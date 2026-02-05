@@ -1,0 +1,33 @@
+# Environment
+.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+.Python
+
+# Data (too large for git)
+data/
+*.parquet
+*.csv
+*.json
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Build
+*.egg-info/
+dist/
+build/
+
+# Personal/mentor documentation (local only)
+home/

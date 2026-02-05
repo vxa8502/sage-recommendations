@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+venv/
+data/
+home/
+scripts/
+*.parquet
+*.npy
+__pycache__/
+.git/
+*.md
+*.ipynb
+.pytest_cache/
+*.egg-info/
