@@ -1,0 +1,46 @@
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# System dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Non-root user
+RUN addgroup --system sage && adduser --system --ingroup sage sage
+
+# Ensure pip uses CPU-only torch for all subsequent installs
+ENV PIP_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cpu
+
+# Install torch CPU-only first (avoids pulling CUDA libs)
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# Install project with API extras (no sentencepiece needed without HHEM)
+COPY pyproject.toml .
+COPY sage/ sage/
+RUN pip install --no-cache-dir ".[api]"
+
+# Store models in /app/.cache so non-root user can access them
+ENV HF_HOME=/app/.cache/huggingface
+
+# Pre-download embedding model only (skip HHEM to fit in 512MB)
+RUN python -c "\
+from sentence_transformers import SentenceTransformer; \
+SentenceTransformer('intfloat/e5-small-v2')"
+
+# Signal to app that HHEM is disabled
+ENV HHEM_DISABLED=true
+
+# Fix ownership for non-root user
+RUN chown -R sage:sage /app
+
+USER sage
+
+# Default port; overridden by PORT env var at runtime (Render, Railway)
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD curl -sf http://localhost:${PORT:-8000}/health || exit 1
+
+CMD ["python", "-m", "sage.api.run", "--host", "0.0.0.0"]

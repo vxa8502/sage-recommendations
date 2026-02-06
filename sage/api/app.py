@@ -19,6 +19,7 @@ from sage.api.routes import router
 from sage.config import get_logger
 
 CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",")]
+HHEM_DISABLED = os.getenv("HHEM_DISABLED", "").lower() in ("true", "1", "yes")
 
 logger = get_logger(__name__)
 
@@ -62,15 +63,19 @@ async def _lifespan(app: FastAPI):
     except Exception:
         logger.warning("Qdrant unreachable at startup -- will retry on requests")
 
-    # HHEM hallucination detector (loads T5 model) -- required for grounding
-    from sage.adapters.hhem import HallucinationDetector
+    # HHEM hallucination detector (loads T5 model) -- optional for lite deployment
+    if HHEM_DISABLED:
+        logger.info("HHEM disabled (HHEM_DISABLED=true) -- running in lite mode")
+        app.state.detector = None
+    else:
+        from sage.adapters.hhem import HallucinationDetector
 
-    try:
-        app.state.detector = HallucinationDetector()
-        logger.info("HHEM detector loaded")
-    except Exception:
-        logger.exception("Failed to load HHEM model -- cannot start")
-        raise
+        try:
+            app.state.detector = HallucinationDetector()
+            logger.info("HHEM detector loaded")
+        except Exception:
+            logger.exception("Failed to load HHEM model -- cannot start")
+            raise
 
     # LLM explainer -- graceful degradation if unavailable
     from sage.services.explanation import Explainer
