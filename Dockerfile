@@ -29,11 +29,15 @@ RUN python -c "\
 from sentence_transformers import SentenceTransformer; \
 SentenceTransformer('intfloat/e5-small-v2')"
 
-# Pre-download HHEM model (requires trust_remote_code for custom model)
+# Pre-download HHEM model (mirrors sage/adapters/hhem.py loading pattern)
+# HHEM uses a custom config that points to a foundation T5 model for the tokenizer
 RUN python -c "\
-from transformers import AutoModelForSequenceClassification, AutoTokenizer; \
-AutoTokenizer.from_pretrained('vectara/hallucination_evaluation_model', trust_remote_code=True); \
-AutoModelForSequenceClassification.from_pretrained('vectara/hallucination_evaluation_model', trust_remote_code=True)"
+from transformers import AutoConfig, AutoTokenizer; \
+from huggingface_hub import hf_hub_download; \
+config = AutoConfig.from_pretrained('vectara/hallucination_evaluation_model', trust_remote_code=True); \
+AutoTokenizer.from_pretrained(config.foundation); \
+AutoConfig.from_pretrained(config.foundation); \
+hf_hub_download('vectara/hallucination_evaluation_model', 'model.safetensors')"
 
 # Fix ownership for non-root user
 RUN chown -R sage:sage /app
