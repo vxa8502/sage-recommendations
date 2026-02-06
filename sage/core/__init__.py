@@ -21,6 +21,8 @@ from sage.core.models import (
     ExplanationResult,
     StreamingExplanation,
     # Verification
+    CitationResult,
+    CitationVerificationResult,
     QuoteVerification,
     VerificationResult,
     # Hallucination Detection
@@ -59,8 +61,6 @@ from sage.core.aggregation import (
 # Verification
 from sage.core.verification import (
     FORBIDDEN_PHRASES,
-    CitationResult,
-    CitationVerificationResult,
     ForbiddenPhraseResult,
     check_forbidden_phrases,
     extract_citations,

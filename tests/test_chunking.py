@@ -85,12 +85,14 @@ class TestSlidingWindowChunk:
         sentences = [f"Unique sentence {i} here." for i in range(20)]
         text = " ".join(sentences)
         chunks = sliding_window_chunk(text, chunk_size=30, overlap=10)
-        if len(chunks) >= 2:
-            # With overlap, adjacent chunks should share some text
-            _words_0 = set(chunks[0].split())
-            _words_1 = set(chunks[1].split())
-            # At least some overlap is expected (not guaranteed to be exact)
-            assert len(chunks) > 1
+        assert len(chunks) >= 2, "Expected multiple chunks for overlap test"
+        # With overlap, adjacent chunks should share some words
+        words_0 = set(chunks[0].split())
+        words_1 = set(chunks[1].split())
+        shared_words = words_0 & words_1
+        assert len(shared_words) > 0, (
+            "Adjacent chunks should share words due to overlap"
+        )
 
 
 class TestFindSplitPoints:

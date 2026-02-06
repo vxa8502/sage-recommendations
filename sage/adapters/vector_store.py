@@ -4,7 +4,13 @@ Qdrant vector store adapter.
 Wraps Qdrant client operations for storing and searching review embeddings.
 """
 
+from __future__ import annotations
+
 import hashlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from sage.core import Chunk
 from sage.config import (
@@ -114,7 +120,7 @@ def create_payload_indexes(client, collection_name: str = COLLECTION_NAME) -> No
 def upload_chunks(
     client,
     chunks: list[Chunk],
-    embeddings: list,
+    embeddings: list | "np.ndarray",
     collection_name: str = COLLECTION_NAME,
     batch_size: int = 100,
 ) -> None:
@@ -133,7 +139,7 @@ def upload_chunks(
 
     points = []
 
-    for chunk, embedding in zip(chunks, embeddings):
+    for chunk, embedding in zip(chunks, embeddings, strict=True):
         point_id = _generate_point_id(chunk.review_id, chunk.chunk_index)
         point = PointStruct(
             id=point_id,
@@ -251,5 +257,6 @@ def collection_exists(client, collection_name: str = COLLECTION_NAME) -> bool:
             return False
         info = client.get_collection(collection_name)
         return info.points_count > 0
-    except Exception:
+    except Exception as e:
+        logger.debug("collection_exists check failed: %s", e)
         return False

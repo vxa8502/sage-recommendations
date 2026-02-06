@@ -86,7 +86,12 @@ def demo_recommendation(query: str, top_k: int = 3, max_evidence: int = 3):
         # Display evidence traceability
         log_section(logger, "EVIDENCE SOURCES")
         for j, (ev_id, ev_text) in enumerate(
-            zip(explanation_result.evidence_ids, explanation_result.evidence_texts), 1
+            zip(
+                explanation_result.evidence_ids,
+                explanation_result.evidence_texts,
+                strict=True,
+            ),
+            1,
         ):
             # Truncate long evidence for display
             display_text = ev_text[:200] + "..." if len(ev_text) > 200 else ev_text
@@ -108,7 +113,9 @@ def demo_recommendation(query: str, top_k: int = 3, max_evidence: int = 3):
             "evidence_sources": [
                 {"id": ev_id, "text": ev_text}
                 for ev_id, ev_text in zip(
-                    explanation_result.evidence_ids, explanation_result.evidence_texts
+                    explanation_result.evidence_ids,
+                    explanation_result.evidence_texts,
+                    strict=True,
                 )
             ],
         }

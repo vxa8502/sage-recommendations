@@ -46,9 +46,68 @@ def is_event_loop_running() -> bool:
         return False
 
 
+def _clean_explanation_for_ragas(explanation: str) -> str:
+    """
+    Clean explanation text for RAGAS evaluation.
+
+    RAGAS fails on explanations with quotes + citations together, even when
+    the quoted content is verbatim from evidence. This is a known limitation.
+    We clean the explanation to remove metadata (citations, framing) while
+    preserving the factual claims for evaluation.
+
+    Args:
+        explanation: Original explanation with framing and citations.
+
+    Returns:
+        Cleaned explanation suitable for RAGAS faithfulness evaluation.
+    """
+    import re
+
+    text = explanation
+
+    # Remove [review_X] citations - these are metadata, not claims
+    text = re.sub(r"\s*\[review_\d+\]", "", text)
+
+    # Remove framing phrases that aren't factual claims (order matters - longer first)
+    framing_patterns = [
+        r"According to reviews?,?\s*",
+        r"Customers report\s+",
+        r"Reviewers say\s+",
+        r"One user said\s+",
+        r"One user found\s+",
+        r"One reviewer found\s+",
+        r"One reviewer confirms?\s+(it\s+)?",
+        r"One reviewer\s+",
+        r"Users mention\s+",
+        r"Users also note\s+",
+        r"Users note\s+",
+        r"Reviewers?\s+(also\s+)?note\s+",
+        r"Reviewers?\s+(also\s+)?mention\s+",
+        r"Reviewers?\s+confirm\s+",
+        r"Reviewers?\s+praise\s+",
+        r"Reviewers?\s+highlight\s+",
+    ]
+    for pattern in framing_patterns:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+
+    # Clean up "and" between quotes to make separate sentences
+    text = re.sub(r'\s+and\s+"', '. "', text)
+
+    # Clean up residual empty/hanging parts
+    text = re.sub(r"\s+\.", ".", text)
+    text = re.sub(r"\s+,", ",", text)
+    text = re.sub(r"\s{2,}", " ", text)
+
+    return text.strip()
+
+
 def create_ragas_sample(query: str, explanation: str, evidence_texts: list[str]):
     """
     Create a RAGAS SingleTurnSample from explanation data.
+
+    Cleans the explanation to remove citations and framing that RAGAS
+    incorrectly penalizes, and combines evidence into a single context
+    for proper claim verification.
 
     Args:
         query: User's original query.
@@ -66,10 +125,16 @@ def create_ragas_sample(query: str, explanation: str, evidence_texts: list[str])
     except ImportError:
         raise ImportError("ragas package required. Install with: pip install ragas")
 
+    # Clean explanation for RAGAS evaluation
+    cleaned_explanation = _clean_explanation_for_ragas(explanation)
+
+    # Combine evidence into single context (RAGAS has issues with multiple contexts)
+    combined_evidence = " ".join(evidence_texts)
+
     return SingleTurnSample(
         user_input=query,
-        response=explanation,
-        retrieved_contexts=evidence_texts,
+        response=cleaned_explanation,
+        retrieved_contexts=[combined_evidence],
     )
 
 
@@ -223,7 +288,7 @@ class FaithfulnessEvaluator:
                 evidence_count=len(er.evidence_texts),
                 meets_target=float(score) >= self.target,
             )
-            for er, score in zip(explanation_results, scores)
+            for er, score in zip(explanation_results, scores, strict=True)
         ]
 
         scores_arr = np.array(scores)
@@ -400,7 +465,7 @@ def compute_adjusted_faithfulness(
     # - Regular recommendations evaluated by HHEM
     regular_passes = sum(
         1
-        for r, is_non_rec in zip(results, valid_non_recs)
+        for r, is_non_rec in zip(results, valid_non_recs, strict=True)
         if not is_non_rec and not r.is_hallucinated
     )
     adjusted_passes = regular_passes + n_valid_non_recs

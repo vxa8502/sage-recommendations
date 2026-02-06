@@ -17,7 +17,7 @@ from sage.core.models import EvidenceQuality, ProductScore
 # due to insufficient evidence. They prevent hallucination by declining to
 # explain when the LLM would be forced to fabricate claims.
 #
-# Threshold selection rationale based on failure analysis (Session 27):
+# Threshold selection rationale based on failure analysis:
 # =============================================================================
 
 # Minimum number of evidence chunks required for explanation generation.

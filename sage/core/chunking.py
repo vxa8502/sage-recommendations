@@ -91,8 +91,8 @@ def sliding_window_chunk(
     Returns:
         List of chunk texts.
     """
-    chars_per_chunk = chunk_size * 4
-    chars_overlap = overlap * 4
+    chars_per_chunk = chunk_size * CHARS_PER_TOKEN
+    chars_overlap = overlap * CHARS_PER_TOKEN
 
     chunks = []
     start = 0

@@ -167,7 +167,7 @@ class ExplanationResult:
         """Build serializable evidence list from ids and texts."""
         return [
             {"id": eid, "text": etxt}
-            for eid, etxt in zip(self.evidence_ids, self.evidence_texts)
+            for eid, etxt in zip(self.evidence_ids, self.evidence_texts, strict=True)
         ]
 
 
@@ -264,6 +264,32 @@ class VerificationResult:
     quotes_missing: int
     verified_quotes: list[QuoteVerification] = field(default_factory=list)
     missing_quotes: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CitationResult:
+    """Result of verifying a single citation."""
+
+    citation_id: str
+    found: bool
+    quote_text: str | None = None  # The quote associated with this citation
+    source_text: str | None = None  # The evidence text if found
+
+
+@dataclass
+class CitationVerificationResult:
+    """Result of citation verification for an explanation."""
+
+    all_valid: bool
+    citations_found: int
+    citations_invalid: int
+    valid_citations: list[CitationResult] = field(default_factory=list)
+    invalid_citations: list[CitationResult] = field(default_factory=list)
+
+    @property
+    def n_citations(self) -> int:
+        """Total number of citations in explanation."""
+        return self.citations_found + self.citations_invalid
 
 
 # ============================================================================

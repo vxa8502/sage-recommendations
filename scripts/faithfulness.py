@@ -25,6 +25,7 @@ import numpy as np
 
 from sage.core import AggregationMethod
 from sage.config import (
+    ANALYSIS_QUERIES,
     EVALUATION_QUERIES,
     FAITHFULNESS_TARGET,
     MAX_EVIDENCE,
@@ -100,7 +101,7 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
         for expl in all_explanations
     ]
 
-    for expl, result in zip(all_explanations, hhem_results):
+    for expl, result in zip(all_explanations, hhem_results, strict=True):
         status = "GROUNDED" if not result.is_hallucinated else "HALLUCINATED"
         logger.info("  [%s] %.3f - %s", status, result.score, expl.product_id)
 
@@ -199,23 +200,6 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
 # ============================================================================
 # SECTION: Failure Analysis
 # ============================================================================
-
-ANALYSIS_QUERIES = [
-    "wireless headphones with noise cancellation",
-    "laptop charger for MacBook",
-    "USB hub with multiple ports",
-    "portable battery pack for travel",
-    "bluetooth speaker with good bass",
-    "cheap but good quality earbuds",
-    "durable phone case that looks nice",
-    "fast charging cable that won't break",
-    "comfortable headphones for long sessions",
-    "quiet keyboard for office",
-    "headphones that don't hurt ears",
-    "charger that actually works",
-    "waterproof speaker for shower",
-    "gift for someone who likes music",
-]
 
 
 def run_failure_analysis():

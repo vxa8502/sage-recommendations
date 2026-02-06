@@ -8,12 +8,11 @@ once at startup and shared across requests.
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
-
-import os
 
 from sage.api.middleware import LatencyMiddleware
 from sage.api.routes import router

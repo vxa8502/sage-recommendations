@@ -156,7 +156,11 @@ EVAL_DIMENSIONS = {
 }
 
 
-from sage.config.queries import EVALUATION_QUERIES  # noqa: E402
+from sage.config.queries import (  # noqa: E402
+    ANALYSIS_QUERIES,
+    E2E_EVAL_QUERIES,
+    EVALUATION_QUERIES,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -246,6 +250,8 @@ __all__ = [
     # Evaluation
     "EVAL_DIMENSIONS",
     "EVALUATION_QUERIES",
+    "ANALYSIS_QUERIES",
+    "E2E_EVAL_QUERIES",
     # Utilities
     "save_results",
     # Logging

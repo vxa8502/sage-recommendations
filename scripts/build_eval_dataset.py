@@ -536,7 +536,7 @@ def save_eval_cases(
         for c in cases
     ]
 
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
     if verbose:
@@ -557,7 +557,7 @@ def load_eval_cases(filename: str) -> list[EvalCase]:
     """
     filepath = EVAL_DIR / filename
 
-    with open(filepath) as f:
+    with open(filepath, encoding="utf-8") as f:
         data = json.load(f)
 
     return [

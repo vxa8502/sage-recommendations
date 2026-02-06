@@ -269,7 +269,7 @@ class HallucinationDetector:
             ClaimResult(
                 claim=claim, score=score, is_hallucinated=score < self.threshold
             )
-            for claim, score in zip(claims, scores)
+            for claim, score in zip(claims, scores, strict=True)
         ]
 
     def check_batch(
@@ -293,7 +293,7 @@ class HallucinationDetector:
 
         return [
             self._make_result(score, explanation, len(premise))
-            for (premise, explanation), score in zip(pairs, scores)
+            for (premise, explanation), score in zip(pairs, scores, strict=True)
         ]
 
 

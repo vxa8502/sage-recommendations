@@ -8,7 +8,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from sage.config import DEV_SUBSET_SIZE, DATA_DIR
+from sage.config import CHARS_PER_TOKEN, DEV_SUBSET_SIZE, DATA_DIR
 from sage.data import load_reviews, get_review_stats, prepare_data
 
 # Output directory for figures
@@ -21,7 +21,9 @@ plt.rcParams.update(
     {
         "figure.figsize": (10, 5),
         "figure.dpi": 100,
-        "savefig.dpi": 150,
+        "savefig.dpi": 300,  # High-res for markdown reports
+        "savefig.bbox": "tight",
+        "savefig.pad_inches": 0.1,
         "font.size": 11,
         "axes.titlesize": 12,
         "axes.labelsize": 11,
@@ -67,7 +69,7 @@ ax.set_ylabel("Count")
 ax.set_title("Rating Distribution")
 ax.set_xticks(rating_counts.index)
 
-for bar, count in zip(bars, rating_counts.values):
+for bar, count in zip(bars, rating_counts.values, strict=True):
     ax.text(
         bar.get_x() + bar.get_width() / 2,
         bar.get_height() + 50,
@@ -77,9 +79,7 @@ for bar, count in zip(bars, rating_counts.values):
         fontsize=10,
     )
 
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / "rating_distribution.png", dpi=150)
-plt.show()
+plt.savefig(FIGURES_DIR / "rating_distribution.png")
 
 print("\nRating breakdown:")
 for rating, count in rating_counts.items():
@@ -89,7 +89,7 @@ for rating, count in rating_counts.items():
 # %% Review length analysis
 df["text_length"] = df["text"].str.len()
 df["word_count"] = df["text"].str.split().str.len()
-df["estimated_tokens"] = df["text_length"] // 4
+df["estimated_tokens"] = df["text_length"] // CHARS_PER_TOKEN
 
 fig, axes = plt.subplots(1, 2, figsize=FIGURE_SIZE_WIDE)
 
@@ -120,9 +120,7 @@ ax2.set_title("Estimated Token Distribution")
 ax2.axvline(200, color="red", linestyle="--", label="Chunking threshold (200)")
 ax2.legend()
 
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / "review_lengths.png", dpi=150)
-plt.show()
+plt.savefig(FIGURES_DIR / "review_lengths.png")
 
 needs_chunking = (df["estimated_tokens"] > 200).sum()
 print("\nReview length stats:")
@@ -146,9 +144,7 @@ ax.set_ylabel("Median Review Length (chars)")
 ax.set_title("Review Length by Rating")
 ax.set_xticks([1, 2, 3, 4, 5])
 
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / "length_by_rating.png", dpi=150)
-plt.show()
+plt.savefig(FIGURES_DIR / "length_by_rating.png")
 
 print("\nMedian review length by rating:")
 for rating, length in length_by_rating.items():
@@ -169,9 +165,7 @@ ax.set_ylabel("Number of Reviews")
 ax.set_title("Reviews Over Time")
 plt.xticks(rotation=45)
 
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / "reviews_over_time.png", dpi=150)
-plt.show()
+plt.savefig(FIGURES_DIR / "reviews_over_time.png")
 
 print("\nTemporal range:")
 print(f"  Earliest: {df['datetime'].min()}")
@@ -230,9 +224,7 @@ ax2.set_xlabel("Reviews per Item")
 ax2.set_ylabel("Number of Items")
 ax2.set_title("Item Popularity Distribution")
 
-plt.tight_layout()
-plt.savefig(FIGURES_DIR / "user_item_distribution.png", dpi=150)
-plt.show()
+plt.savefig(FIGURES_DIR / "user_item_distribution.png")
 
 print("\nUser activity:")
 print(
@@ -321,5 +313,3 @@ print(
 )
 print(f"Data quality issues: {empty_reviews + very_short + duplicate_texts}")
 print(f"\nPlots saved to: {FIGURES_DIR}")
-
-# %%

@@ -23,6 +23,7 @@ import argparse
 import numpy as np
 
 from sage.config import (
+    CHARS_PER_TOKEN,
     DEV_SUBSET_SIZE,
     DATA_DIR,
     get_logger,
@@ -80,7 +81,7 @@ def run_tokenizer_validation():
 
     log_section(logger, "Results")
     log_kv(logger, "Mean chars/token", np.mean(ratios))
-    log_kv(logger, "Std", np.std(ratios))
+    log_kv(logger, "Std", np.std(ratios, ddof=1))
     log_kv(logger, "Current assumption", 4.0)
 
     status = "VALID" if abs(np.mean(ratios) - 4.0) <= 0.5 else "UPDATE NEEDED"
@@ -115,8 +116,8 @@ def run_chunking_test():
     sample = long_reviews.sample(min(50, len(long_reviews)), random_state=42)
     results = []
 
-    for idx, (_, row) in enumerate(sample.iterrows()):
-        text, tokens, rating = row["text"], row["tokens"], int(row["rating"])
+    for idx, row in enumerate(sample.itertuples(index=False)):
+        text, tokens, rating = row.text, row.tokens, int(row.rating)
         chunks = chunk_text(text, embedder=embedder)
         sentences = split_sentences(text)
 
@@ -185,7 +186,7 @@ def run_pipeline(subset_size: int, force: bool):
 
     # Review length analysis
     df["text_length"] = df["text"].str.len()
-    df["estimated_tokens"] = df["text_length"] // 4
+    df["estimated_tokens"] = df["text_length"] // CHARS_PER_TOKEN
 
     needs_chunking = (df["estimated_tokens"] > 200).sum()
     logger.info(

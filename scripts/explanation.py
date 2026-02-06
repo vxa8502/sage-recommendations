@@ -90,7 +90,7 @@ def run_basic_tests():
         for expl in all_explanations
     ]
 
-    for expl, result in zip(all_explanations, hhem_results):
+    for expl, result in zip(all_explanations, hhem_results, strict=True):
         status = "GROUNDED" if not result.is_hallucinated else "HALLUCINATED"
         logger.info("[%s] Score: %.3f - %s", status, result.score, expl.product_id)
 

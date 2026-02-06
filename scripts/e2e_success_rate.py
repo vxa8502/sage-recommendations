@@ -19,7 +19,8 @@ from dataclasses import dataclass, asdict
 from datetime import datetime
 
 from sage.config import (
-    DATA_DIR,
+    E2E_EVAL_QUERIES,
+    RESULTS_DIR,
     get_logger,
     log_banner,
     log_section,
@@ -30,33 +31,6 @@ from sage.core.verification import check_forbidden_phrases
 from sage.services.retrieval import get_candidates
 
 logger = get_logger(__name__)
-
-RESULTS_DIR = DATA_DIR / "eval_results"
-RESULTS_DIR.mkdir(exist_ok=True)
-
-# Evaluation queries - mix of natural language intents
-EVAL_QUERIES = [
-    "wireless headphones with noise cancellation",
-    "laptop charger for MacBook",
-    "USB hub with multiple ports",
-    "portable battery pack for travel",
-    "bluetooth speaker with good bass",
-    "cheap but good quality earbuds",
-    "durable phone case that looks nice",
-    "fast charging cable that won't break",
-    "comfortable headphones for long sessions",
-    "quiet keyboard for office",
-    "headphones that don't hurt ears",
-    "charger that actually works",
-    "waterproof speaker for shower",
-    "gift for someone who likes music",
-    "tablet stand for kitchen",
-    "wireless mouse for laptop",
-    "HDMI cable for monitor",
-    "phone mount for car",
-    "screen protector for phone",
-    "backup battery for camping",
-]
 
 
 @dataclass
@@ -137,7 +111,7 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
         is_valid_non_recommendation,
     )
 
-    queries = EVAL_QUERIES[:n_samples]
+    queries = E2E_EVAL_QUERIES[:n_samples]
 
     log_banner(logger, "END-TO-END SUCCESS RATE EVALUATION")
     logger.info("Samples: %d", len(queries))
@@ -408,7 +382,7 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
     output_file = (
         RESULTS_DIR / f"e2e_success_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     )
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=2)
     logger.info("Saved: %s", output_file)
 

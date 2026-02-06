@@ -19,6 +19,7 @@ Run from project root.
 
 import argparse
 import json
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
@@ -29,15 +30,12 @@ from sage.services.baselines import (
     RandomBaseline,
     load_product_embeddings_from_qdrant,
 )
-from sage.config import DATA_DIR, get_logger, log_banner, log_section, log_kv
+from sage.config import RESULTS_DIR, get_logger, log_banner, log_section, log_kv
 from sage.data import load_eval_cases, load_splits
 from sage.services.evaluation import compute_item_popularity, evaluate_recommendations
 from sage.services.retrieval import recommend
 
 logger = get_logger(__name__)
-
-RESULTS_DIR = DATA_DIR / "eval_results"
-RESULTS_DIR.mkdir(exist_ok=True)
 
 
 def create_recommend_fn(
@@ -46,7 +44,7 @@ def create_recommend_fn(
     min_rating: float | None = None,
     similarity_weight: float = 1.0,
     rating_weight: float = 0.0,
-):
+) -> Callable[[str], list[str]]:
     """Create a recommend function for evaluation."""
 
     def _recommend(query: str) -> list[str]:
@@ -76,14 +74,14 @@ def save_results(
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"eval_results_{timestamp}.json"
     filepath = RESULTS_DIR / filename
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
 
     # Write latest symlink for the summary script
     if dataset:
         stem = Path(dataset).stem  # e.g. "eval_loo_history"
         latest_path = RESULTS_DIR / f"{stem}_latest.json"
-        with open(latest_path, "w") as f:
+        with open(latest_path, "w", encoding="utf-8") as f:
             json.dump(results, f, indent=2)
 
     return filepath

@@ -11,9 +11,14 @@ non-existent review IDs.
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from sage.core.models import QuoteVerification, VerificationResult
+from sage.core.models import (
+    CitationResult,
+    CitationVerificationResult,
+    QuoteVerification,
+    VerificationResult,
+)
 
 
 # Forbidden phrases that violate prompt constraints.
@@ -205,32 +210,6 @@ def verify_explanation(
 # =============================================================================
 # Citation ID Verification
 # =============================================================================
-
-
-@dataclass
-class CitationResult:
-    """Result of verifying a single citation."""
-
-    citation_id: str
-    found: bool
-    quote_text: str | None = None  # The quote associated with this citation
-    source_text: str | None = None  # The evidence text if found
-
-
-@dataclass
-class CitationVerificationResult:
-    """Result of citation verification for an explanation."""
-
-    all_valid: bool
-    citations_found: int
-    citations_invalid: int
-    valid_citations: list[CitationResult] = field(default_factory=list)
-    invalid_citations: list[CitationResult] = field(default_factory=list)
-
-    @property
-    def n_citations(self) -> int:
-        """Total number of citations in explanation."""
-        return self.citations_found + self.citations_invalid
 
 
 def extract_citations(text: str) -> list[tuple[str, str | None]]:

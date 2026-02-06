@@ -23,10 +23,10 @@ check-env:
 
 setup:
 	@echo "=== SETUP ==="
-	python -m venv venv
-	. venv/bin/activate && pip install -e ".[pipeline,api,anthropic,openai]"
+	python -m venv .venv
+	. .venv/bin/activate && pip install -e ".[pipeline,api,anthropic,openai]"
 	@echo ""
-	@echo "Setup complete. Activate with: source venv/bin/activate"
+	@echo "Setup complete. Activate with: source .venv/bin/activate"
 
 # ---------------------------------------------------------------------------
 # Data Pipeline
@@ -41,11 +41,13 @@ data: check-env
 	@test -f data/splits/train.parquet || (echo "FAIL: train.parquet not created" && exit 1)
 	@echo "Data pipeline complete"
 
-# Exploratory data analysis
-eda: check-env
-	@test -d data/splits || (echo "ERROR: Run 'make data' first" && exit 1)
+# Exploratory data analysis (generates figures for reports/eda_report.md)
+eda:
 	@echo "=== EDA ANALYSIS ==="
+	@mkdir -p data/figures
 	python scripts/eda.py
+	@echo "Figures saved to data/figures/"
+	@echo "View report: reports/eda_report.md"
 
 # ---------------------------------------------------------------------------
 # Evaluation Suite
@@ -262,7 +264,7 @@ help:
 	@echo ""
 	@echo "PIPELINE:"
 	@echo "  make data          Load, chunk, embed, and index reviews"
-	@echo "  make eda           Exploratory data analysis"
+	@echo "  make eda           Exploratory data analysis (generates figures)"
 	@echo "  make eval          Standard evaluation (primary metrics + RAGAS + spot-checks)"
 	@echo "  make eval-deep     Deep evaluation (all ablations + baselines + calibration)"
 	@echo "  make eval-quick    Quick eval (skip RAGAS)"

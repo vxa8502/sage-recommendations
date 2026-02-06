@@ -15,9 +15,12 @@ from __future__ import annotations
 import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Iterator
+from typing import TYPE_CHECKING, Iterator
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, Query, Request, Response
+
+if TYPE_CHECKING:
+    import numpy as np
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -113,8 +116,8 @@ class RecommendParams:
 
 def _fetch_products(
     params: RecommendParams,
-    app,
-    query_embedding=None,
+    app: FastAPI,
+    query_embedding: "np.ndarray | None" = None,
 ) -> list[ProductScore]:
     """Run candidate generation with lifespan-managed singletons."""
     return get_candidates(
@@ -238,7 +241,7 @@ def recommend(
                 results = list(pool.map(_explain, products))
 
             for i, (product, (er, hr, cr)) in enumerate(
-                zip(products, results),
+                zip(products, results, strict=True),
                 1,
             ):
                 rec = _build_product_dict(i, product)

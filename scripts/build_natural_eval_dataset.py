@@ -479,7 +479,7 @@ def save_natural_eval_cases(
             }
         )
 
-    with open(filepath, "w") as f:
+    with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
     logger.info("Saved %d natural language eval cases to: %s", len(data), filepath)
