@@ -29,13 +29,20 @@ class TestIsRefusal:
 
 class TestIsMismatchWarning:
     def test_detects_not_best_match(self):
-        assert is_mismatch_warning("This product may not be the best match for your needs.") is True
+        assert (
+            is_mismatch_warning(
+                "This product may not be the best match for your needs."
+            )
+            is True
+        )
 
     def test_detects_not_designed_for(self):
         assert is_mismatch_warning("This is not designed for that purpose.") is True
 
     def test_detects_not_suitable(self):
-        assert is_mismatch_warning("This product is not suitable for heavy use.") is True
+        assert (
+            is_mismatch_warning("This product is not suitable for heavy use.") is True
+        )
 
     def test_normal_explanation_not_mismatch(self):
         assert is_mismatch_warning("Great headphones with noise cancellation.") is False

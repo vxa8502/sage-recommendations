@@ -24,7 +24,12 @@ from pydantic import BaseModel
 from sage.adapters.vector_store import collection_exists
 from sage.api.metrics import metrics_response, record_cache_event
 from sage.config import MAX_EVIDENCE, get_logger
-from sage.core import AggregationMethod, ExplanationResult, ProductScore, verify_citations
+from sage.core import (
+    AggregationMethod,
+    ExplanationResult,
+    ProductScore,
+    verify_citations,
+)
 from sage.services.retrieval import get_candidates
 
 # Cap parallel LLM+HHEM workers per request. With k=10 and concurrent
@@ -40,6 +45,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # Response models
 # ---------------------------------------------------------------------------
+
 
 class EvidenceSource(BaseModel):
     id: str
@@ -95,6 +101,7 @@ class CacheStatsResponse(BaseModel):
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RecommendParams:
     """Query parameters shared by /recommend and /recommend/stream."""
@@ -105,7 +112,9 @@ class RecommendParams:
 
 
 def _fetch_products(
-    params: RecommendParams, app, query_embedding=None,
+    params: RecommendParams,
+    app,
+    query_embedding=None,
 ) -> list[ProductScore]:
     """Run candidate generation with lifespan-managed singletons."""
     return get_candidates(
@@ -138,6 +147,7 @@ def _build_evidence_list(result: ExplanationResult) -> list[dict]:
 # Health
 # ---------------------------------------------------------------------------
 
+
 @router.get("/health", response_model=HealthResponse)
 def health(request: Request):
     """Deployment readiness probe. Checks Qdrant connectivity.
@@ -158,6 +168,7 @@ def health(request: Request):
 # ---------------------------------------------------------------------------
 # Recommend (non-streaming)
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/recommend",
@@ -208,20 +219,27 @@ def recommend(
                 # HHEM model in eval() + no_grad() = read-only forward
                 # pass with no state mutation. Tokenizer is stateless.
                 er = explainer.generate_explanation(
-                    query=q, product=product, max_evidence=MAX_EVIDENCE,
+                    query=q,
+                    product=product,
+                    max_evidence=MAX_EVIDENCE,
                 )
                 hr = detector.check_explanation(
                     evidence_texts=er.evidence_texts,
                     explanation=er.explanation,
                 )
-                cr = verify_citations(er.explanation, er.evidence_ids, er.evidence_texts)
+                cr = verify_citations(
+                    er.explanation, er.evidence_ids, er.evidence_texts
+                )
                 return er, hr, cr
 
-            with ThreadPoolExecutor(max_workers=min(len(products), _MAX_EXPLAIN_WORKERS)) as pool:
+            with ThreadPoolExecutor(
+                max_workers=min(len(products), _MAX_EXPLAIN_WORKERS)
+            ) as pool:
                 results = list(pool.map(_explain, products))
 
             for i, (product, (er, hr, cr)) in enumerate(
-                zip(products, results), 1,
+                zip(products, results),
+                1,
             ):
                 rec = _build_product_dict(i, product)
                 rec["explanation"] = er.explanation
@@ -257,6 +275,7 @@ def recommend(
 # Recommend (SSE streaming)
 # ---------------------------------------------------------------------------
 
+
 def _sse_event(event: str, data: str) -> str:
     """Format a single SSE event."""
     return f"event: {event}\ndata: {data}\n\n"
@@ -267,9 +286,16 @@ def _stream_recommendations(
     app,
 ) -> Iterator[str]:
     """Generator that yields SSE events for streaming recommendations."""
-    yield _sse_event("metadata", json.dumps({
-        "verified": False, "cache": False, "hhem": False,
-    }))
+    yield _sse_event(
+        "metadata",
+        json.dumps(
+            {
+                "verified": False,
+                "cache": False,
+                "hhem": False,
+            }
+        ),
+    )
 
     try:
         products = _fetch_products(params, app)
@@ -285,7 +311,9 @@ def _stream_recommendations(
 
     explainer = app.state.explainer
     if explainer is None:
-        yield _sse_event("error", json.dumps({"detail": "Explanation service unavailable"}))
+        yield _sse_event(
+            "error", json.dumps({"detail": "Explanation service unavailable"})
+        )
         yield _sse_event("done", json.dumps({"status": "error"}))
         return
 
@@ -314,7 +342,9 @@ def _stream_recommendations(
             yield _sse_event("refusal", json.dumps({"detail": str(exc)}))
         except Exception:
             logger.exception("Streaming error for product %s", product.product_id)
-            yield _sse_event("error", json.dumps({"detail": "Failed to generate explanation"}))
+            yield _sse_event(
+                "error", json.dumps({"detail": "Failed to generate explanation"})
+            )
 
     yield _sse_event("done", json.dumps({"status": "complete"}))
 
@@ -340,6 +370,7 @@ def recommend_stream(
 # ---------------------------------------------------------------------------
 # Cache management
 # ---------------------------------------------------------------------------
+
 
 @router.get("/cache/stats", response_model=CacheStatsResponse)
 def cache_stats(request: Request):
@@ -369,6 +400,7 @@ def cache_clear(request: Request):
 # ---------------------------------------------------------------------------
 # Prometheus metrics
 # ---------------------------------------------------------------------------
+
 
 @router.get("/metrics")
 def metrics():

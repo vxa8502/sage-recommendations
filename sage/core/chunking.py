@@ -19,16 +19,16 @@ from sage.config import CHARS_PER_TOKEN
 
 
 # Chunking thresholds (tokens)
-NO_CHUNK_THRESHOLD = 200      # Texts under this: no chunking
-SEMANTIC_THRESHOLD = 500      # Texts under this: semantic only
-MAX_CHUNK_TOKENS = 400        # Chunks larger than this get sliding window
+NO_CHUNK_THRESHOLD = 200  # Texts under this: no chunking
+SEMANTIC_THRESHOLD = 500  # Texts under this: semantic only
+MAX_CHUNK_TOKENS = 400  # Chunks larger than this get sliding window
 
 # Semantic chunking config
-SIMILARITY_PERCENTILE = 85    # Split at drops below this percentile
+SIMILARITY_PERCENTILE = 85  # Split at drops below this percentile
 
 # Sliding window config (fallback)
-SLIDING_CHUNK_SIZE = 150      # Target tokens per sliding window chunk
-SLIDING_OVERLAP = 30          # Token overlap between chunks
+SLIDING_CHUNK_SIZE = 150  # Target tokens per sliding window chunk
+SLIDING_OVERLAP = 30  # Token overlap between chunks
 
 
 def estimate_tokens(text: str) -> int:

@@ -138,7 +138,11 @@ class RetrievalService:
             limit=limit,
             min_rating=min_rating,
         )
-        logger.info("Qdrant search: %.0fms, %d results", (time.perf_counter() - t0) * 1000, len(results))
+        logger.info(
+            "Qdrant search: %.0fms, %d results",
+            (time.perf_counter() - t0) * 1000,
+            len(results),
+        )
 
         chunks = []
         for r in results:
@@ -157,7 +161,9 @@ class RetrievalService:
             )
 
         product_ids = {c.product_id for c in chunks}
-        logger.info("Retrieved %d chunks across %d products", len(chunks), len(product_ids))
+        logger.info(
+            "Retrieved %d chunks across %d products", len(chunks), len(product_ids)
+        )
 
         return chunks
 
@@ -247,7 +253,11 @@ def retrieve_chunks(
     """Retrieve relevant chunks from the vector store."""
     service = RetrievalService(client=client, embedder=embedder)
     return service.retrieve_chunks(
-        query, limit, min_rating, exclude_products, query_embedding,
+        query,
+        limit,
+        min_rating,
+        exclude_products,
+        query_embedding,
     )
 
 
@@ -347,7 +357,8 @@ def recommend_for_user(
 
     # Get products to exclude
     exclude: set[str] = {
-        pid for r in user_history
+        pid
+        for r in user_history
         if (pid := r.get("product_id")) is not None and isinstance(pid, str)
     }
 

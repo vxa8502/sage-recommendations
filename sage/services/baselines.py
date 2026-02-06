@@ -73,9 +73,7 @@ class PopularityBaseline:
         counts = Counter(i[item_key] for i in interactions if item_key in i)
 
         # Sort by popularity (descending)
-        self.ranked_items = [
-            item for item, _ in counts.most_common()
-        ]
+        self.ranked_items = [item for item, _ in counts.most_common()]
 
         self.popularity = counts
 
@@ -119,9 +117,9 @@ class ItemKNNBaseline:
             embedder: E5Embedder instance for query embedding.
         """
         self.product_ids = list(product_embeddings.keys())
-        self.embeddings = np.array([
-            product_embeddings[pid] for pid in self.product_ids
-        ])
+        self.embeddings = np.array(
+            [product_embeddings[pid] for pid in self.product_ids]
+        )
 
         # Normalize embeddings for cosine similarity
         norms = np.linalg.norm(self.embeddings, axis=1, keepdims=True)
@@ -143,6 +141,7 @@ class ItemKNNBaseline:
         """
         if self.embedder is None:
             from sage.adapters.embeddings import get_embedder
+
             self.embedder = get_embedder()
 
         # Embed query
@@ -188,7 +187,9 @@ def build_product_embeddings(
         elif aggregation == "max":
             agg_emb = product_embs.max(axis=0)
         else:
-            raise ValueError(f"Unknown aggregation method: {aggregation}. Use 'mean' or 'max'.")
+            raise ValueError(
+                f"Unknown aggregation method: {aggregation}. Use 'mean' or 'max'."
+            )
 
         # Normalize
         agg_emb = agg_emb / (np.linalg.norm(agg_emb) + 1e-8)

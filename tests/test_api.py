@@ -27,9 +27,16 @@ def _make_app(**state_overrides) -> FastAPI:
     mock_cache = MagicMock()
     mock_cache.get.return_value = (None, "miss")
     mock_cache.stats.return_value = SimpleNamespace(
-        size=0, max_entries=100, exact_hits=0, semantic_hits=0,
-        misses=0, evictions=0, hit_rate=0.0, ttl_seconds=3600.0,
-        similarity_threshold=0.92, avg_semantic_similarity=0.0,
+        size=0,
+        max_entries=100,
+        exact_hits=0,
+        semantic_hits=0,
+        misses=0,
+        evictions=0,
+        hit_rate=0.0,
+        ttl_seconds=3600.0,
+        similarity_threshold=0.92,
+        avg_semantic_similarity=0.0,
     )
 
     app.state.qdrant = state_overrides.get("qdrant", mock_qdrant)
@@ -56,6 +63,7 @@ class TestHealthEndpoint:
         with TestClient(app) as c:
             # Patch collection_exists to return True
             import sage.api.routes as routes_mod
+
             original = routes_mod.collection_exists
             routes_mod.collection_exists = lambda client: True
             try:
@@ -70,6 +78,7 @@ class TestHealthEndpoint:
     def test_degraded_when_collection_missing(self):
         app = _make_app()
         import sage.api.routes as routes_mod
+
         original = routes_mod.collection_exists
         routes_mod.collection_exists = lambda client: False
         try:
@@ -90,6 +99,7 @@ class TestRecommendEndpoint:
 
     def test_empty_results(self, client):
         import sage.api.routes as routes_mod
+
         original = routes_mod.get_candidates
         routes_mod.get_candidates = lambda **kw: []
         try:
@@ -102,12 +112,18 @@ class TestRecommendEndpoint:
 
     def test_returns_products_without_explain(self):
         product = ProductScore(
-            product_id="P1", score=0.9, chunk_count=2, avg_rating=4.5,
+            product_id="P1",
+            score=0.9,
+            chunk_count=2,
+            avg_rating=4.5,
             evidence=[
-                RetrievedChunk(text="Good", score=0.9, product_id="P1", rating=4.5, review_id="r1"),
+                RetrievedChunk(
+                    text="Good", score=0.9, product_id="P1", rating=4.5, review_id="r1"
+                ),
             ],
         )
         import sage.api.routes as routes_mod
+
         original = routes_mod.get_candidates
         routes_mod.get_candidates = lambda **kw: [product]
         app = _make_app()
@@ -126,12 +142,18 @@ class TestRecommendEndpoint:
 
     def test_explainer_unavailable_returns_503(self):
         product = ProductScore(
-            product_id="P1", score=0.9, chunk_count=2, avg_rating=4.5,
+            product_id="P1",
+            score=0.9,
+            chunk_count=2,
+            avg_rating=4.5,
             evidence=[
-                RetrievedChunk(text="Good", score=0.9, product_id="P1", rating=4.5, review_id="r1"),
+                RetrievedChunk(
+                    text="Good", score=0.9, product_id="P1", rating=4.5, review_id="r1"
+                ),
             ],
         )
         import sage.api.routes as routes_mod
+
         original = routes_mod.get_candidates
         routes_mod.get_candidates = lambda **kw: [product]
 

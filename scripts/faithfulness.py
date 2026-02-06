@@ -47,6 +47,7 @@ TOP_K_PRODUCTS = 3
 # SECTION: Core Evaluation
 # ============================================================================
 
+
 def run_evaluation(n_samples: int, run_ragas: bool = False):
     """Run faithfulness evaluation on sample queries."""
     from sage.services.explanation import Explainer
@@ -64,8 +65,13 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
     all_explanations = []
 
     for i, query in enumerate(queries, 1):
-        logger.info("[%d/%d] \"%s\"", i, len(queries), query)
-        products = get_candidates(query=query, k=TOP_K_PRODUCTS, min_rating=4.0, aggregation=AggregationMethod.MAX)
+        logger.info('[%d/%d] "%s"', i, len(queries), query)
+        products = get_candidates(
+            query=query,
+            k=TOP_K_PRODUCTS,
+            min_rating=4.0,
+            aggregation=AggregationMethod.MAX,
+        )
 
         if not products:
             logger.info("  No products found")
@@ -73,7 +79,9 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
 
         product = products[0]
         try:
-            result = explainer.generate_explanation(query, product, max_evidence=MAX_EVIDENCE)
+            result = explainer.generate_explanation(
+                query, product, max_evidence=MAX_EVIDENCE
+            )
             all_explanations.append(result)
             logger.info("  %s: %s...", product.product_id, result.explanation[:60])
         except Exception:
@@ -101,7 +109,9 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
 
     logger.info(
         "HHEM (full-explanation): %d/%d grounded, mean=%.3f",
-        len(hhem_results) - n_hallucinated, len(hhem_results), np.mean(hhem_scores),
+        len(hhem_results) - n_hallucinated,
+        len(hhem_results),
+        np.mean(hhem_scores),
     )
 
     # Multi-metric faithfulness (claim-level as primary)
@@ -109,20 +119,24 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
 
     from sage.services.faithfulness import compute_multi_metric_faithfulness
 
-    multi_items = [
-        (expl.evidence_texts, expl.explanation) for expl in all_explanations
-    ]
+    multi_items = [(expl.evidence_texts, expl.explanation) for expl in all_explanations]
     multi_report = compute_multi_metric_faithfulness(multi_items)
 
-    logger.info("Quote verification: %d/%d (%.1f%%)",
-        multi_report.quotes_found, multi_report.quotes_total,
+    logger.info(
+        "Quote verification: %d/%d (%.1f%%)",
+        multi_report.quotes_found,
+        multi_report.quotes_total,
         multi_report.quote_verification_rate * 100,
     )
-    logger.info("Claim-level HHEM:   %.3f avg, %.1f%% pass rate",
-        multi_report.claim_level_avg_score, multi_report.claim_level_pass_rate * 100,
+    logger.info(
+        "Claim-level HHEM:   %.3f avg, %.1f%% pass rate",
+        multi_report.claim_level_avg_score,
+        multi_report.claim_level_pass_rate * 100,
     )
-    logger.info("Full-explanation:   %.3f avg, %.1f%% pass rate (reference only)",
-        multi_report.full_explanation_avg_score, multi_report.full_explanation_pass_rate * 100,
+    logger.info(
+        "Full-explanation:   %.3f avg, %.1f%% pass rate (reference only)",
+        multi_report.full_explanation_avg_score,
+        multi_report.full_explanation_pass_rate * 100,
     )
 
     # RAGAS (optional)
@@ -132,16 +146,17 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
 
         try:
             from sage.services.faithfulness import FaithfulnessEvaluator
+
             evaluator = FaithfulnessEvaluator()
             ragas_report = evaluator.evaluate_batch(all_explanations)
 
             logger.info(
                 "Faithfulness: %.3f +/- %.3f",
-                ragas_report.mean_score, ragas_report.std_score
+                ragas_report.mean_score,
+                ragas_report.std_score,
             )
             logger.info(
-                "Passing: %d/%d",
-                ragas_report.n_passing, ragas_report.n_samples
+                "Passing: %d/%d", ragas_report.n_passing, ragas_report.n_samples
             )
         except Exception:
             logger.exception("RAGAS evaluation failed")
@@ -217,8 +232,10 @@ def run_failure_analysis():
     case_id = 0
 
     for query in ANALYSIS_QUERIES:
-        logger.info("Query: \"%s\"", query)
-        products = get_candidates(query=query, k=3, min_rating=3.5, aggregation=AggregationMethod.MAX)
+        logger.info('Query: "%s"', query)
+        products = get_candidates(
+            query=query, k=3, min_rating=3.5, aggregation=AggregationMethod.MAX
+        )
 
         if not products:
             continue
@@ -226,21 +243,27 @@ def run_failure_analysis():
         for product in products[:2]:
             try:
                 result = explainer.generate_explanation(query, product, max_evidence=3)
-                hhem = detector.check_explanation(result.evidence_texts, result.explanation)
+                hhem = detector.check_explanation(
+                    result.evidence_texts, result.explanation
+                )
 
                 case_id += 1
-                all_cases.append({
-                    "case_id": case_id,
-                    "query": query,
-                    "product_id": product.product_id,
-                    "explanation": result.explanation,
-                    "evidence_texts": result.evidence_texts,
-                    "hhem_score": hhem.score,
-                    "is_hallucinated": hhem.is_hallucinated,
-                })
+                all_cases.append(
+                    {
+                        "case_id": case_id,
+                        "query": query,
+                        "product_id": product.product_id,
+                        "explanation": result.explanation,
+                        "evidence_texts": result.evidence_texts,
+                        "hhem_score": hhem.score,
+                        "is_hallucinated": hhem.is_hallucinated,
+                    }
+                )
 
                 status = "FAIL" if hhem.is_hallucinated else "PASS"
-                logger.info("  [%s] %.3f - %s...", status, hhem.score, product.product_id[:20])
+                logger.info(
+                    "  [%s] %.3f - %s...", status, hhem.score, product.product_id[:20]
+                )
             except Exception:
                 logger.exception("  Error processing product")
 
@@ -254,7 +277,9 @@ def run_failure_analysis():
 
     log_banner(logger, "ANALYSIS SUMMARY")
     logger.info("Total cases: %d", len(all_cases))
-    logger.info("Failures: %d (%.1f%%)", len(failures), len(failures) / len(all_cases) * 100)
+    logger.info(
+        "Failures: %d (%.1f%%)", len(failures), len(failures) / len(all_cases) * 100
+    )
     logger.info("Passes: %d", len(passes))
 
     # Categorize failures
@@ -273,6 +298,7 @@ def run_failure_analysis():
 # ============================================================================
 # SECTION: Adjusted Faithfulness
 # ============================================================================
+
 
 def run_adjusted_calculation():
     """Calculate adjusted faithfulness with refusals excluded."""
@@ -296,8 +322,14 @@ def run_adjusted_calculation():
 
     # Classify
     refusals = [c for c in cases if is_refusal(c["explanation"])]
-    non_refusal_passes = [c for c in cases if not is_refusal(c["explanation"]) and not c["is_hallucinated"]]
-    non_refusal_fails = [c for c in cases if not is_refusal(c["explanation"]) and c["is_hallucinated"]]
+    non_refusal_passes = [
+        c
+        for c in cases
+        if not is_refusal(c["explanation"]) and not c["is_hallucinated"]
+    ]
+    non_refusal_fails = [
+        c for c in cases if not is_refusal(c["explanation"]) and c["is_hallucinated"]
+    ]
 
     n_total = len(cases)
     raw_pass = sum(1 for c in cases if not c["is_hallucinated"])
@@ -309,9 +341,21 @@ def run_adjusted_calculation():
     logger.info("Non-refusal fails: %d", len(non_refusal_fails))
 
     log_section(logger, "Metrics")
-    logger.info("Raw pass rate:      %d/%d = %.1f%%", raw_pass, n_total, raw_pass / n_total * 100)
-    logger.info("Adjusted pass rate: %d/%d = %.1f%%", adjusted_pass, n_total, adjusted_pass / n_total * 100)
-    logger.info("Improvement: +%.1f%%", (adjusted_pass / n_total - raw_pass / n_total) * 100)
+    logger.info(
+        "Raw pass rate:      %d/%d = %.1f%%",
+        raw_pass,
+        n_total,
+        raw_pass / n_total * 100,
+    )
+    logger.info(
+        "Adjusted pass rate: %d/%d = %.1f%%",
+        adjusted_pass,
+        n_total,
+        adjusted_pass / n_total * 100,
+    )
+    logger.info(
+        "Improvement: +%.1f%%", (adjusted_pass / n_total - raw_pass / n_total) * 100
+    )
 
     # Save
     output = {
@@ -328,12 +372,15 @@ def run_adjusted_calculation():
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run faithfulness evaluation")
     parser.add_argument("--samples", "-n", type=int, default=DEFAULT_SAMPLES)
     parser.add_argument("--ragas", action="store_true", help="Include RAGAS evaluation")
     parser.add_argument("--analyze", action="store_true", help="Run failure analysis")
-    parser.add_argument("--adjusted", action="store_true", help="Calculate adjusted metrics")
+    parser.add_argument(
+        "--adjusted", action="store_true", help="Calculate adjusted metrics"
+    )
     args = parser.parse_args()
 
     if args.analyze:

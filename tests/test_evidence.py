@@ -50,7 +50,10 @@ class TestCheckEvidenceQuality:
         product = _product(score=0.3, n_chunks=3, text_len=300)
         quality = check_evidence_quality(product, min_score=0.7)
         assert quality.is_sufficient is False
-        assert "relevance" in quality.failure_reason.lower() or "score" in quality.failure_reason.lower()
+        assert (
+            "relevance" in quality.failure_reason.lower()
+            or "score" in quality.failure_reason.lower()
+        )
 
     def test_tracks_chunk_count(self):
         product = _product(score=0.85, n_chunks=4, text_len=200)

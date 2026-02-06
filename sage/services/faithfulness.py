@@ -73,7 +73,9 @@ def create_ragas_sample(query: str, explanation: str, evidence_texts: list[str])
     )
 
 
-def _explanation_results_to_samples(explanation_results: list[ExplanationResult]) -> list:
+def _explanation_results_to_samples(
+    explanation_results: list[ExplanationResult],
+) -> list:
     """Convert ExplanationResults to RAGAS samples."""
     return [
         create_ragas_sample(
@@ -239,6 +241,7 @@ class FaithfulnessEvaluator:
             results=individual_results,
         )
 
+
 def evaluate_faithfulness(
     explanation_results: list[ExplanationResult],
     provider: str | None = None,
@@ -396,7 +399,8 @@ def compute_adjusted_faithfulness(
     # - Valid non-recommendations count as passes (correct behavior)
     # - Regular recommendations evaluated by HHEM
     regular_passes = sum(
-        1 for r, is_non_rec in zip(results, valid_non_recs)
+        1
+        for r, is_non_rec in zip(results, valid_non_recs)
         if not is_non_rec and not r.is_hallucinated
     )
     adjusted_passes = regular_passes + n_valid_non_recs
@@ -594,14 +598,13 @@ def compute_multi_metric_faithfulness(
     detector = get_detector()
 
     # 1. Full-explanation HHEM (structural)
-    full_scores = [
-        detector.check_explanation(ev, exp).score
-        for ev, exp in items
-    ]
+    full_scores = [detector.check_explanation(ev, exp).score for ev, exp in items]
 
     # 2. Claim-level HHEM
     claim_report = compute_claim_level_hhem(
-        items, threshold, full_explanation_scores=full_scores,
+        items,
+        threshold,
+        full_explanation_scores=full_scores,
     )
 
     # 3. Quote verification (lexical)

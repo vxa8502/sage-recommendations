@@ -16,7 +16,12 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 try:
-    from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    from prometheus_client import (
+        Counter,
+        Histogram,
+        generate_latest,
+        CONTENT_TYPE_LATEST,
+    )
 
     REQUEST_COUNT = Counter(
         "sage_requests_total",
@@ -47,6 +52,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Public helpers
 # ---------------------------------------------------------------------------
+
 
 def record_request(endpoint: str, method: str, status: int) -> None:
     """Increment the request counter."""

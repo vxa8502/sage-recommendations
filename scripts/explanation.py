@@ -40,6 +40,7 @@ PRODUCTS_PER_QUERY = 2
 # SECTION: Basic Explanation Generation
 # ============================================================================
 
+
 def run_basic_tests():
     """Test basic explanation generation and HHEM detection."""
     from sage.services.explanation import Explainer
@@ -59,10 +60,13 @@ def run_basic_tests():
     query_results = {}
     for query in test_queries:
         products = get_candidates(
-            query=query, k=TOP_K_PRODUCTS, min_rating=4.0, aggregation=AggregationMethod.MAX
+            query=query,
+            k=TOP_K_PRODUCTS,
+            min_rating=4.0,
+            aggregation=AggregationMethod.MAX,
         )
         query_results[query] = products
-        logger.info("Query: \"%s\"", query)
+        logger.info('Query: "%s"', query)
         logger.info("  Found %d products", len(products))
 
     # Generate explanations
@@ -71,7 +75,7 @@ def run_basic_tests():
     all_explanations = []
 
     for query, products in query_results.items():
-        logger.info("--- Query: \"%s\" ---", query)
+        logger.info('--- Query: "%s" ---', query)
         for product in products[:PRODUCTS_PER_QUERY]:
             result = explainer.generate_explanation(query, product)
             all_explanations.append(result)
@@ -100,7 +104,7 @@ def run_basic_tests():
     if query_results:
         test_query = list(query_results.keys())[0]
         test_product = query_results[test_query][0]
-        logger.info("Query: \"%s\"", test_query)
+        logger.info('Query: "%s"', test_query)
         logger.info("Streaming: ")
 
         stream = explainer.generate_explanation_stream(test_query, test_product)
@@ -110,7 +114,9 @@ def run_basic_tests():
         logger.info("".join(chunks))
 
         streamed_result = stream.get_complete_result()
-        hhem = detector.check_explanation(streamed_result.evidence_texts, streamed_result.explanation)
+        hhem = detector.check_explanation(
+            streamed_result.evidence_texts, streamed_result.explanation
+        )
         logger.info("HHEM Score: %.3f", hhem.score)
 
     log_banner(logger, "BASIC TESTS COMPLETE")
@@ -120,7 +126,10 @@ def run_basic_tests():
 # SECTION: Evidence Quality Gate
 # ============================================================================
 
-def create_mock_product(n_chunks: int, tokens_per_chunk: int = 100, product_score: float = 0.85) -> ProductScore:
+
+def create_mock_product(
+    n_chunks: int, tokens_per_chunk: int = 100, product_score: float = 0.85
+) -> ProductScore:
     """Create a mock ProductScore for testing."""
     chunks = [
         RetrievedChunk(
@@ -145,7 +154,11 @@ def run_quality_gate_tests():
     """Test the evidence quality gate."""
     from sage.core.evidence import check_evidence_quality, generate_refusal_message
     from sage.services.faithfulness import is_refusal
-    from sage.config import MIN_EVIDENCE_CHUNKS, MIN_EVIDENCE_TOKENS, MIN_RETRIEVAL_SCORE
+    from sage.config import (
+        MIN_EVIDENCE_CHUNKS,
+        MIN_EVIDENCE_TOKENS,
+        MIN_RETRIEVAL_SCORE,
+    )
 
     log_banner(logger, "EVIDENCE QUALITY GATE TESTS")
 
@@ -161,7 +174,14 @@ def run_quality_gate_tests():
         product = create_mock_product(n_chunks, tok, score)
         quality = check_evidence_quality(product)
         status = "PASS" if quality.is_sufficient == expected else "FAIL"
-        logger.info("[%s] %d chunks, %d tok, score=%.2f -> %s", status, n_chunks, tok, score, reason)
+        logger.info(
+            "[%s] %d chunks, %d tok, score=%.2f -> %s",
+            status,
+            n_chunks,
+            tok,
+            score,
+            reason,
+        )
         assert quality.is_sufficient == expected
 
     log_section(logger, "2. REFUSAL GENERATION")
@@ -172,12 +192,18 @@ def run_quality_gate_tests():
         quality = check_evidence_quality(product)
         refusal = generate_refusal_message(query, quality)
         detected = is_refusal(refusal)
-        logger.info("[%s] Refusal detected for %s", "PASS" if detected else "FAIL", quality.failure_reason)
+        logger.info(
+            "[%s] Refusal detected for %s",
+            "PASS" if detected else "FAIL",
+            quality.failure_reason,
+        )
         assert detected
 
     logger.info(
         "Thresholds: chunks=%d, tokens=%d, score=%.2f",
-        MIN_EVIDENCE_CHUNKS, MIN_EVIDENCE_TOKENS, MIN_RETRIEVAL_SCORE
+        MIN_EVIDENCE_CHUNKS,
+        MIN_EVIDENCE_TOKENS,
+        MIN_RETRIEVAL_SCORE,
     )
     log_banner(logger, "QUALITY GATE TESTS COMPLETE")
 
@@ -186,9 +212,14 @@ def run_quality_gate_tests():
 # SECTION: Verification Loop
 # ============================================================================
 
+
 def run_verification_tests():
     """Test the post-generation verification loop."""
-    from sage.core.verification import extract_quotes, verify_quote_in_evidence, verify_explanation
+    from sage.core.verification import (
+        extract_quotes,
+        verify_quote_in_evidence,
+        verify_explanation,
+    )
 
     log_banner(logger, "VERIFICATION LOOP TESTS")
 
@@ -235,6 +266,7 @@ def run_verification_tests():
 # SECTION: Cold-Start
 # ============================================================================
 
+
 def run_cold_start_tests():
     """Test cold-start handling."""
     from sage.services.cold_start import (
@@ -264,7 +296,9 @@ def run_cold_start_tests():
     for count in test_counts:
         level = get_warmup_level(count)
         weight = get_content_weight(count)
-        logger.info("  %d interactions: level=%s, content_weight=%.1f", count, level, weight)
+        logger.info(
+            "  %d interactions: level=%s, content_weight=%.1f", count, level, weight
+        )
 
     # Test preferences to query
     log_section(logger, "2. PREFERENCES TO QUERY")
@@ -277,7 +311,7 @@ def run_cold_start_tests():
     )
     query = preferences_to_query(prefs)
     logger.info("Preferences: %s", prefs)
-    logger.info("Query: \"%s\"", query)
+    logger.info('Query: "%s"', query)
 
     # Test cold-start recommendations
     log_section(logger, "3. COLD-START RECOMMENDATIONS")
@@ -290,7 +324,9 @@ def run_cold_start_tests():
     )
     logger.info("Got %d recommendations", len(recs))
     for r in recs[:3]:
-        logger.info("  %s: score=%.3f, rating=%.1f", r.product_id, r.score, r.avg_rating)
+        logger.info(
+            "  %s: score=%.3f, rating=%.1f", r.product_id, r.score, r.avg_rating
+        )
 
     logger.info("Query-based (cold user):")
     recs = recommend_cold_start_user(
@@ -337,10 +373,12 @@ def run_cold_start_tests():
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run explanation tests")
     parser.add_argument(
-        "--section", "-s",
+        "--section",
+        "-s",
         choices=["all", "basic", "gate", "verify", "cold"],
         default="all",
         help="Which section to run",

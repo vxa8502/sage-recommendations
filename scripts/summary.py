@@ -16,7 +16,12 @@ import json
 import sys
 from pathlib import Path
 
-from sage.config import EVAL_DIMENSIONS, FAITHFULNESS_TARGET, HELPFULNESS_TARGET, RESULTS_DIR
+from sage.config import (
+    EVAL_DIMENSIONS,
+    FAITHFULNESS_TARGET,
+    HELPFULNESS_TARGET,
+    RESULTS_DIR,
+)
 
 WIDTH = 60
 SEP = "=" * WIDTH
@@ -82,14 +87,20 @@ def main():
         quotes_total = mm.get("quotes_total", 0)
 
         if claim_pass is not None:
-            print(f"  Claim HHEM:     {fmt(claim_avg, 3)}  ({claim_pass*100:.0f}% pass)")
-            print(f"  Quote Verif:    {fmt(quote_rate, 3)}  ({quotes_found}/{quotes_total})")
+            print(
+                f"  Claim HHEM:     {fmt(claim_avg, 3)}  ({claim_pass * 100:.0f}% pass)"
+            )
+            print(
+                f"  Quote Verif:    {fmt(quote_rate, 3)}  ({quotes_found}/{quotes_total})"
+            )
 
         # Full-explanation HHEM (reference)
         h = faith["hhem"]
         n_grounded = n_samples - h.get("n_hallucinated", 0)
         full_avg = h.get("mean_score")
-        print(f"  Full HHEM:      {fmt(full_avg, 3)}  ({n_grounded}/{n_samples} grounded, reference)")
+        print(
+            f"  Full HHEM:      {fmt(full_avg, 3)}  ({n_grounded}/{n_samples} grounded, reference)"
+        )
 
         # RAGAS if available
         ragas = faith.get("ragas", {})
@@ -98,8 +109,10 @@ def main():
             print(f"  RAGAS Faith:    {fmt(ragas_faith, 3)}")
 
         # Pass/fail: use claim-level as primary, fall back to RAGAS, then full HHEM
-        effective = claim_avg if claim_avg is not None else (
-            ragas_faith if ragas_faith is not None else full_avg
+        effective = (
+            claim_avg
+            if claim_avg is not None
+            else (ragas_faith if ragas_faith is not None else full_avg)
         )
         if effective is not None:
             status = "PASS" if effective >= FAITHFULNESS_TARGET else "FAIL"
@@ -123,7 +136,9 @@ def main():
             print(f"  {label + ':':<15s} {fmt(m, 2) if m is not None else '   ---'}")
         if overall is not None:
             status = "PASS" if human.get("pass", False) else "FAIL"
-            print(f"  Helpfulness:    {fmt(overall, 2)}  (target: {target:.1f})  [{status}]")
+            print(
+                f"  Helpfulness:    {fmt(overall, 2)}  (target: {target:.1f})  [{status}]"
+            )
         corr = human.get("hhem_trust_correlation", {})
         r = corr.get("spearman_r")
         if r is not None:

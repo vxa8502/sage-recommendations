@@ -42,6 +42,7 @@ RESULTS_DIR.mkdir(exist_ok=True)
 # SECTION: Spot-Check
 # ============================================================================
 
+
 def run_spot_check():
     """Manual spot-check of explanations vs evidence."""
     from sage.services.explanation import Explainer
@@ -56,18 +57,24 @@ def run_spot_check():
     queries = EVALUATION_QUERIES[:5]
 
     for query in queries:
-        products = get_candidates(query=query, k=2, min_rating=4.0, aggregation=AggregationMethod.MAX)
+        products = get_candidates(
+            query=query, k=2, min_rating=4.0, aggregation=AggregationMethod.MAX
+        )
 
         for product in products[:2]:
             result = explainer.generate_explanation(query, product, max_evidence=3)
             hhem = detector.check_explanation(result.evidence_texts, result.explanation)
 
             log_section(logger, f"SAMPLE {len(results) + 1}")
-            logger.info("Query: \"%s\"", query)
-            logger.info("HHEM: %.3f (%s)", hhem.score, "PASS" if not hhem.is_hallucinated else "FAIL")
+            logger.info('Query: "%s"', query)
+            logger.info(
+                "HHEM: %.3f (%s)",
+                hhem.score,
+                "PASS" if not hhem.is_hallucinated else "FAIL",
+            )
             logger.info("EVIDENCE:")
             for ev in result.evidence_texts[:2]:
-                logger.info("  \"%s...\"", ev[:100])
+                logger.info('  "%s..."', ev[:100])
             logger.info("EXPLANATION:")
             logger.info("  %s", result.explanation)
 
@@ -85,6 +92,7 @@ def run_spot_check():
 # ============================================================================
 # SECTION: Adversarial Tests
 # ============================================================================
+
 
 def run_adversarial_tests():
     """Test with contradictory evidence."""
@@ -118,10 +126,28 @@ def run_adversarial_tests():
         log_section(logger, case["name"])
 
         chunks = [
-            RetrievedChunk(text=case["positive"], score=0.9, product_id="TEST", rating=5.0, review_id="pos"),
-            RetrievedChunk(text=case["negative"], score=0.85, product_id="TEST", rating=1.0, review_id="neg"),
+            RetrievedChunk(
+                text=case["positive"],
+                score=0.9,
+                product_id="TEST",
+                rating=5.0,
+                review_id="pos",
+            ),
+            RetrievedChunk(
+                text=case["negative"],
+                score=0.85,
+                product_id="TEST",
+                rating=1.0,
+                review_id="neg",
+            ),
         ]
-        product = ProductScore(product_id="TEST", score=0.85, chunk_count=2, avg_rating=3.0, evidence=chunks)
+        product = ProductScore(
+            product_id="TEST",
+            score=0.85,
+            chunk_count=2,
+            avg_rating=3.0,
+            evidence=chunks,
+        )
 
         result = explainer.generate_explanation(case["query"], product, max_evidence=2)
         hhem = detector.check_explanation(result.evidence_texts, result.explanation)
@@ -142,6 +168,7 @@ def run_adversarial_tests():
 # SECTION: Empty Context Tests
 # ============================================================================
 
+
 def run_empty_context_tests():
     """Test graceful refusal with irrelevant evidence."""
     from sage.services.explanation import Explainer
@@ -153,19 +180,46 @@ def run_empty_context_tests():
     detector = HallucinationDetector()
 
     cases = [
-        {"name": "Irrelevant", "query": "quantum computing textbook", "evidence": "Great USB cable."},
+        {
+            "name": "Irrelevant",
+            "query": "quantum computing textbook",
+            "evidence": "Great USB cable.",
+        },
         {"name": "Minimal", "query": "high-quality camera lens", "evidence": "OK."},
-        {"name": "Foreign", "query": "wireless mouse", "evidence": "Muy bueno el producto."},
+        {
+            "name": "Foreign",
+            "query": "wireless mouse",
+            "evidence": "Muy bueno el producto.",
+        },
     ]
 
-    refusal_words = ["cannot", "can't", "unable", "no evidence", "insufficient", "limited"]
+    refusal_words = [
+        "cannot",
+        "can't",
+        "unable",
+        "no evidence",
+        "insufficient",
+        "limited",
+    ]
     results = []
 
     for case in cases:
         log_section(logger, case["name"])
 
-        chunk = RetrievedChunk(text=case["evidence"], score=0.3, product_id="TEST", rating=3.0, review_id="r1")
-        product = ProductScore(product_id="TEST", score=0.3, chunk_count=1, avg_rating=3.0, evidence=[chunk])
+        chunk = RetrievedChunk(
+            text=case["evidence"],
+            score=0.3,
+            product_id="TEST",
+            rating=3.0,
+            review_id="r1",
+        )
+        product = ProductScore(
+            product_id="TEST",
+            score=0.3,
+            chunk_count=1,
+            avg_rating=3.0,
+            evidence=[chunk],
+        )
 
         result = explainer.generate_explanation(case["query"], product, max_evidence=1)
         _hhem = detector.check_explanation(result.evidence_texts, result.explanation)
@@ -184,6 +238,7 @@ def run_empty_context_tests():
 # ============================================================================
 # SECTION: Calibration Check
 # ============================================================================
+
 
 @dataclass
 class CalibrationSample:
@@ -210,21 +265,27 @@ def run_calibration_check():
 
     logger.info("Generating samples...")
     for query in queries:
-        products = get_candidates(query=query, k=5, min_rating=3.0, aggregation=AggregationMethod.MAX)
+        products = get_candidates(
+            query=query, k=5, min_rating=3.0, aggregation=AggregationMethod.MAX
+        )
 
         for product in products[:2]:
             try:
                 result = explainer.generate_explanation(query, product, max_evidence=3)
-                hhem = detector.check_explanation(result.evidence_texts, result.explanation)
+                hhem = detector.check_explanation(
+                    result.evidence_texts, result.explanation
+                )
 
-                samples.append(CalibrationSample(
-                    query=query,
-                    product_id=product.product_id,
-                    retrieval_score=product.score,
-                    evidence_count=product.chunk_count,
-                    avg_rating=product.avg_rating,
-                    hhem_score=hhem.score,
-                ))
+                samples.append(
+                    CalibrationSample(
+                        query=query,
+                        product_id=product.product_id,
+                        retrieval_score=product.score,
+                        evidence_count=product.chunk_count,
+                        avg_rating=product.avg_rating,
+                        hhem_score=hhem.score,
+                    )
+                )
             except Exception:
                 logger.debug("Error generating sample", exc_info=True)
 
@@ -251,24 +312,28 @@ def run_calibration_check():
     # Stratified analysis
     sorted_samples = sorted(samples, key=lambda s: s.retrieval_score)
     n = len(sorted_samples)
-    low = sorted_samples[:n//3]
-    mid = sorted_samples[n//3:2*n//3]
-    high = sorted_samples[2*n//3:]
+    low = sorted_samples[: n // 3]
+    mid = sorted_samples[n // 3 : 2 * n // 3]
+    high = sorted_samples[2 * n // 3 :]
 
     log_section(logger, "HHEM by Confidence Tier")
     logger.info("  LOW  (n=%2d): %.3f", len(low), np.mean([s.hhem_score for s in low]))
     logger.info("  MED  (n=%2d): %.3f", len(mid), np.mean([s.hhem_score for s in mid]))
-    logger.info("  HIGH (n=%2d): %.3f", len(high), np.mean([s.hhem_score for s in high]))
+    logger.info(
+        "  HIGH (n=%2d): %.3f", len(high), np.mean([s.hhem_score for s in high])
+    )
 
 
 # ============================================================================
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run pipeline sanity checks")
     parser.add_argument(
-        "--section", "-s",
+        "--section",
+        "-s",
         choices=["all", "spot", "adversarial", "empty", "calibration"],
         default="all",
         help="Which section to run",

@@ -76,7 +76,7 @@ def format_evidence(
         return "(No review evidence available)"
 
     return "\n\n".join(
-        f"[{chunk.review_id}] ({int(chunk.rating or 0)}/5 stars): \"{chunk.text}\""
+        f'[{chunk.review_id}] ({int(chunk.rating or 0)}/5 stars): "{chunk.text}"'
         for chunk in chunks[:max_chunks]
     )
 

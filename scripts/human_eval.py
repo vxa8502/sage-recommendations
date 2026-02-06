@@ -51,6 +51,7 @@ NATURAL_QUERIES_FILE = DATA_DIR / "eval" / "eval_natural_queries.json"
 # Sample Generation
 # ============================================================================
 
+
 def _select_diverse_natural_queries(target: int = 35) -> list[str]:
     """Select diverse queries from natural eval dataset, balanced by category."""
     if not NATURAL_QUERIES_FILE.exists():
@@ -114,7 +115,8 @@ def generate_samples(force: bool = False):
             logger.error(
                 "%s contains %d rated samples. "
                 "Use --force to overwrite, or run --annotate to continue.",
-                SAMPLES_FILE, rated,
+                SAMPLES_FILE,
+                rated,
             )
             sys.exit(1)
 
@@ -129,7 +131,9 @@ def generate_samples(force: bool = False):
     all_queries = natural + config
     logger.info(
         "Queries: %d natural + %d config = %d total",
-        len(natural), len(config), len(all_queries),
+        len(natural),
+        len(config),
+        len(all_queries),
     )
 
     if len(all_queries) < TARGET_SAMPLES:
@@ -137,7 +141,8 @@ def generate_samples(force: bool = False):
             "Only %d unique queries available (target: %d). "
             "Results will lack statistical power. "
             "Run 'make eval' to build natural query dataset.",
-            len(all_queries), TARGET_SAMPLES,
+            len(all_queries),
+            TARGET_SAMPLES,
         )
 
     # Initialize services
@@ -146,10 +151,12 @@ def generate_samples(force: bool = False):
 
     samples = []
     for i, query in enumerate(all_queries, 1):
-        logger.info("[%d/%d] \"%s\"", i, len(all_queries), query)
+        logger.info('[%d/%d] "%s"', i, len(all_queries), query)
 
         products = get_candidates(
-            query=query, k=1, min_rating=4.0,
+            query=query,
+            k=1,
+            min_rating=4.0,
             aggregation=AggregationMethod.MAX,
         )
         if not products:
@@ -159,10 +166,13 @@ def generate_samples(force: bool = False):
         product = products[0]
         try:
             expl = explainer.generate_explanation(
-                query, product, max_evidence=MAX_EVIDENCE,
+                query,
+                product,
+                max_evidence=MAX_EVIDENCE,
             )
             hhem = detector.check_explanation(
-                expl.evidence_texts, expl.explanation,
+                expl.evidence_texts,
+                expl.explanation,
             )
 
             sample = {
@@ -178,7 +188,9 @@ def generate_samples(force: bool = False):
             samples.append(sample)
             logger.info(
                 "  %s (%.1f stars) HHEM=%.3f",
-                product.product_id, product.avg_rating, hhem.score,
+                product.product_id,
+                product.avg_rating,
+                hhem.score,
             )
         except ValueError as exc:
             logger.info("  Quality gate refusal: %s", exc)
@@ -196,6 +208,7 @@ def generate_samples(force: bool = False):
 # ============================================================================
 # Interactive Annotation
 # ============================================================================
+
 
 def _load_samples() -> list[dict]:
     """Load samples from disk."""
@@ -261,7 +274,7 @@ def annotate_samples():
                 text = ev["text"]
                 if len(text) > 200:
                     text = text[:200] + "..."
-                print(f"  [{ev['id']}]: \"{text}\"")
+                print(f'  [{ev["id"]}]: "{text}"')
             print()
 
             # Collect ratings
@@ -286,6 +299,7 @@ def annotate_samples():
 # Analysis
 # ============================================================================
 
+
 def analyze_results():
     """Compute aggregate metrics from rated samples."""
     samples = _load_samples()
@@ -306,7 +320,7 @@ def analyze_results():
         n = len(scores)
         mean = sum(scores) / n
         variance = sum((x - mean) ** 2 for x in scores) / (n - 1) if n > 1 else 0.0
-        std = variance ** 0.5
+        std = variance**0.5
         dimensions_results[dim_key] = {
             "mean": round(mean, 2),
             "std": round(std, 2),
@@ -315,7 +329,11 @@ def analyze_results():
         }
         logger.info(
             "  %-15s mean=%.2f  std=%.2f  range=[%d, %d]",
-            dim_key + ":", mean, std, min(scores), max(scores),
+            dim_key + ":",
+            mean,
+            std,
+            min(scores),
+            max(scores),
         )
 
     # Overall helpfulness: mean of per-sample averages
@@ -328,15 +346,20 @@ def analyze_results():
     passed = overall >= HELPFULNESS_TARGET
 
     logger.info("")
-    logger.info("Overall helpfulness: %.2f (target: %.1f) [%s]",
-                overall, HELPFULNESS_TARGET, "PASS" if passed else "FAIL")
+    logger.info(
+        "Overall helpfulness: %.2f (target: %.1f) [%s]",
+        overall,
+        HELPFULNESS_TARGET,
+        "PASS" if passed else "FAIL",
+    )
 
     # HHEM vs Trust correlation (Spearman)
     correlation = _compute_hhem_trust_correlation(rated)
     if correlation:
         logger.info(
             "HHEM-Trust correlation: r=%.3f, p=%.4f",
-            correlation["spearman_r"], correlation["p_value"],
+            correlation["spearman_r"],
+            correlation["p_value"],
         )
 
     # Save results
@@ -368,6 +391,7 @@ def _compute_hhem_trust_correlation(rated: list[dict]) -> dict | None:
 
     try:
         from scipy.stats import spearmanr
+
         r, p = spearmanr(hhem_scores, trust_scores)
         return {"spearman_r": round(float(r), 4), "p_value": round(float(p), 4)}
     except ImportError:
@@ -399,13 +423,13 @@ def _manual_spearman(x: list[float], y: list[float]) -> dict | None:
     ry = _rank(y)
 
     d_sq = sum((rx[i] - ry[i]) ** 2 for i in range(n))
-    rho = 1 - (6 * d_sq) / (n * (n ** 2 - 1))
+    rho = 1 - (6 * d_sq) / (n * (n**2 - 1))
 
     # Approximate p-value via t-distribution (large sample)
     if abs(rho) >= 1.0:
         p = 0.0
     else:
-        t = rho * math.sqrt((n - 2) / (1 - rho ** 2))
+        t = rho * math.sqrt((n - 2) / (1 - rho**2))
         # Two-tailed p-value approximation
         p = 2 * (1 - _t_cdf_approx(abs(t), n - 2))
 
@@ -426,6 +450,7 @@ def _t_cdf_approx(t: float, df: int) -> float:
 # ============================================================================
 # Status
 # ============================================================================
+
 
 def show_status():
     """Show annotation progress."""
@@ -450,21 +475,27 @@ def show_status():
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(
         description="Human evaluation of recommendation explanations",
     )
     group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--generate", action="store_true",
-                       help="Generate recommendation samples")
-    group.add_argument("--annotate", action="store_true",
-                       help="Rate samples interactively (resumable)")
-    group.add_argument("--analyze", action="store_true",
-                       help="Compute aggregate results from ratings")
-    group.add_argument("--status", action="store_true",
-                       help="Show annotation progress")
-    parser.add_argument("--force", action="store_true",
-                        help="Overwrite existing rated samples (with --generate)")
+    group.add_argument(
+        "--generate", action="store_true", help="Generate recommendation samples"
+    )
+    group.add_argument(
+        "--annotate", action="store_true", help="Rate samples interactively (resumable)"
+    )
+    group.add_argument(
+        "--analyze", action="store_true", help="Compute aggregate results from ratings"
+    )
+    group.add_argument("--status", action="store_true", help="Show annotation progress")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing rated samples (with --generate)",
+    )
     args = parser.parse_args()
 
     if args.force and not args.generate:

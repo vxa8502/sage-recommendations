@@ -102,6 +102,7 @@ class ColdStartService:
         """Lazy-load retrieval service."""
         if self._retrieval is None:
             from sage.services.retrieval import RetrievalService
+
             self._retrieval = RetrievalService(collection_name=self.collection_name)
         return self._retrieval
 
@@ -179,7 +180,9 @@ class ColdStartService:
         item_text = " ".join(text_parts)
 
         # Embed as a passage
-        item_embedding = self.embedder.embed_passages([item_text], show_progress=False)[0]
+        item_embedding = self.embedder.embed_passages([item_text], show_progress=False)[
+            0
+        ]
 
         # Search for similar chunks
         results = search(

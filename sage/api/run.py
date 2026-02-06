@@ -24,7 +24,8 @@ def main():
     parser = argparse.ArgumentParser(description="Sage API server")
     parser.add_argument("--host", default="0.0.0.0", help="Bind address")
     parser.add_argument(
-        "--port", type=int,
+        "--port",
+        type=int,
         default=int(os.getenv("PORT", "8000")),
         help="Port (defaults to PORT env var, then 8000)",
     )

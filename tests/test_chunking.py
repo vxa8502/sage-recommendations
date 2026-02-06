@@ -67,7 +67,9 @@ class TestSlidingWindowChunk:
 
     def test_long_text_creates_multiple_chunks(self):
         # Create text long enough to require multiple chunks
-        sentences = [f"This is sentence number {i} with some padding text." for i in range(20)]
+        sentences = [
+            f"This is sentence number {i} with some padding text." for i in range(20)
+        ]
         text = " ".join(sentences)
         chunks = sliding_window_chunk(text, chunk_size=50, overlap=10)
         assert len(chunks) > 1

@@ -20,8 +20,10 @@ from typing import Iterator
 # RETRIEVAL & RECOMMENDATION MODELS
 # ============================================================================
 
+
 class AggregationMethod(Enum):
     """Methods for aggregating chunk scores to product scores."""
+
     MAX = "max"
     MEAN = "mean"
     WEIGHTED_MEAN = "weighted_mean"
@@ -35,6 +37,7 @@ class Chunk:
     This is the unit stored in the vector database. Reviews are chunked
     using semantic or sliding-window strategies based on length.
     """
+
     text: str
     chunk_index: int
     total_chunks: int
@@ -52,6 +55,7 @@ class RetrievedChunk:
     This is returned by semantic search and used as evidence for
     explanation generation.
     """
+
     text: str
     score: float
     product_id: str
@@ -67,6 +71,7 @@ class ProductScore:
     Multiple chunks may belong to the same product. This dataclass
     holds the aggregated score and all supporting evidence.
     """
+
     product_id: str
     score: float
     chunk_count: int
@@ -89,6 +94,7 @@ class Recommendation:
     This is the output of the recommendation pipeline, ready for
     display or API response.
     """
+
     rank: int
     product_id: str
     score: float
@@ -102,6 +108,7 @@ class Recommendation:
 # COLD START MODELS
 # ============================================================================
 
+
 @dataclass
 class UserPreferences:
     """
@@ -110,6 +117,7 @@ class UserPreferences:
     In production, these would be collected via an onboarding flow:
     "What categories interest you?" "What's your budget?" etc.
     """
+
     categories: list[str] | None = None
     budget: str | None = None  # "low", "medium", "high", or specific like "$50-100"
     priorities: list[str] | None = None  # ["quality", "value", "durability"]
@@ -123,6 +131,7 @@ class NewItem:
 
     In production, this would come from the product catalog.
     """
+
     product_id: str
     title: str
     description: str | None = None
@@ -136,6 +145,7 @@ class NewItem:
 # EXPLANATION MODELS
 # ============================================================================
 
+
 @dataclass
 class ExplanationResult:
     """
@@ -144,6 +154,7 @@ class ExplanationResult:
     Contains the generated explanation along with evidence attribution
     for traceability and faithfulness verification.
     """
+
     explanation: str
     product_id: str
     query: str
@@ -174,6 +185,7 @@ class StreamingExplanation:
             print(token, end="", flush=True)
         result = stream.get_complete_result()
     """
+
     token_iterator: Iterator[str]
     product_id: str
     query: str
@@ -215,6 +227,7 @@ class EvidenceQuality:
     when evidence is too thin. Thin evidence (1 chunk, few tokens)
     correlates strongly with LLM overclaiming.
     """
+
     is_sufficient: bool
     chunk_count: int
     total_tokens: int
@@ -226,9 +239,11 @@ class EvidenceQuality:
 # VERIFICATION MODELS
 # ============================================================================
 
+
 @dataclass
 class QuoteVerification:
     """Result of verifying a single quoted claim against evidence."""
+
     quote: str
     found: bool
     source_text: str | None = None  # Which evidence text contained it
@@ -243,6 +258,7 @@ class VerificationResult:
     exists in the provided evidence. Catches wrong attribution where
     LLM cites quotes that don't exist.
     """
+
     all_verified: bool
     quotes_found: int
     quotes_missing: int
@@ -254,6 +270,7 @@ class VerificationResult:
 # HALLUCINATION DETECTION MODELS
 # ============================================================================
 
+
 @dataclass
 class HallucinationResult:
     """
@@ -263,6 +280,7 @@ class HallucinationResult:
     consistency between evidence (premise) and explanation (hypothesis).
     Score < 0.5 indicates hallucination.
     """
+
     score: float
     is_hallucinated: bool
     threshold: float
@@ -273,6 +291,7 @@ class HallucinationResult:
 @dataclass
 class ClaimResult:
     """Result of hallucination check for a single claim."""
+
     claim: str
     score: float
     is_hallucinated: bool
@@ -286,6 +305,7 @@ class AgreementReport:
     Useful for understanding when the two methods disagree and
     calibrating thresholds.
     """
+
     n_samples: int
     agreement_rate: float  # Proportion where both agree on pass/fail
     hhem_pass_rate: float
@@ -306,6 +326,7 @@ class AdjustedFaithfulnessReport:
     Refusals (e.g., "I cannot recommend...") are correct LLM behavior
     but get penalized by HHEM. This report adjusts for that.
     """
+
     n_total: int
     n_refusals: int
     n_evaluated: int  # n_total - n_refusals
@@ -334,6 +355,7 @@ class ClaimLevelReport:
     - min_score: Lowest scoring claim (weakest grounding)
     - pass_rate: Proportion of claims scoring >= threshold
     """
+
     n_explanations: int
     n_claims: int
     avg_score: float
@@ -368,6 +390,7 @@ class MultiMetricFaithfulnessReport:
     individually. Full-explanation HHEM (57%) measures structural patterns
     that HHEM was trained on, not actual hallucination."
     """
+
     n_samples: int
     # Quote verification (lexical)
     quote_verification_rate: float
@@ -410,19 +433,19 @@ class MultiMetricFaithfulnessReport:
             "=" * 50,
             "",
             "Quote Verification (lexical grounding):",
-            f"  Pass rate: {self.quote_verification_rate*100:.1f}% ({self.quotes_found}/{self.quotes_total})",
+            f"  Pass rate: {self.quote_verification_rate * 100:.1f}% ({self.quotes_found}/{self.quotes_total})",
             "",
             "Claim-Level HHEM (semantic grounding per claim):",
-            f"  Pass rate: {self.claim_level_pass_rate*100:.1f}%",
+            f"  Pass rate: {self.claim_level_pass_rate * 100:.1f}%",
             f"  Avg score: {self.claim_level_avg_score:.3f}",
             f"  Min score: {self.claim_level_min_score:.3f}",
             "",
             "Full-Explanation HHEM (structural compatibility):",
-            f"  Pass rate: {self.full_explanation_pass_rate*100:.1f}%",
+            f"  Pass rate: {self.full_explanation_pass_rate * 100:.1f}%",
             f"  Avg score: {self.full_explanation_avg_score:.3f}",
             "",
             "-" * 50,
-            f"PRIMARY METRIC ({self.primary_metric}): {self.claim_level_pass_rate*100:.1f}%",
+            f"PRIMARY METRIC ({self.primary_metric}): {self.claim_level_pass_rate * 100:.1f}%",
         ]
         return "\n".join(lines)
 
@@ -431,9 +454,11 @@ class MultiMetricFaithfulnessReport:
 # FAITHFULNESS EVALUATION MODELS (RAGAS)
 # ============================================================================
 
+
 @dataclass
 class FaithfulnessResult:
     """Result of RAGAS faithfulness evaluation for a single explanation."""
+
     score: float
     query: str
     explanation: str
@@ -444,6 +469,7 @@ class FaithfulnessResult:
 @dataclass
 class FaithfulnessReport:
     """Aggregate report for batch faithfulness evaluation (legacy format)."""
+
     mean_score: float
     min_score: float
     max_score: float
@@ -459,6 +485,7 @@ class FaithfulnessReport:
 # EVALUATION METRICS MODELS
 # ============================================================================
 
+
 @dataclass
 class EvalCase:
     """
@@ -470,6 +497,7 @@ class EvalCase:
                        For binary relevance, use 1 for relevant, 0 for not.
         user_id: Optional user identifier for the case.
     """
+
     query: str
     relevant_items: dict[str, float]
     user_id: str | None = None
@@ -483,6 +511,7 @@ class EvalCase:
 @dataclass
 class EvalResult:
     """Results from evaluating a single recommendation list."""
+
     ndcg: float = 0.0
     hit: float = 0.0
     mrr: float = 0.0
@@ -498,6 +527,7 @@ class MetricsReport:
     Includes both accuracy metrics (NDCG, Hit, MRR) and
     beyond-accuracy metrics (diversity, coverage, novelty).
     """
+
     n_cases: int = 0
     ndcg_at_k: float = 0.0
     hit_at_k: float = 0.0

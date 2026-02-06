@@ -109,8 +109,8 @@ class Explainer:
         Returns:
             (explanation, tokens, evidence_texts, evidence_ids, user_prompt).
         """
-        system_prompt, user_prompt, evidence_texts, evidence_ids = build_explanation_prompt(
-            query, product, max_evidence
+        system_prompt, user_prompt, evidence_texts, evidence_ids = (
+            build_explanation_prompt(query, product, max_evidence)
         )
 
         t0 = time.perf_counter()
@@ -120,7 +120,9 @@ class Explainer:
         )
         logger.info(
             "LLM generation for %s: %.0fms, %d tokens",
-            product.product_id, (time.perf_counter() - t0) * 1000, tokens,
+            product.product_id,
+            (time.perf_counter() - t0) * 1000,
+            tokens,
         )
 
         return explanation, tokens, evidence_texts, evidence_ids, user_prompt
@@ -241,8 +243,8 @@ class Explainer:
                 f"Client {type(self.client).__name__} does not support streaming."
             )
 
-        system_prompt, user_prompt, evidence_texts, evidence_ids = build_explanation_prompt(
-            query, product, max_evidence
+        system_prompt, user_prompt, evidence_texts, evidence_ids = (
+            build_explanation_prompt(query, product, max_evidence)
         )
 
         token_iterator = self.client.generate_stream(
@@ -335,7 +337,11 @@ class Explainer:
         """
         return [
             self.generate_explanation(
-                query, product, max_evidence, enforce_quality_gate, enforce_forbidden_phrases
+                query,
+                product,
+                max_evidence,
+                enforce_quality_gate,
+                enforce_forbidden_phrases,
             )
             for product in products
         ]

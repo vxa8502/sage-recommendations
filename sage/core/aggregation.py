@@ -55,13 +55,15 @@ def aggregate_chunks_to_products(
         else:
             agg_score = max(scores)
 
-        product_scores.append(ProductScore(
-            product_id=product_id,
-            score=agg_score,
-            chunk_count=len(prod_chunks),
-            avg_rating=float(np.mean(ratings)),
-            evidence=sorted(prod_chunks, key=lambda c: c.score, reverse=True),
-        ))
+        product_scores.append(
+            ProductScore(
+                product_id=product_id,
+                score=agg_score,
+                chunk_count=len(prod_chunks),
+                avg_rating=float(np.mean(ratings)),
+                evidence=sorted(prod_chunks, key=lambda c: c.score, reverse=True),
+            )
+        )
 
     # Sort by score descending
     return sorted(product_scores, key=lambda p: p.score, reverse=True)
@@ -112,12 +114,14 @@ def apply_weighted_ranking(
     # Create new ProductScore objects with updated scores
     reranked = []
     for i, product in enumerate(products):
-        reranked.append(ProductScore(
-            product_id=product.product_id,
-            score=float(final_scores[i]),
-            chunk_count=product.chunk_count,
-            avg_rating=product.avg_rating,
-            evidence=product.evidence,
-        ))
+        reranked.append(
+            ProductScore(
+                product_id=product.product_id,
+                score=float(final_scores[i]),
+                chunk_count=product.chunk_count,
+                avg_rating=product.avg_rating,
+                evidence=product.evidence,
+            )
+        )
 
     return sorted(reranked, key=lambda p: p.score, reverse=True)

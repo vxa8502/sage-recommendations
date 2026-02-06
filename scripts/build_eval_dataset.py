@@ -35,27 +35,199 @@ EVAL_DIR = DATA_DIR / "eval"
 
 # Common stopwords to filter out
 STOPWORDS = {
-    "i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your",
-    "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she",
-    "her", "hers", "herself", "it", "its", "itself", "they", "them", "their",
-    "theirs", "themselves", "what", "which", "who", "whom", "this", "that",
-    "these", "those", "am", "is", "are", "was", "were", "be", "been", "being",
-    "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an",
-    "the", "and", "but", "if", "or", "because", "as", "until", "while", "of",
-    "at", "by", "for", "with", "about", "against", "between", "into", "through",
-    "during", "before", "after", "above", "below", "to", "from", "up", "down",
-    "in", "out", "on", "off", "over", "under", "again", "further", "then",
-    "once", "here", "there", "when", "where", "why", "how", "all", "each",
-    "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only",
-    "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just",
-    "don", "should", "now", "d", "ll", "m", "o", "re", "ve", "y", "ain", "aren",
-    "couldn", "didn", "doesn", "hadn", "hasn", "haven", "isn", "ma", "mightn",
-    "mustn", "needn", "shan", "shouldn", "wasn", "weren", "won", "wouldn",
-    "also", "would", "could", "get", "got", "one", "two", "really", "like",
-    "just", "even", "well", "much", "still", "back", "way", "thing", "things",
-    "make", "made", "work", "works", "worked", "use", "used", "using", "good",
-    "great", "nice", "product", "item", "bought", "buy", "amazon", "review",
-    "ordered", "order", "received", "came", "arrived", "shipping", "shipped",
+    "i",
+    "me",
+    "my",
+    "myself",
+    "we",
+    "our",
+    "ours",
+    "ourselves",
+    "you",
+    "your",
+    "yours",
+    "yourself",
+    "yourselves",
+    "he",
+    "him",
+    "his",
+    "himself",
+    "she",
+    "her",
+    "hers",
+    "herself",
+    "it",
+    "its",
+    "itself",
+    "they",
+    "them",
+    "their",
+    "theirs",
+    "themselves",
+    "what",
+    "which",
+    "who",
+    "whom",
+    "this",
+    "that",
+    "these",
+    "those",
+    "am",
+    "is",
+    "are",
+    "was",
+    "were",
+    "be",
+    "been",
+    "being",
+    "have",
+    "has",
+    "had",
+    "having",
+    "do",
+    "does",
+    "did",
+    "doing",
+    "a",
+    "an",
+    "the",
+    "and",
+    "but",
+    "if",
+    "or",
+    "because",
+    "as",
+    "until",
+    "while",
+    "of",
+    "at",
+    "by",
+    "for",
+    "with",
+    "about",
+    "against",
+    "between",
+    "into",
+    "through",
+    "during",
+    "before",
+    "after",
+    "above",
+    "below",
+    "to",
+    "from",
+    "up",
+    "down",
+    "in",
+    "out",
+    "on",
+    "off",
+    "over",
+    "under",
+    "again",
+    "further",
+    "then",
+    "once",
+    "here",
+    "there",
+    "when",
+    "where",
+    "why",
+    "how",
+    "all",
+    "each",
+    "few",
+    "more",
+    "most",
+    "other",
+    "some",
+    "such",
+    "no",
+    "nor",
+    "not",
+    "only",
+    "own",
+    "same",
+    "so",
+    "than",
+    "too",
+    "very",
+    "s",
+    "t",
+    "can",
+    "will",
+    "just",
+    "don",
+    "should",
+    "now",
+    "d",
+    "ll",
+    "m",
+    "o",
+    "re",
+    "ve",
+    "y",
+    "ain",
+    "aren",
+    "couldn",
+    "didn",
+    "doesn",
+    "hadn",
+    "hasn",
+    "haven",
+    "isn",
+    "ma",
+    "mightn",
+    "mustn",
+    "needn",
+    "shan",
+    "shouldn",
+    "wasn",
+    "weren",
+    "won",
+    "wouldn",
+    "also",
+    "would",
+    "could",
+    "get",
+    "got",
+    "one",
+    "two",
+    "really",
+    "like",
+    "just",
+    "even",
+    "well",
+    "much",
+    "still",
+    "back",
+    "way",
+    "thing",
+    "things",
+    "make",
+    "made",
+    "work",
+    "works",
+    "worked",
+    "use",
+    "used",
+    "using",
+    "good",
+    "great",
+    "nice",
+    "product",
+    "item",
+    "bought",
+    "buy",
+    "amazon",
+    "review",
+    "ordered",
+    "order",
+    "received",
+    "came",
+    "arrived",
+    "shipping",
+    "shipped",
 }
 
 
@@ -75,7 +247,7 @@ def extract_keywords(text: str, max_keywords: int = 8) -> list[str]:
     # Clean text
     text = text.lower()
     text = re.sub(r"<br\s*/?>", " ", text)  # Remove HTML breaks
-    text = re.sub(r"[^a-z\s]", " ", text)   # Keep only letters
+    text = re.sub(r"[^a-z\s]", " ", text)  # Keep only letters
     text = re.sub(r"\s+", " ", text).strip()
 
     # Tokenize and filter
@@ -165,6 +337,7 @@ def generate_query_from_history(
 # Evaluation Dataset Construction
 # ---------------------------------------------------------------------------
 
+
 def build_leave_one_out_cases(
     df: pd.DataFrame,
     min_reviews: int = 2,
@@ -231,16 +404,21 @@ def build_leave_one_out_cases(
 
         # Only include if target has positive relevance
         if relevance > 0:
-            eval_cases.append(EvalCase(
-                query=query,
-                relevant_items={target_product: relevance},
-                user_id=user_id,
-            ))
+            eval_cases.append(
+                EvalCase(
+                    query=query,
+                    relevant_items={target_product: relevance},
+                    user_id=user_id,
+                )
+            )
 
     if verbose:
         logger.info("Users with enough reviews: %d", len(user_groups) - skipped_users)
         logger.info("Eval cases created: %d", len(eval_cases))
-        logger.info("Skipped (low relevance): %d", len(user_groups) - skipped_users - len(eval_cases))
+        logger.info(
+            "Skipped (low relevance): %d",
+            len(user_groups) - skipped_users - len(eval_cases),
+        )
 
     return eval_cases
 
@@ -310,16 +488,20 @@ def build_multi_relevant_cases(
                 )
 
         if relevant_items:
-            eval_cases.append(EvalCase(
-                query=query,
-                relevant_items=relevant_items,
-                user_id=user_id,
-            ))
+            eval_cases.append(
+                EvalCase(
+                    query=query,
+                    relevant_items=relevant_items,
+                    user_id=user_id,
+                )
+            )
 
     if verbose:
         logger.info("Users with train history: %d", len(train_users))
         logger.info("Eval cases created: %d", len(eval_cases))
-        avg_relevant = np.mean([len(c.relevant_items) for c in eval_cases]) if eval_cases else 0
+        avg_relevant = (
+            np.mean([len(c.relevant_items) for c in eval_cases]) if eval_cases else 0
+        )
         logger.info("Avg relevant items per case: %.1f", avg_relevant)
 
     return eval_cases
@@ -400,7 +582,12 @@ if __name__ == "__main__":
     # Load splits
     log_section(logger, "Loading data splits")
     train_df, val_df, test_df = load_splits()
-    logger.info("Train: %s | Val: %s | Test: %s", f"{len(train_df):,}", f"{len(val_df):,}", f"{len(test_df):,}")
+    logger.info(
+        "Train: %s | Val: %s | Test: %s",
+        f"{len(train_df):,}",
+        f"{len(val_df):,}",
+        f"{len(test_df):,}",
+    )
 
     # Strategy 1: Leave-one-out with keyword queries
     # WARNING: This strategy has TARGET LEAKAGE - queries are generated from
@@ -418,8 +605,12 @@ if __name__ == "__main__":
     # Show examples
     logger.info("Sample queries:")
     for case in loo_keyword_cases[:5]:
-        logger.info("  Query: \"%s\"", case.query)
-        logger.info("  Target: %s (rel=%s)", list(case.relevant_items.keys())[0], list(case.relevant_items.values())[0])
+        logger.info('  Query: "%s"', case.query)
+        logger.info(
+            "  Target: %s (rel=%s)",
+            list(case.relevant_items.keys())[0],
+            list(case.relevant_items.values())[0],
+        )
 
     save_eval_cases(loo_keyword_cases, "eval_loo_keyword.json")
 
@@ -435,8 +626,12 @@ if __name__ == "__main__":
     # Show examples
     logger.info("Sample queries:")
     for case in loo_history_cases[:5]:
-        logger.info("  Query: \"%s\"", case.query)
-        logger.info("  Target: %s (rel=%s)", list(case.relevant_items.keys())[0], list(case.relevant_items.values())[0])
+        logger.info('  Query: "%s"', case.query)
+        logger.info(
+            "  Target: %s (rel=%s)",
+            list(case.relevant_items.keys())[0],
+            list(case.relevant_items.values())[0],
+        )
 
     save_eval_cases(loo_history_cases, "eval_loo_history.json")
 
@@ -452,7 +647,7 @@ if __name__ == "__main__":
     if multi_cases:
         logger.info("Sample queries:")
         for case in multi_cases[:3]:
-            logger.info("  Query: \"%s...\"", case.query[:60])
+            logger.info('  Query: "%s..."', case.query[:60])
             logger.info("  Relevant: %d items", len(case.relevant_items))
 
         save_eval_cases(multi_cases, "eval_multi_relevant.json")

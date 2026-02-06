@@ -54,6 +54,7 @@ logger = get_logger(__name__)
 # TOKENIZER VALIDATION (--validate-tokenizer)
 # ============================================================================
 
+
 def run_tokenizer_validation():
     """Validate the chars/token ratio assumption used in chunker.py."""
     from transformers import AutoTokenizer
@@ -90,10 +91,16 @@ def run_tokenizer_validation():
 # CHUNKING QUALITY TEST (--test-chunking)
 # ============================================================================
 
+
 def run_chunking_test():
     """Test chunking quality on long reviews."""
     import pandas as pd
-    from sage.core.chunking import chunk_text, split_sentences, estimate_tokens, NO_CHUNK_THRESHOLD
+    from sage.core.chunking import (
+        chunk_text,
+        split_sentences,
+        estimate_tokens,
+        NO_CHUNK_THRESHOLD,
+    )
 
     log_banner(logger, "CHUNKING QUALITY TEST", width=70)
 
@@ -113,34 +120,43 @@ def run_chunking_test():
         chunks = chunk_text(text, embedder=embedder)
         sentences = split_sentences(text)
 
-        results.append({
-            "tokens": tokens,
-            "sentences": len(sentences),
-            "chunks": len(chunks),
-            "avg_chunk_tokens": np.mean([estimate_tokens(c) for c in chunks]),
-        })
+        results.append(
+            {
+                "tokens": tokens,
+                "sentences": len(sentences),
+                "chunks": len(chunks),
+                "avg_chunk_tokens": np.mean([estimate_tokens(c) for c in chunks]),
+            }
+        )
 
         if idx < 5:
             logger.info(
                 "Review %d [%d*] (%d tok) -> %d chunks",
-                idx + 1, rating, tokens, len(chunks)
+                idx + 1,
+                rating,
+                tokens,
+                len(chunks),
             )
 
     results_df = pd.DataFrame(results)
     log_section(logger, f"Summary ({len(results_df)} reviews)")
     logger.info(
         "Chunks per review: %.2f (median: %.0f)",
-        results_df["chunks"].mean(), results_df["chunks"].median()
+        results_df["chunks"].mean(),
+        results_df["chunks"].median(),
     )
     logger.info("Avg tokens/chunk: %.0f", results_df["avg_chunk_tokens"].mean())
 
-    expansion = (results_df["chunks"] * results_df["avg_chunk_tokens"]).sum() / results_df["tokens"].sum()
+    expansion = (
+        results_df["chunks"] * results_df["avg_chunk_tokens"]
+    ).sum() / results_df["tokens"].sum()
     logger.info("Expansion ratio: %.2fx", expansion)
 
 
 # ============================================================================
 # MAIN PIPELINE
 # ============================================================================
+
 
 def run_pipeline(subset_size: int, force: bool):
     """Run the full data pipeline: load, chunk, embed, upload."""
@@ -174,7 +190,8 @@ def run_pipeline(subset_size: int, force: bool):
     needs_chunking = (df["estimated_tokens"] > 200).sum()
     logger.info(
         "Reviews needing chunking (>200 tokens): %d (%.1f%%)",
-        needs_chunking, needs_chunking / len(df) * 100
+        needs_chunking,
+        needs_chunking / len(df) * 100,
     )
 
     # Prepare reviews for chunking
@@ -192,7 +209,9 @@ def run_pipeline(subset_size: int, force: bool):
     chunks = chunk_reviews_batch(reviews_for_chunking, embedder=embedder)
     logger.info(
         "Created %d chunks from %d reviews (expansion: %.2fx)",
-        len(chunks), len(reviews_for_chunking), len(chunks) / len(reviews_for_chunking)
+        len(chunks),
+        len(reviews_for_chunking),
+        len(chunks) / len(reviews_for_chunking),
     )
 
     # Generate embeddings
@@ -200,7 +219,9 @@ def run_pipeline(subset_size: int, force: bool):
     cache_path = DATA_DIR / f"embeddings_{len(chunks)}.npy"
 
     logger.info("Embedding %d chunks...", len(chunk_texts))
-    embeddings = embedder.embed_passages(chunk_texts, cache_path=cache_path, force=force)
+    embeddings = embedder.embed_passages(
+        chunk_texts, cache_path=cache_path, force=force
+    )
     logger.info("Embeddings shape: %s", embeddings.shape)
 
     # Embedding technical validation
@@ -243,12 +264,21 @@ def run_pipeline(subset_size: int, force: bool):
     sim_out = float(np.dot(emb_query, emb_out))
 
     logger.info("Query: '%s'", test_query)
-    logger.info("  In-domain (same topic):  '%s' = %.3f", in_domain_similar, sim_in_similar)
-    logger.info("  In-domain (diff topic):  '%s' = %.3f", in_domain_different, sim_in_different)
+    logger.info(
+        "  In-domain (same topic):  '%s' = %.3f", in_domain_similar, sim_in_similar
+    )
+    logger.info(
+        "  In-domain (diff topic):  '%s' = %.3f", in_domain_different, sim_in_different
+    )
     logger.info("  Out-of-domain:           '%s' = %.3f", out_of_domain, sim_out)
 
     if sim_in_similar > sim_in_different > sim_out:
-        logger.info("Ranking correct: %.3f > %.3f > %.3f", sim_in_similar, sim_in_different, sim_out)
+        logger.info(
+            "Ranking correct: %.3f > %.3f > %.3f",
+            sim_in_similar,
+            sim_in_different,
+            sim_out,
+        )
     else:
         logger.warning("Unexpected ranking")
 
@@ -307,10 +337,23 @@ def run_pipeline(subset_size: int, force: bool):
 
 def main():
     parser = argparse.ArgumentParser(description="Run the data pipeline")
-    parser.add_argument("--force", action="store_true", help="Force recreate collection")
-    parser.add_argument("--subset-size", type=int, default=DEV_SUBSET_SIZE, help="Number of reviews to load initially")
-    parser.add_argument("--validate-tokenizer", action="store_true", help="Run tokenizer validation only")
-    parser.add_argument("--test-chunking", action="store_true", help="Run chunking quality test only")
+    parser.add_argument(
+        "--force", action="store_true", help="Force recreate collection"
+    )
+    parser.add_argument(
+        "--subset-size",
+        type=int,
+        default=DEV_SUBSET_SIZE,
+        help="Number of reviews to load initially",
+    )
+    parser.add_argument(
+        "--validate-tokenizer",
+        action="store_true",
+        help="Run tokenizer validation only",
+    )
+    parser.add_argument(
+        "--test-chunking", action="store_true", help="Run chunking quality test only"
+    )
     args = parser.parse_args()
 
     if args.validate_tokenizer:

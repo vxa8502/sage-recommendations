@@ -42,8 +42,7 @@ def get_client():
         from qdrant_client import QdrantClient
     except ImportError:
         raise ImportError(
-            "qdrant-client package required. "
-            "Install with: pip install qdrant-client"
+            "qdrant-client package required. Install with: pip install qdrant-client"
         )
 
     if QDRANT_API_KEY:

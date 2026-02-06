@@ -35,19 +35,32 @@ class TestNewItem:
 class TestProductScore:
     def test_top_evidence_returns_highest(self):
         chunks = [
-            RetrievedChunk(text="low", score=0.5, product_id="P1", rating=4.0, review_id="r1"),
-            RetrievedChunk(text="high", score=0.9, product_id="P1", rating=4.0, review_id="r2"),
-            RetrievedChunk(text="mid", score=0.7, product_id="P1", rating=4.0, review_id="r3"),
+            RetrievedChunk(
+                text="low", score=0.5, product_id="P1", rating=4.0, review_id="r1"
+            ),
+            RetrievedChunk(
+                text="high", score=0.9, product_id="P1", rating=4.0, review_id="r2"
+            ),
+            RetrievedChunk(
+                text="mid", score=0.7, product_id="P1", rating=4.0, review_id="r3"
+            ),
         ]
         product = ProductScore(
-            product_id="P1", score=0.9, chunk_count=3, avg_rating=4.0, evidence=chunks,
+            product_id="P1",
+            score=0.9,
+            chunk_count=3,
+            avg_rating=4.0,
+            evidence=chunks,
         )
         assert product.top_evidence.text == "high"
         assert product.top_evidence.score == 0.9
 
     def test_top_evidence_empty(self):
         product = ProductScore(
-            product_id="P1", score=0.5, chunk_count=0, avg_rating=4.0,
+            product_id="P1",
+            score=0.5,
+            chunk_count=0,
+            avg_rating=4.0,
         )
         assert product.top_evidence is None
 
@@ -116,7 +129,10 @@ class TestStreamingExplanation:
 class TestEvidenceQuality:
     def test_sufficient(self):
         eq = EvidenceQuality(
-            is_sufficient=True, chunk_count=3, total_tokens=150, top_score=0.9,
+            is_sufficient=True,
+            chunk_count=3,
+            total_tokens=150,
+            top_score=0.9,
         )
         assert eq.is_sufficient is True
         assert eq.failure_reason is None

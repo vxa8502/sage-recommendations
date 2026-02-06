@@ -148,7 +148,9 @@ class HallucinationDetector:
             remaining = [t for t in evidence_texts if hyp_lower not in t.lower()]
             evidence_texts = containing + remaining
 
-        hypothesis_tokens = len(self.tokenizer(hypothesis, add_special_tokens=False).input_ids)
+        hypothesis_tokens = len(
+            self.tokenizer(hypothesis, add_special_tokens=False).input_ids
+        )
         budget = HHEM_MAX_TOKENS - HHEM_TEMPLATE_OVERHEAD - hypothesis_tokens
 
         kept = []
@@ -253,13 +255,20 @@ class HallucinationDetector:
             List of ClaimResult objects, one per claim.
         """
         pairs = [
-            (self._format_premise(evidence_texts, hypothesis=claim, prioritize_hypothesis=True), claim)
+            (
+                self._format_premise(
+                    evidence_texts, hypothesis=claim, prioritize_hypothesis=True
+                ),
+                claim,
+            )
             for claim in claims
         ]
         scores = self._predict(pairs)
 
         return [
-            ClaimResult(claim=claim, score=score, is_hallucinated=score < self.threshold)
+            ClaimResult(
+                claim=claim, score=score, is_hallucinated=score < self.threshold
+            )
             for claim, score in zip(claims, scores)
         ]
 

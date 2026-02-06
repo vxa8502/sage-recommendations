@@ -356,7 +356,9 @@ def get_llm_client(provider: str | None = None) -> LLMClient:
     elif provider == "openai":
         return OpenAIClient()
     else:
-        raise ValueError(f"Unknown LLM provider: {provider}. Use 'anthropic' or 'openai'.")
+        raise ValueError(
+            f"Unknown LLM provider: {provider}. Use 'anthropic' or 'openai'."
+        )
 
 
 __all__ = [

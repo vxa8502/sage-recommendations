@@ -149,7 +149,7 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
     case_id = 0
 
     for query in queries:
-        logger.info("Query: \"%s\"", query)
+        logger.info('Query: "%s"', query)
 
         products = get_candidates(
             query=query,
@@ -275,23 +275,43 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
     n_evidence_insufficient = sum(1 for c in all_cases if not c.evidence_sufficient)
     n_generated = sum(1 for c in all_cases if c.evidence_sufficient)
     n_forbidden_violations = sum(1 for c in all_cases if c.has_forbidden_phrases)
-    n_hhem_failures = sum(1 for c in all_cases if c.evidence_sufficient and not c.hhem_pass and not c.is_valid_non_recommendation)
+    n_hhem_failures = sum(
+        1
+        for c in all_cases
+        if c.evidence_sufficient
+        and not c.hhem_pass
+        and not c.is_valid_non_recommendation
+    )
     n_valid_non_recs = sum(1 for c in all_cases if c.is_valid_non_recommendation)
 
     # Success counts
     n_raw_success = sum(1 for c in all_cases if c.e2e_success)
-    n_adjusted_success = n_raw_success + n_valid_non_recs  # Valid non-recs are correct behavior
+    n_adjusted_success = (
+        n_raw_success + n_valid_non_recs
+    )  # Valid non-recs are correct behavior
 
     # Rates
     evidence_pass_rate = n_generated / n_total if n_total > 0 else 0
 
     # Forbidden phrase compliance among generated explanations
     generated_cases = [c for c in all_cases if c.evidence_sufficient]
-    phrase_compliance = sum(1 for c in generated_cases if not c.has_forbidden_phrases) / len(generated_cases) if generated_cases else 0
+    phrase_compliance = (
+        sum(1 for c in generated_cases if not c.has_forbidden_phrases)
+        / len(generated_cases)
+        if generated_cases
+        else 0
+    )
 
     # HHEM pass rate among non-refusal generated explanations
-    non_refusal_generated = [c for c in generated_cases if not c.is_valid_non_recommendation]
-    hhem_pass_rate = sum(1 for c in non_refusal_generated if c.hhem_pass) / len(non_refusal_generated) if non_refusal_generated else 0
+    non_refusal_generated = [
+        c for c in generated_cases if not c.is_valid_non_recommendation
+    ]
+    hhem_pass_rate = (
+        sum(1 for c in non_refusal_generated if c.hhem_pass)
+        / len(non_refusal_generated)
+        if non_refusal_generated
+        else 0
+    )
 
     raw_e2e = n_raw_success / n_total if n_total > 0 else 0
     adjusted_e2e = n_adjusted_success / n_total if n_total > 0 else 0
@@ -321,11 +341,31 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
 
     log_section(logger, "Stage Breakdown")
     logger.info("Total cases:              %d", n_total)
-    logger.info("Evidence insufficient:    %d (%.1f%%)", n_evidence_insufficient, n_evidence_insufficient / n_total * 100)
-    logger.info("Generated explanations:   %d (%.1f%%)", n_generated, n_generated / n_total * 100)
-    logger.info("Forbidden phrase fails:   %d (%.1f%%)", n_forbidden_violations, n_forbidden_violations / n_total * 100)
-    logger.info("HHEM failures:            %d (%.1f%%)", n_hhem_failures, n_hhem_failures / n_total * 100)
-    logger.info("Valid non-recommendations:%d (%.1f%%)", n_valid_non_recs, n_valid_non_recs / n_total * 100)
+    logger.info(
+        "Evidence insufficient:    %d (%.1f%%)",
+        n_evidence_insufficient,
+        n_evidence_insufficient / n_total * 100,
+    )
+    logger.info(
+        "Generated explanations:   %d (%.1f%%)",
+        n_generated,
+        n_generated / n_total * 100,
+    )
+    logger.info(
+        "Forbidden phrase fails:   %d (%.1f%%)",
+        n_forbidden_violations,
+        n_forbidden_violations / n_total * 100,
+    )
+    logger.info(
+        "HHEM failures:            %d (%.1f%%)",
+        n_hhem_failures,
+        n_hhem_failures / n_total * 100,
+    )
+    logger.info(
+        "Valid non-recommendations:%d (%.1f%%)",
+        n_valid_non_recs,
+        n_valid_non_recs / n_total * 100,
+    )
 
     log_section(logger, "Component Rates")
     logger.info("Evidence pass rate:       %.1f%%", evidence_pass_rate * 100)
@@ -333,8 +373,18 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
     logger.info("HHEM pass rate:           %.1f%%", hhem_pass_rate * 100)
 
     log_section(logger, "END-TO-END SUCCESS RATES")
-    logger.info("Raw E2E success:          %d/%d = %.1f%%", n_raw_success, n_total, raw_e2e * 100)
-    logger.info("Adjusted E2E success:     %d/%d = %.1f%%", n_adjusted_success, n_total, adjusted_e2e * 100)
+    logger.info(
+        "Raw E2E success:          %d/%d = %.1f%%",
+        n_raw_success,
+        n_total,
+        raw_e2e * 100,
+    )
+    logger.info(
+        "Adjusted E2E success:     %d/%d = %.1f%%",
+        n_adjusted_success,
+        n_total,
+        adjusted_e2e * 100,
+    )
     logger.info("Target:                   %.1f%%", target * 100)
     logger.info("Gap to target:            %.1f%%", report.gap_to_target * 100)
     logger.info("Meets target:             %s", "YES" if report.meets_target else "NO")
@@ -355,7 +405,9 @@ def run_e2e_evaluation(n_samples: int = 20) -> E2EReport:
         "cases": [c.to_dict() for c in all_cases],
     }
 
-    output_file = RESULTS_DIR / f"e2e_success_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_file = (
+        RESULTS_DIR / f"e2e_success_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    )
     with open(output_file, "w") as f:
         json.dump(output, f, indent=2)
     logger.info("Saved: %s", output_file)

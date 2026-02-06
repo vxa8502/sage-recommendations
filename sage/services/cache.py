@@ -27,6 +27,7 @@ logger = get_logger(__name__)
 # Cache entry
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class _CacheEntry:
     """Single cached result with metadata for eviction."""
@@ -42,6 +43,7 @@ class _CacheEntry:
 # ---------------------------------------------------------------------------
 # Cache stats
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class CacheStats:
@@ -72,6 +74,7 @@ class CacheStats:
 # ---------------------------------------------------------------------------
 # Semantic cache
 # ---------------------------------------------------------------------------
+
 
 class SemanticCache:
     """Thread-safe in-memory cache with exact-match and semantic-similarity layers.
@@ -116,7 +119,9 @@ class SemanticCache:
     # ------------------------------------------------------------------
 
     def get(
-        self, query: str, query_embedding: np.ndarray | None = None,
+        self,
+        query: str,
+        query_embedding: np.ndarray | None = None,
     ) -> tuple[dict | None, str]:
         """Look up a cached result.
 
@@ -232,7 +237,8 @@ class SemanticCache:
     # ------------------------------------------------------------------
 
     def _find_semantic_match(
-        self, query_embedding: np.ndarray,
+        self,
+        query_embedding: np.ndarray,
     ) -> tuple[_CacheEntry, float]:
         """Find the best semantic match among cached entries.
 

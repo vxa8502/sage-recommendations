@@ -70,7 +70,6 @@ NATURAL_QUERIES = [
         "category": "echo_devices",
         "intent": "feature_specific",
     },
-
     # === FIRE TABLET QUERIES ===
     {
         "query": "tablet for reading books and light browsing",
@@ -111,7 +110,6 @@ NATURAL_QUERIES = [
         "category": "fire_tablets",
         "intent": "use_case",
     },
-
     # === FIRE TV / STREAMING QUERIES ===
     {
         "query": "streaming device for my tv",
@@ -151,7 +149,6 @@ NATURAL_QUERIES = [
         "category": "fire_tv",
         "intent": "use_case",
     },
-
     # === SMART HOME QUERIES ===
     {
         "query": "smart plug to control lights with alexa",
@@ -191,7 +188,6 @@ NATURAL_QUERIES = [
         "category": "smart_home",
         "intent": "feature_specific",
     },
-
     # === STORAGE QUERIES ===
     {
         "query": "sd card for camera",
@@ -232,7 +228,6 @@ NATURAL_QUERIES = [
         "category": "storage",
         "intent": "feature_specific",
     },
-
     # === HEADPHONES / AUDIO QUERIES ===
     {
         "query": "wireless headphones for working out",
@@ -283,7 +278,6 @@ NATURAL_QUERIES = [
         "category": "headphones_audio",
         "intent": "use_case",
     },
-
     # === CABLES / ADAPTERS QUERIES ===
     {
         "query": "usb c charging cable",
@@ -322,7 +316,6 @@ NATURAL_QUERIES = [
         "category": "cables_adapters",
         "intent": "feature_specific",
     },
-
     # === KEYBOARD / MOUSE QUERIES ===
     {
         "query": "wireless keyboard for computer",
@@ -353,7 +346,6 @@ NATURAL_QUERIES = [
         "category": "keyboards_mice",
         "intent": "feature_specific",
     },
-
     # === GIFT QUERIES ===
     {
         "query": "gift for someone who likes music",
@@ -395,7 +387,6 @@ NATURAL_QUERIES = [
         "category": "gifts",
         "intent": "gift",
     },
-
     # === PROBLEM-SOLVING QUERIES ===
     {
         "query": "headphones that dont hurt ears",
@@ -424,7 +415,6 @@ NATURAL_QUERIES = [
         "category": "fire_tv",
         "intent": "problem_solving",
     },
-
     # === COMPARISON / BEST QUERIES ===
     {
         "query": "best value fire tablet",
@@ -460,15 +450,19 @@ def build_natural_eval_cases() -> list[EvalCase]:
     """Convert natural queries to EvalCase objects."""
     cases = []
     for item in NATURAL_QUERIES:
-        cases.append(EvalCase(
-            query=item["query"],
-            relevant_items=item["relevant_items"],
-            user_id=None,  # No user for natural queries
-        ))
+        cases.append(
+            EvalCase(
+                query=item["query"],
+                relevant_items=item["relevant_items"],
+                user_id=None,  # No user for natural queries
+            )
+        )
     return cases
 
 
-def save_natural_eval_cases(cases: list[EvalCase], filename: str = "eval_natural_queries.json"):
+def save_natural_eval_cases(
+    cases: list[EvalCase], filename: str = "eval_natural_queries.json"
+):
     """Save evaluation cases with metadata."""
     EVAL_DIR.mkdir(exist_ok=True)
     filepath = EVAL_DIR / filename
@@ -476,12 +470,14 @@ def save_natural_eval_cases(cases: list[EvalCase], filename: str = "eval_natural
     # Include metadata for analysis
     data = []
     for i, item in enumerate(NATURAL_QUERIES):
-        data.append({
-            "query": item["query"],
-            "relevant_items": item["relevant_items"],
-            "category": item.get("category", "unknown"),
-            "intent": item.get("intent", "general"),
-        })
+        data.append(
+            {
+                "query": item["query"],
+                "relevant_items": item["relevant_items"],
+                "category": item.get("category", "unknown"),
+                "intent": item.get("intent", "general"),
+            }
+        )
 
     with open(filepath, "w") as f:
         json.dump(data, f, indent=2)
@@ -522,9 +518,9 @@ def analyze_dataset():
     # Sample queries
     log_section(logger, "SAMPLE QUERIES")
     for q in NATURAL_QUERIES[:5]:
-        logger.info("Query: \"%s\"", q['query'])
-        logger.info("  Category: %s | Intent: %s", q['category'], q['intent'])
-        logger.info("  Relevant: %d products", len(q['relevant_items']))
+        logger.info('Query: "%s"', q["query"])
+        logger.info("  Category: %s | Intent: %s", q["category"], q["intent"])
+        logger.info("  Relevant: %d products", len(q["relevant_items"]))
 
 
 if __name__ == "__main__":

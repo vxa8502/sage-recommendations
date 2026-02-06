@@ -48,6 +48,7 @@ def create_recommend_fn(
     rating_weight: float = 0.0,
 ):
     """Create a recommend function for evaluation."""
+
     def _recommend(query: str) -> list[str]:
         recs = recommend(
             query=query,
@@ -59,10 +60,13 @@ def create_recommend_fn(
             rating_weight=rating_weight,
         )
         return [r.product_id for r in recs]
+
     return _recommend
 
 
-def save_results(results: dict, filename: str | None = None, dataset: str | None = None) -> Path:
+def save_results(
+    results: dict, filename: str | None = None, dataset: str | None = None
+) -> Path:
     """Save evaluation results to JSON file.
 
     Also writes a fixed-name "latest" file so downstream scripts (e.g.
@@ -88,6 +92,7 @@ def save_results(results: dict, filename: str | None = None, dataset: str | None
 # ============================================================================
 # SECTION: Primary Evaluation
 # ============================================================================
+
 
 def run_primary_evaluation(cases, item_embeddings, item_popularity, total_items):
     """Run primary evaluation on leave-one-out dataset."""
@@ -124,6 +129,7 @@ def run_primary_evaluation(cases, item_embeddings, item_popularity, total_items)
 # SECTION: Aggregation Methods
 # ============================================================================
 
+
 def run_aggregation_comparison(cases):
     """Compare different aggregation methods."""
     log_banner(logger, "AGGREGATION METHOD COMPARISON")
@@ -154,6 +160,7 @@ def run_aggregation_comparison(cases):
 # SECTION: Rating Filter
 # ============================================================================
 
+
 def run_rating_filter_comparison(cases):
     """Compare different rating filters."""
     log_banner(logger, "RATING FILTER COMPARISON")
@@ -176,6 +183,7 @@ def run_rating_filter_comparison(cases):
 # ============================================================================
 # SECTION: K Values
 # ============================================================================
+
 
 def run_k_value_comparison(cases):
     """Compare metrics at different K values."""
@@ -200,16 +208,23 @@ def run_k_value_comparison(cases):
 # SECTION: Weight Tuning
 # ============================================================================
 
+
 def run_weight_tuning(cases):
     """Run ranking weight tuning experiment."""
     log_banner(logger, "RANKING WEIGHT TUNING (alpha*sim + beta*rating)")
 
     weight_configs = [
-        (1.0, 0.0), (0.9, 0.1), (0.8, 0.2),
-        (0.7, 0.3), (0.6, 0.4), (0.5, 0.5),
+        (1.0, 0.0),
+        (0.9, 0.1),
+        (0.8, 0.2),
+        (0.7, 0.3),
+        (0.6, 0.4),
+        (0.5, 0.5),
     ]
 
-    logger.info("%-10s %-12s %-10s %-10s %-10s", "alpha", "beta", "NDCG@10", "Hit@10", "MRR")
+    logger.info(
+        "%-10s %-12s %-10s %-10s %-10s", "alpha", "beta", "NDCG@10", "Hit@10", "MRR"
+    )
     logger.info("-" * 52)
 
     results = []
@@ -227,15 +242,22 @@ def run_weight_tuning(cases):
             k=10,
             verbose=False,
         )
-        results.append({
-            "alpha": alpha, "beta": beta,
-            "ndcg_at_10": report.ndcg_at_k,
-            "hit_at_10": report.hit_at_k,
-            "mrr": report.mrr,
-        })
+        results.append(
+            {
+                "alpha": alpha,
+                "beta": beta,
+                "ndcg_at_10": report.ndcg_at_k,
+                "hit_at_10": report.hit_at_k,
+                "mrr": report.mrr,
+            }
+        )
         logger.info(
             "%-10.1f %-12.1f %-10.4f %-10.4f %-10.4f",
-            alpha, beta, report.ndcg_at_k, report.hit_at_k, report.mrr
+            alpha,
+            beta,
+            report.ndcg_at_k,
+            report.hit_at_k,
+            report.mrr,
         )
 
         if report.ndcg_at_k > best_ndcg:
@@ -245,7 +267,9 @@ def run_weight_tuning(cases):
     logger.info("-" * 52)
     logger.info(
         "Best: alpha=%.1f, beta=%.1f (NDCG@10=%.4f)",
-        best_weights[0], best_weights[1], best_ndcg
+        best_weights[0],
+        best_weights[1],
+        best_ndcg,
     )
 
     return results, best_weights, best_ndcg
@@ -254,6 +278,7 @@ def run_weight_tuning(cases):
 # ============================================================================
 # SECTION: Baseline Comparison
 # ============================================================================
+
 
 def run_baseline_comparison(cases, train_records, all_products, product_embeddings):
     """Compare against baselines: Random, Popularity, ItemKNN."""
@@ -274,7 +299,12 @@ def run_baseline_comparison(cases, train_records, all_products, product_embeddin
         return itemknn_baseline.recommend(query, top_k=10)
 
     def rag_recommend(query: str) -> list[str]:
-        recs = recommend(query=query, top_k=10, candidate_limit=100, aggregation=AggregationMethod.MAX)
+        recs = recommend(
+            query=query,
+            top_k=10,
+            candidate_limit=100,
+            aggregation=AggregationMethod.MAX,
+        )
         return [r.product_id for r in recs]
 
     results = {}
@@ -305,7 +335,10 @@ def run_baseline_comparison(cases, train_records, all_products, product_embeddin
     for name, report in results.items():
         logger.info(
             "%-15s %10.4f %10.4f %10.4f",
-            name, report.ndcg_at_k, report.hit_at_k, report.mrr
+            name,
+            report.ndcg_at_k,
+            report.hit_at_k,
+            report.mrr,
         )
 
     # Relative improvements
@@ -323,17 +356,22 @@ def run_baseline_comparison(cases, train_records, all_products, product_embeddin
 # Main
 # ============================================================================
 
+
 def main():
     parser = argparse.ArgumentParser(description="Run recommendation evaluation")
-    parser.add_argument("--baselines", action="store_true", help="Include baseline comparison")
     parser.add_argument(
-        "--section", "-s",
+        "--baselines", action="store_true", help="Include baseline comparison"
+    )
+    parser.add_argument(
+        "--section",
+        "-s",
         choices=["all", "primary", "aggregation", "rating", "k", "weights"],
         default="primary",
         help="Which section to run (default: primary)",
     )
     parser.add_argument(
-        "--dataset", "-d",
+        "--dataset",
+        "-d",
         default="eval_loo_history.json",
         help="Evaluation dataset file (default: eval_loo_history.json)",
     )
@@ -375,7 +413,9 @@ def main():
         )
 
     if args.section in ("all", "aggregation"):
-        all_results["experiments"]["aggregation_methods"] = run_aggregation_comparison(cases)
+        all_results["experiments"]["aggregation_methods"] = run_aggregation_comparison(
+            cases
+        )
 
     if args.section in ("all", "rating"):
         run_rating_filter_comparison(cases)

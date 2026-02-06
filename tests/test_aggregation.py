@@ -82,7 +82,9 @@ class TestApplyWeightedRanking:
             ProductScore(product_id="A", score=0.9, chunk_count=2, avg_rating=3.0),
             ProductScore(product_id="B", score=0.7, chunk_count=1, avg_rating=5.0),
         ]
-        ranked = apply_weighted_ranking(products, similarity_weight=0.5, rating_weight=0.5)
+        ranked = apply_weighted_ranking(
+            products, similarity_weight=0.5, rating_weight=0.5
+        )
         assert len(ranked) == 2
         # B has higher rating, so with 50/50 weights it might rank higher
         assert all(isinstance(p, ProductScore) for p in ranked)
@@ -92,7 +94,9 @@ class TestApplyWeightedRanking:
             ProductScore(product_id="A", score=0.9, chunk_count=1, avg_rating=1.0),
             ProductScore(product_id="B", score=0.5, chunk_count=1, avg_rating=5.0),
         ]
-        ranked = apply_weighted_ranking(products, similarity_weight=1.0, rating_weight=0.0)
+        ranked = apply_weighted_ranking(
+            products, similarity_weight=1.0, rating_weight=0.0
+        )
         assert ranked[0].product_id == "A"
 
     def test_pure_rating_reranks(self):
@@ -100,7 +104,9 @@ class TestApplyWeightedRanking:
             ProductScore(product_id="A", score=0.9, chunk_count=1, avg_rating=1.0),
             ProductScore(product_id="B", score=0.5, chunk_count=1, avg_rating=5.0),
         ]
-        ranked = apply_weighted_ranking(products, similarity_weight=0.0, rating_weight=1.0)
+        ranked = apply_weighted_ranking(
+            products, similarity_weight=0.0, rating_weight=1.0
+        )
         assert ranked[0].product_id == "B"
 
     def test_single_product(self):

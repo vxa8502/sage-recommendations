@@ -263,7 +263,9 @@ class EvaluationService:
             ndcg_at_k=float(np.mean(ndcg_scores)) if ndcg_scores else 0.0,
             hit_at_k=float(np.mean(hit_scores)) if hit_scores else 0.0,
             mrr=float(np.mean(mrr_scores)) if mrr_scores else 0.0,
-            precision_at_k=float(np.mean(precision_scores)) if precision_scores else 0.0,
+            precision_at_k=float(np.mean(precision_scores))
+            if precision_scores
+            else 0.0,
             recall_at_k=float(np.mean(recall_scores)) if recall_scores else 0.0,
             diversity=float(np.mean(diversity_scores)) if diversity_scores else 0.0,
             novelty=float(np.mean(novelty_scores)) if novelty_scores else 0.0,

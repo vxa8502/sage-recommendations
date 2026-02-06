@@ -69,9 +69,7 @@ class LatencyMiddleware:
                 # The Prometheus histogram (in finally) measures total time.
                 elapsed_ms = (time.perf_counter() - start) * 1000
                 headers = list(message.get("headers", []))
-                headers.append(
-                    (b"x-response-time-ms", f"{elapsed_ms:.1f}".encode())
-                )
+                headers.append((b"x-response-time-ms", f"{elapsed_ms:.1f}".encode()))
                 headers.append((b"x-request-id", request_id.encode()))
                 message = {**message, "headers": headers}
             await send(message)
@@ -88,6 +86,9 @@ class LatencyMiddleware:
             if path not in _QUIET_PATHS:
                 logger.info(
                     "%s %s %d %.1fms [%s]",
-                    method, path, status,
-                    elapsed_ms, request_id,
+                    method,
+                    path,
+                    status,
+                    elapsed_ms,
+                    request_id,
                 )

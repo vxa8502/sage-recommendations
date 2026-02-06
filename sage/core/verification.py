@@ -86,9 +86,9 @@ def extract_quotes(text: str, min_length: int = 4) -> list[str]:
         List of unique quoted strings found in the text.
     """
     patterns = [
-        r'"([^"]+)"',      # Regular double quotes
-        r'"([^"]+)"',      # Curly double quotes
-        r"'([^']+)'",      # Single quotes
+        r'"([^"]+)"',  # Regular double quotes
+        r'"([^"]+)"',  # Curly double quotes
+        r"'([^']+)'",  # Single quotes
     ]
 
     quotes = []
@@ -206,6 +206,7 @@ def verify_explanation(
 # Citation ID Verification
 # =============================================================================
 
+
 @dataclass
 class CitationResult:
     """Result of verifying a single citation."""
@@ -256,12 +257,12 @@ def extract_citations(text: str) -> list[tuple[str, str | None]]:
         quote_text = match.group(1)
         citation_block = match.group(2)
         # Split multiple citations like "review_123, review_456"
-        for citation_id in re.findall(r'review_\d+', citation_block):
+        for citation_id in re.findall(r"review_\d+", citation_block):
             citations.append((citation_id, quote_text))
 
     # Pattern for standalone citations not preceded by a quote
     # Find all citations, then filter out ones already captured with quotes
-    all_citation_ids = set(re.findall(r'review_\d+', text))
+    all_citation_ids = set(re.findall(r"review_\d+", text))
     quoted_citation_ids = {c[0] for c in citations}
     standalone_ids = all_citation_ids - quoted_citation_ids
 
@@ -294,9 +295,7 @@ def verify_citation(
     """
     # Collect all chunks belonging to this citation ID (a single review
     # may produce multiple chunks after splitting long reviews).
-    matching_indices = [
-        i for i, eid in enumerate(evidence_ids) if eid == citation_id
-    ]
+    matching_indices = [i for i, eid in enumerate(evidence_ids) if eid == citation_id]
 
     if not matching_indices:
         return CitationResult(

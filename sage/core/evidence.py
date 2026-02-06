@@ -101,8 +101,14 @@ def check_evidence_quality(
 
     # Check thresholds using table-driven validation
     thresholds = [
-        (chunk_count < min_chunks, f"insufficient_chunks: {chunk_count} < {min_chunks}"),
-        (total_tokens < min_tokens, f"insufficient_tokens: {total_tokens} < {min_tokens}"),
+        (
+            chunk_count < min_chunks,
+            f"insufficient_chunks: {chunk_count} < {min_chunks}",
+        ),
+        (
+            total_tokens < min_tokens,
+            f"insufficient_tokens: {total_tokens} < {min_tokens}",
+        ),
         (top_score < min_score, f"low_relevance: {top_score:.3f} < {min_score}"),
     ]
 
@@ -150,17 +156,17 @@ def generate_refusal_message(
             f"I cannot provide a confident recommendation for this product based on "
             f"the available review evidence. Only {quality.chunk_count} review excerpt(s) "
             f"were found, which is insufficient to make a well-grounded recommendation "
-            f"for your query about \"{query}\"."
+            f'for your query about "{query}".'
         )
     elif "insufficient_tokens" in reason:
         return (
             f"I cannot provide a meaningful recommendation for this product. "
             f"The available review evidence is too brief ({quality.total_tokens} tokens) "
-            f"to support a well-grounded explanation for your query about \"{query}\"."
+            f'to support a well-grounded explanation for your query about "{query}".'
         )
     elif "low_relevance" in reason:
         return (
-            f"I cannot recommend this product for your query about \"{query}\" because "
+            f'I cannot recommend this product for your query about "{query}" because '
             f"the available reviews do not appear to be sufficiently relevant "
             f"(relevance score: {quality.top_score:.2f}). The reviews may discuss "
             f"different aspects or product features than what you're looking for."
@@ -168,5 +174,5 @@ def generate_refusal_message(
     else:
         return (
             f"I cannot provide a recommendation for this product due to "
-            f"insufficient review evidence for your query about \"{query}\"."
+            f'insufficient review evidence for your query about "{query}".'
         )

@@ -20,6 +20,7 @@ def save_results(data: dict, prefix: str, directory: Path | None = None) -> Path
     """
     if directory is None:
         from sage.config import RESULTS_DIR
+
         directory = RESULTS_DIR
 
     directory.mkdir(parents=True, exist_ok=True)

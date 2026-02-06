@@ -31,7 +31,7 @@ def demo_recommendation(query: str, top_k: int = 3, max_evidence: int = 3):
     Returns dict suitable for JSON serialization.
     """
     log_banner(logger, "SAGE RECOMMENDATION DEMO", width=70)
-    logger.info("Query: \"%s\"", query)
+    logger.info('Query: "%s"', query)
 
     # Get candidates
     products = get_candidates(
@@ -91,7 +91,7 @@ def demo_recommendation(query: str, top_k: int = 3, max_evidence: int = 3):
             # Truncate long evidence for display
             display_text = ev_text[:200] + "..." if len(ev_text) > 200 else ev_text
             logger.info("[%s]:", ev_id)
-            logger.info("  \"%s\"", display_text)
+            logger.info('  "%s"', display_text)
 
         # Compile result
         result = {
@@ -108,8 +108,7 @@ def demo_recommendation(query: str, top_k: int = 3, max_evidence: int = 3):
             "evidence_sources": [
                 {"id": ev_id, "text": ev_text}
                 for ev_id, ev_text in zip(
-                    explanation_result.evidence_ids,
-                    explanation_result.evidence_texts
+                    explanation_result.evidence_ids, explanation_result.evidence_texts
                 )
             ],
         }
@@ -131,13 +130,15 @@ def demo_recommendation(query: str, top_k: int = 3, max_evidence: int = 3):
 def main():
     parser = argparse.ArgumentParser(description="Demo recommendation pipeline")
     parser.add_argument(
-        "--query", "-q",
+        "--query",
+        "-q",
         type=str,
         default="wireless earbuds for running",
         help="Query to demonstrate",
     )
     parser.add_argument(
-        "--top-k", "-k",
+        "--top-k",
+        "-k",
         type=int,
         default=1,
         help="Number of products to recommend (default: 1)",

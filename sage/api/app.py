@@ -31,24 +31,19 @@ async def _lifespan(app: FastAPI):
 
     # Validate LLM credentials early
     from sage.config import ANTHROPIC_API_KEY, LLM_PROVIDER, OPENAI_API_KEY
+
     if not ANTHROPIC_API_KEY and not OPENAI_API_KEY:
         logger.error(
-            "No LLM API key set -- add ANTHROPIC_API_KEY "
-            "or OPENAI_API_KEY to .env"
+            "No LLM API key set -- add ANTHROPIC_API_KEY or OPENAI_API_KEY to .env"
         )
     elif LLM_PROVIDER == "anthropic" and not ANTHROPIC_API_KEY:
-        logger.warning(
-            "LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY "
-            "is not set"
-        )
+        logger.warning("LLM_PROVIDER=anthropic but ANTHROPIC_API_KEY is not set")
     elif LLM_PROVIDER == "openai" and not OPENAI_API_KEY:
-        logger.warning(
-            "LLM_PROVIDER=openai but OPENAI_API_KEY "
-            "is not set"
-        )
+        logger.warning("LLM_PROVIDER=openai but OPENAI_API_KEY is not set")
 
     # Embedder (loads E5-small model) -- required for all requests
     from sage.adapters.embeddings import get_embedder
+
     try:
         app.state.embedder = get_embedder()
         logger.info("Embedder loaded")
@@ -58,6 +53,7 @@ async def _lifespan(app: FastAPI):
 
     # Qdrant client
     from sage.adapters.vector_store import get_client, collection_exists
+
     app.state.qdrant = get_client()
     try:
         if collection_exists(app.state.qdrant):
@@ -69,6 +65,7 @@ async def _lifespan(app: FastAPI):
 
     # HHEM hallucination detector (loads T5 model) -- required for grounding
     from sage.adapters.hhem import HallucinationDetector
+
     try:
         app.state.detector = HallucinationDetector()
         logger.info("HHEM detector loaded")
@@ -78,18 +75,19 @@ async def _lifespan(app: FastAPI):
 
     # LLM explainer -- graceful degradation if unavailable
     from sage.services.explanation import Explainer
+
     try:
         app.state.explainer = Explainer()
         logger.info("Explainer ready (%s)", app.state.explainer.model)
     except Exception:
         logger.exception(
-            "Failed to initialize explainer -- "
-            "explain=true requests will fail"
+            "Failed to initialize explainer -- explain=true requests will fail"
         )
         app.state.explainer = None
 
     # Semantic cache
     from sage.services.cache import SemanticCache
+
     app.state.cache = SemanticCache()
     logger.info("Semantic cache initialized")
 

@@ -28,27 +28,48 @@ LOG_FORMAT = os.getenv("SAGE_LOG_FORMAT", "console")  # "console" or "json"
 
 # Standard LogRecord attributes to ignore when extracting user-specified extras.
 # These are built-in attributes from logging.LogRecord plus taskName from asyncio.
-_STANDARD_LOG_ATTRS = frozenset({
-    "name", "msg", "args", "created", "filename", "funcName",
-    "levelname", "levelno", "lineno", "module", "msecs",
-    "pathname", "process", "processName", "relativeCreated",
-    "stack_info", "exc_info", "exc_text", "thread", "threadName",
-    "message", "asctime", "taskName",
-})
+_STANDARD_LOG_ATTRS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "created",
+        "filename",
+        "funcName",
+        "levelname",
+        "levelno",
+        "lineno",
+        "module",
+        "msecs",
+        "pathname",
+        "process",
+        "processName",
+        "relativeCreated",
+        "stack_info",
+        "exc_info",
+        "exc_text",
+        "thread",
+        "threadName",
+        "message",
+        "asctime",
+        "taskName",
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Custom Formatter (Console)
 # ---------------------------------------------------------------------------
 
+
 class ConsoleFormatter(logging.Formatter):
     """Human-readable formatter with visual hierarchy."""
 
     COLORS = {
-        "DEBUG": "\033[36m",     # Cyan
-        "INFO": "\033[32m",      # Green
-        "WARNING": "\033[33m",   # Yellow
-        "ERROR": "\033[31m",     # Red
+        "DEBUG": "\033[36m",  # Cyan
+        "INFO": "\033[32m",  # Green
+        "WARNING": "\033[33m",  # Yellow
+        "ERROR": "\033[31m",  # Red
         "CRITICAL": "\033[35m",  # Magenta
         "RESET": "\033[0m",
     }
@@ -86,6 +107,7 @@ class ConsoleFormatter(logging.Formatter):
 # ---------------------------------------------------------------------------
 # Custom Formatter (JSON)
 # ---------------------------------------------------------------------------
+
 
 class JSONFormatter(logging.Formatter):
     """Machine-parseable JSON formatter for production."""
@@ -180,14 +202,19 @@ def get_logger(name: str) -> logging.Logger:
 # Convenience functions for visual output
 # ---------------------------------------------------------------------------
 
-def log_banner(logger: logging.Logger, title: str, char: str = "=", width: int = 60) -> None:
+
+def log_banner(
+    logger: logging.Logger, title: str, char: str = "=", width: int = 60
+) -> None:
     """Log a visual banner for section headers."""
     logger.info(char * width)
     logger.info(title)
     logger.info(char * width)
 
 
-def log_section(logger: logging.Logger, title: str, char: str = "-", width: int = 60) -> None:
+def log_section(
+    logger: logging.Logger, title: str, char: str = "-", width: int = 60
+) -> None:
     """Log a section divider."""
     logger.info("")
     logger.info(char * width)
