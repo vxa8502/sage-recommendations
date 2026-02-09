@@ -1,3 +1,12 @@
+---
+title: Sage
+emoji: 🌿
+colorFrom: blue
+colorTo: orange
+sdk: docker
+app_port: 7860
+---
+
 # Sage
 
 RAG-powered product recommendation system with explainable AI. Retrieves relevant products via semantic search over customer reviews, generates natural language explanations grounded in evidence, and verifies faithfulness using hallucination detection.

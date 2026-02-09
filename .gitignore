@@ -36,5 +36,8 @@ htmlcov/
 # Logs
 *.log
 
+# Kaggle
+sage_package.zip
+
 # Personal
 home/

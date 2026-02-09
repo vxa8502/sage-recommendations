@@ -266,7 +266,7 @@ health:
 # Reset
 # ---------------------------------------------------------------------------
 
-# Clear processed data, keep raw download cache
+# Clear processed data, keep raw download cache and Qdrant Cloud data
 reset:
 	@echo "Clearing processed data..."
 	rm -f data/reviews_prepared_*.parquet
@@ -278,16 +278,28 @@ reset:
 	@echo "  (human_eval_*.json preserved — use rm -rf data/eval_results/ to clear)"
 	rm -rf data/figures/
 	rm -f reports/eda_report.md
+	@echo "Done. (Raw cache + Qdrant preserved — use 'make reset-hard' to clear all)"
+
+# ---------------------------------------------------------------------------
+# Kaggle
+# ---------------------------------------------------------------------------
+
+kaggle-test:
+	@echo "=== TESTING KAGGLE PIPELINE (local, 100K) ==="
+	python scripts/kaggle_pipeline.py
+
+# ---------------------------------------------------------------------------
+# Reset
+# ---------------------------------------------------------------------------
+
+# Hard reset: remove EVERYTHING (ground zero for fresh start)
+reset-hard: reset
 	@echo "Clearing Qdrant collection..."
 	@python -c "\
 	from sage.adapters.vector_store import get_client; \
 	c = get_client(); c.delete_collection('sage_reviews'); \
 	print('  Collection deleted')" 2>/dev/null || \
 		echo "  Qdrant not reachable, skipping collection cleanup"
-	@echo "Done. (Raw download cache preserved — use 'make reset-hard' to clear)"
-
-# Hard reset: remove EVERYTHING (ground zero for fresh start)
-reset-hard: reset
 	@echo "Removing raw download cache..."
 	rm -f data/reviews_[0-9]*.parquet
 	rm -f data/reviews_full.parquet
@@ -392,8 +404,8 @@ help:
 	@echo "  make qdrant-status   Check Qdrant status"
 	@echo ""
 	@echo "CLEANUP:"
-	@echo "  make reset           Clear generated data and Qdrant collection"
-	@echo "  make reset-hard      Reset + clear raw data cache"
+	@echo "  make reset           Clear local generated data (preserves Qdrant)"
+	@echo "  make reset-hard      Reset + clear Qdrant + raw data cache"
 	@echo ""
 	@echo "VARIABLES:"
 	@echo "  QUERY    Demo query (default: wireless headphones...)"

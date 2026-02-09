@@ -58,8 +58,8 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
-# Non-root user for security
-RUN addgroup --system sage && adduser --system --ingroup sage sage
+# Non-root user with UID 1000 (required by HF Spaces)
+RUN useradd -m -u 1000 user
 
 # Copy installed packages from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
@@ -76,15 +76,16 @@ ENV HF_HOME=/app/.cache/huggingface
 ENV PYTHONUNBUFFERED=1
 
 # Fix ownership for non-root user
-RUN chown -R sage:sage /app
+RUN chown -R user:user /app
 
-USER sage
+USER user
 
-# Default port; overridden by PORT env var at runtime (Render, Railway)
-EXPOSE 8000
+# Default port 7860 for HF Spaces; overridden by PORT env var at runtime
+ENV PORT=7860
+EXPOSE 7860
 
 # Health check with startup grace period (models take ~30s to load)
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
-    CMD curl -sf http://localhost:${PORT:-8000}/health || exit 1
+    CMD curl -sf http://localhost:${PORT:-7860}/health || exit 1
 
 CMD ["python", "-m", "sage.api.run", "--host", "0.0.0.0"]

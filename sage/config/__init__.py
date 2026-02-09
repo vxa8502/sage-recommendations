@@ -18,7 +18,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.getenv("SAGE_DATA_DIR", PROJECT_ROOT / "data"))
 DATA_DIR.mkdir(exist_ok=True)
 
 RESULTS_DIR = DATA_DIR / "eval_results"
@@ -32,7 +32,7 @@ RESULTS_DIR.mkdir(exist_ok=True)
 DATASET_NAME = "McAuley-Lab/Amazon-Reviews-2023"
 DATASET_CATEGORY = "raw_review_Electronics"
 DEV_SUBSET_SIZE = 100_000  # Fast iteration (~3-5K after 5-core, ~2 min total)
-FULL_SUBSET_SIZE = 500_000  # Production scale
+FULL_SUBSET_SIZE = 1_000_000  # Production scale (Kaggle GPU)
 MIN_INTERACTIONS = 5
 
 
