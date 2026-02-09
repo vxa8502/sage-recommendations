@@ -182,4 +182,6 @@ for i, r in enumerate(results):
 
 # %%
 client.close()
-print(f"\nDone! {info.get('points_count', len(chunks)):,} chunks indexed to Qdrant Cloud")
+print(
+    f"\nDone! {info.get('points_count', len(chunks)):,} chunks indexed to Qdrant Cloud"
+)
