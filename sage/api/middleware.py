@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
 from starlette.responses import JSONResponse
@@ -64,6 +65,7 @@ class ShutdownCoordinator:
         """True if shutdown has been initiated."""
         return self._shutting_down
 
+    @asynccontextmanager
     async def track_request(self):
         """Context manager to track an active request."""
         async with self._lock:

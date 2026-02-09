@@ -6,6 +6,7 @@ colorTo: yellow
 sdk: docker
 app_port: 7860
 ---
+<!-- Above metadata configures Hugging Face Spaces (hidden there, visible on GitHub) -->
 
 # Sage
 
