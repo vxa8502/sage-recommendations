@@ -34,7 +34,7 @@ A recommendation system that refuses to hallucinate.
 
 Product recommendations without explanations are black boxes. Users see "You might like X" but never learn *why*. When you ask an LLM to explain, it confidently invents features and fabricates reviews.
 
-**Sage is different:** Every claim is a verified quote from real customer reviews. When evidence is sparse, it refuses rather than guesses. Users rated trust at **4.6/5** because honesty beats confident fabrication.
+**Sage is different:** Every claim is a verified quote from real customer reviews. When evidence is sparse, it refuses rather than guesses. Human evaluation scored trust at **4.3/5** because honesty beats confident fabrication.
 
 ---
 
@@ -43,12 +43,12 @@ Product recommendations without explanations are black boxes. Users see "You mig
 | Metric | Target | Achieved | Status |
 |--------|--------|----------|--------|
 | NDCG@10 (recommendation quality) | > 0.30 | 0.295 | 98% |
-| Claim-level faithfulness (HHEM) | > 0.85 | 0.952 | Pass |
-| Human evaluation (n=50) | > 3.5/5 | 4.43/5 | Pass |
-| P99 latency (retrieval) | < 500ms | 283ms | Pass |
-| P99 latency (cache hit) | < 100ms | ~80ms | Pass |
+| Claim-level faithfulness (HHEM) | > 0.85 | 0.967 | Pass |
+| Human evaluation (n=50) | > 3.5/5 | 3.85/5 | Pass |
+| P99 latency (production) | < 500ms | 200ms | Pass |
+| P99 latency (cache hit) | < 100ms | 86ms | Pass |
 
-**Grounding impact:** Explanations generated WITH evidence score 69% on HHEM. WITHOUT evidence: 3%. RAG grounding reduces hallucination by 66 percentage points.
+**Grounding impact:** Explanations generated WITH evidence score 71% on HHEM. WITHOUT evidence: 2.5%. RAG grounding reduces hallucination by 68 percentage points.
 
 ---
 
@@ -79,7 +79,7 @@ User Query: "wireless earbuds for running"
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Data flow:** 1M Amazon reviews → 5-core filter → 30K reviews → semantic chunking → 423K chunks in Qdrant.
+**Data flow:** 1M Amazon reviews → 5-core filter → 334K reviews → semantic chunking → 423K chunks in Qdrant.
 
 ---
 
@@ -91,12 +91,12 @@ When you give an LLM one short review as context, it fills in the gaps with plau
 
 | Decision | Alternative | Why This Choice |
 |----------|-------------|-----------------|
-| **E5-small** (384-dim) | E5-large, BGE-large | 3x faster, same accuracy on product reviews. Latency > marginal gains. |
+| **E5-small** (384-dim) | E5-large, BGE-large | Faster inference, same accuracy on product reviews. Latency > marginal gains. |
 | **Qdrant** | Pinecone, Weaviate | Free cloud tier, payload filtering, clean Python SDK. |
-| **Semantic chunking** | Fixed-window | Preserves complete arguments; +12% quote verification rate. |
-| **HHEM** (Vectara) | GPT-4 judge, NLI models | Purpose-built for RAG hallucination; no API cost; 0.97 AUC. |
+| **Semantic chunking** | Fixed-window | Preserves complete arguments; better quote verification. |
+| **HHEM** (Vectara) | GPT-4 judge, NLI models | Purpose-built for RAG hallucination; no API cost. |
 | **Claim-level evaluation** | Full-explanation | Isolates which claims hallucinate; more actionable. |
-| **Quality gate** (refuse) | Always answer | 46% refusal rate → 4.6/5 trust. Honesty > coverage. |
+| **Quality gate** (refuse) | Always answer | 48% refusal rate → 4.3/5 trust. Honesty > coverage. |
 
 ---
 
@@ -108,7 +108,7 @@ When you give an LLM one short review as context, it fills in the gaps with plau
 | **No image features** | Misses visual product attributes | Could add CLIP embeddings in future |
 | **English only** | Non-English reviews have lower retrieval quality | E5 is primarily English-trained |
 | **Cache invalidation manual** | Stale explanations possible | TTL-based expiry (1 hour); manual `/cache/clear` |
-| **LLM latency on free tier** | P99 ~4s with explanations | Retrieval alone is 283ms; cache hits are ~80ms |
+| **LLM latency on free tier** | P99 ~4s with explanations | Retrieval alone is 200ms; cache hits are 86ms |
 | **No user personalization** | Same results for all users | Would need user history for collaborative filtering |
 
 ---
@@ -230,7 +230,7 @@ scripts/
 | Condition | System Behavior |
 |-----------|-----------------|
 | Insufficient evidence (< 2 chunks) | Refuses to explain |
-| Low relevance (top score < 0.5) | Refuses to explain |
+| Low relevance (top score < 0.7) | Refuses to explain |
 | Quote not found in evidence | Falls back to paraphrased claims |
 | HHEM score < 0.5 | Flags as uncertain |
 
