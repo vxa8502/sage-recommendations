@@ -76,7 +76,7 @@ User Query: "wireless earbuds for running"
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Data flow:** 1M Amazon reviews → 5-core filter → 334K reviews → semantic chunking → 423K chunks in Qdrant. *([pipeline.py](scripts/pipeline.py) | [Kaggle notebook](scripts/kaggle_pipeline.ipynb))*
+**Data flow:** 1M Amazon reviews → 5-core filter → 334K reviews → semantic chunking → 423K chunks in Qdrant. *([pipeline.py](scripts/pipeline.py))*
 
 ---
 
@@ -204,13 +204,11 @@ Prometheus metrics: `sage_request_latency_seconds`, `sage_cache_events_total`, `
 ## Evaluation
 
 ```bash
-make eval-quick    # ~1 min: NDCG + HHEM only
 make eval          # ~5 min: standard pre-commit
-make eval-all      # ~15 min: complete reproducible suite
-make load-test     # P99 latency against production
+make eval-full     # ~17 min: complete automated suite + load test
 ```
 
-See `make help` for all targets.
+See `make help` for all targets (including `eval-quick`, `load-test`).
 
 ---
 

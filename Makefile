@@ -1,4 +1,4 @@
-.PHONY: all setup data data-validate eval eval-all eval-full eval-quick eval-summary demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-workflow human-eval-generate human-eval human-eval-analyze human-eval-status fmt test lint typecheck ci info metrics-snapshot health load-test load-test-quick kaggle-test help
+.PHONY: all setup data data-validate eval eval-full eval-quick eval-summary demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-workflow human-eval-generate human-eval human-eval-analyze human-eval-status fmt test lint typecheck ci info metrics-snapshot health load-test load-test-quick kaggle-test help
 
 # ---------------------------------------------------------------------------
 # Configurable Variables (override: make demo QUERY="gaming mouse")
@@ -127,60 +127,49 @@ eval: check-env
 #   - All explanation tests
 #   - Faithfulness (HHEM + RAGAS)
 #   - Grounding delta (WITH vs WITHOUT evidence)
-#   - Failure analysis + adjusted metrics
-#   - All sanity checks (spot, adversarial, empty, calibration)
-#   - Human eval analysis (if annotations exist)
-#   - Summary report
-eval-all: check-env
-	@echo "=== COMPLETE EVALUATION SUITE ===" && \
-	echo "" && \
-	echo "--- [1/9] EDA (production data) ---" && \
-	mkdir -p assets reports && \
-	python scripts/eda.py && \
-	echo "" && \
-	echo "--- [2/9] Retrieval metrics + ablations ---" && \
-	python scripts/build_natural_eval_dataset.py && \
-	python scripts/evaluation.py --dataset eval_natural_queries.json --section all && \
-	echo "" && \
-	echo "--- [3/9] Baseline comparison ---" && \
-	python scripts/evaluation.py --dataset eval_natural_queries.json --section primary --baselines && \
-	echo "" && \
-	echo "--- [4/9] Explanation tests ---" && \
-	python scripts/explanation.py --section basic && \
-	python scripts/explanation.py --section gate && \
-	python scripts/explanation.py --section verify && \
-	python scripts/explanation.py --section cold && \
-	echo "" && \
-	echo "--- [5/9] Faithfulness (HHEM + RAGAS) ---" && \
-	python scripts/faithfulness.py --samples $(SAMPLES) --ragas && \
-	echo "" && \
-	echo "--- [6/9] Grounding delta experiment ---" && \
-	python scripts/faithfulness.py --delta && \
-	echo "" && \
-	echo "--- [7/9] Failure analysis ---" && \
-	python scripts/faithfulness.py --analyze && \
-	python scripts/faithfulness.py --adjusted && \
-	echo "" && \
-	echo "--- [8/9] All sanity checks ---" && \
-	python scripts/sanity_checks.py --section all && \
-	echo "" && \
-	echo "--- [9/9] Human eval analysis ---" && \
-	(python scripts/human_eval.py --analyze 2>/dev/null || echo "  (skipped - no annotations found)") && \
-	echo "" && \
-	python scripts/summary.py && \
-	echo "=== COMPLETE EVALUATION DONE ==="
-
-# Full reproducibility: eval-all + load test (~17 min, fully automated)
+# Full reproducibility: complete automated eval + load test (~17 min)
 # Human evaluation is a SEPARATE workflow (see: make human-eval-workflow)
 # Run after: make reset-eval
 eval-full: check-env
 	@echo "=== FULL REPRODUCIBLE EVALUATION ===" && \
 	echo "" && \
-	echo "=== PART 1: AUTOMATED METRICS (~15 min) ===" && \
-	$(MAKE) eval-all && \
+	echo "--- [1/10] EDA (production data) ---" && \
+	mkdir -p assets reports && \
+	python scripts/eda.py && \
 	echo "" && \
-	echo "=== PART 2: LOAD TEST ===" && \
+	echo "--- [2/10] Retrieval metrics + ablations ---" && \
+	python scripts/build_natural_eval_dataset.py && \
+	python scripts/evaluation.py --dataset eval_natural_queries.json --section all && \
+	echo "" && \
+	echo "--- [3/10] Baseline comparison ---" && \
+	python scripts/evaluation.py --dataset eval_natural_queries.json --section primary --baselines && \
+	echo "" && \
+	echo "--- [4/10] Explanation tests ---" && \
+	python scripts/explanation.py --section basic && \
+	python scripts/explanation.py --section gate && \
+	python scripts/explanation.py --section verify && \
+	python scripts/explanation.py --section cold && \
+	echo "" && \
+	echo "--- [5/10] Faithfulness (HHEM + RAGAS) ---" && \
+	python scripts/faithfulness.py --samples $(SAMPLES) --ragas && \
+	echo "" && \
+	echo "--- [6/10] Grounding delta experiment ---" && \
+	python scripts/faithfulness.py --delta && \
+	echo "" && \
+	echo "--- [7/10] Failure analysis ---" && \
+	python scripts/faithfulness.py --analyze && \
+	python scripts/faithfulness.py --adjusted && \
+	echo "" && \
+	echo "--- [8/10] All sanity checks ---" && \
+	python scripts/sanity_checks.py --section all && \
+	echo "" && \
+	echo "--- [9/10] Human eval analysis ---" && \
+	(python scripts/human_eval.py --analyze 2>/dev/null || echo "  (skipped - no annotations found)") && \
+	echo "" && \
+	echo "--- [10/10] Load test ---" && \
 	python scripts/load_test.py --url $(URL) --requests $(REQUESTS) --save && \
+	echo "" && \
+	python scripts/summary.py && \
 	echo "" && \
 	echo "=== AUTOMATED EVALUATION COMPLETE ===" && \
 	echo "" && \
@@ -223,7 +212,7 @@ demo-interview: check-env
 # ---------------------------------------------------------------------------
 
 # Complete reproducible pipeline: data + full eval + demo
-all: qdrant-up data eval-all demo
+all: qdrant-up data eval-full demo
 	@echo "=== FULL PIPELINE COMPLETE ==="
 
 # ---------------------------------------------------------------------------
@@ -369,7 +358,7 @@ health:
 # ---------------------------------------------------------------------------
 
 # Clear processed data, keep raw download cache and Qdrant Cloud data
-# After reset, run: make eval-all (full reproducible suite)
+# After reset, run: make eval-full (full reproducible suite)
 reset:
 	@echo "Clearing processed data..."
 	rm -f data/reviews_prepared_*.parquet
@@ -384,7 +373,7 @@ reset:
 	@echo "  (human_eval_*.json preserved — run 'make human-eval' to re-annotate)"
 	rm -rf assets/*.png
 	rm -f reports/eda_report.md
-	@echo "Done. Run 'make eval-all' to reproduce full evaluation suite."
+	@echo "Done. Run 'make eval-full' to reproduce full evaluation suite."
 	@echo "  (Use 'make reset-hard' to also clear Qdrant + raw cache)"
 
 # Clear ALL local artifacts for pristine reproducibility (preserves Qdrant Cloud only)
@@ -502,13 +491,10 @@ help:
 	@echo "  make eda             Exploratory data analysis (queries Qdrant)"
 	@echo "  make kaggle-test     Test Kaggle pipeline locally (100K subset)"
 	@echo ""
-	@echo "EVALUATION (layered):"
+	@echo "EVALUATION:"
 	@echo "  make eval-quick      Quick iteration: NDCG + HHEM only (~1 min)"
 	@echo "  make eval            Standard: metrics + explanation + faithfulness (~5 min)"
-	@echo "  make eval-all        Complete: everything automated (~15 min)"
-	@echo "                       Includes: EDA, ablations, baselines, delta, analysis"
-	@echo "  make eval-full       Full automated eval + load test (~17 min)"
-	@echo "                       Does NOT include human eval (see below)"
+	@echo "  make eval-full       Complete automated suite + load test (~17 min)"
 	@echo "  make eval-summary    View comprehensive results (handles missing data)"
 	@echo ""
 	@echo "LOAD TESTING:"
