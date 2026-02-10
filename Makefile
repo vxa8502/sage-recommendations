@@ -1,4 +1,4 @@
-.PHONY: all setup data data-validate eval eval-all eval-quick demo demo-interview reset reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info human-eval-generate human-eval human-eval-analyze test lint typecheck ci info summary metrics-snapshot health load-test load-test-quick help
+.PHONY: all setup data data-validate eval eval-all eval-full eval-quick demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-generate human-eval human-eval-analyze fmt test lint typecheck ci info summary metrics-snapshot health load-test load-test-quick kaggle-test help
 
 # ---------------------------------------------------------------------------
 # Configurable Variables (override: make demo QUERY="gaming mouse")
@@ -115,7 +115,7 @@ eval: check-env
 	echo "" && \
 	echo "=== EVALUATION COMPLETE ==="
 
-# Complete: Full reproducible suite (~15 min)
+# Complete: Full reproducible suite (~15 min automated)
 #   - EDA (production data stats + figures)
 #   - All retrieval metrics + ablations (aggregation, rating, K, weights)
 #   - Baseline comparison (Random, Popularity, ItemKNN)
@@ -164,6 +164,46 @@ eval-all: check-env
 	echo "" && \
 	python scripts/summary.py && \
 	echo "=== COMPLETE EVALUATION DONE ==="
+
+# Full reproducibility: eval-all + human eval + load test (~15 min + ~1 hour manual)
+# Run after: make reset-eval
+# This is the COMPLETE evaluation for portfolio close-out
+eval-full: check-env
+	@echo "=== FULL REPRODUCIBLE EVALUATION ===" && \
+	echo "" && \
+	echo "=== PART 1: AUTOMATED METRICS (~15 min) ===" && \
+	$(MAKE) eval-all && \
+	echo "" && \
+	echo "=== PART 2: HUMAN EVALUATION ===" && \
+	echo "" && \
+	echo "--- Generating 50 samples ---" && \
+	python scripts/human_eval.py --generate --force && \
+	echo "" && \
+	echo "--- Interactive annotation (50 samples, ~1 hour) ---" && \
+	echo "Rate each sample 1-5 on: comprehension, trust, usefulness, satisfaction" && \
+	echo "Press Ctrl+C to pause and resume later with 'make human-eval'" && \
+	echo "" && \
+	python scripts/human_eval.py --annotate && \
+	echo "" && \
+	echo "--- Computing human eval results ---" && \
+	python scripts/human_eval.py --analyze && \
+	echo "" && \
+	echo "=== PART 3: LOAD TEST ===" && \
+	python scripts/load_test.py --url $(URL) --requests $(REQUESTS) --save && \
+	echo "" && \
+	echo "=== PART 4: FINAL SUMMARY ===" && \
+	python scripts/summary.py && \
+	echo "" && \
+	echo "=== FULL REPRODUCIBLE EVALUATION COMPLETE ===" && \
+	echo "" && \
+	echo "Results saved to: data/eval_results/" && \
+	echo "  - eval_natural_queries_latest.json  (NDCG, Hit@K, MRR)" && \
+	echo "  - faithfulness_latest.json          (HHEM, RAGAS)" && \
+	echo "  - grounding_delta_latest.json       (WITH vs WITHOUT evidence)" && \
+	echo "  - human_eval_latest.json            (50-sample ratings)" && \
+	echo "  - load_test_latest.json             (P99 latency)" && \
+	echo "" && \
+	echo "To verify docs match results: check README.md and home/*.md"
 
 # ---------------------------------------------------------------------------
 # Demo
@@ -216,11 +256,17 @@ docker-run:
 	docker run --rm -p 8000:8000 --env-file .env -e PORT=8000 sage:latest
 
 deploy-info:
-	@echo "DEPLOY TO RENDER:"
+	@echo "DEPLOY TO HUGGING FACE SPACES:"
 	@echo "  1. Push to GitHub"
-	@echo "  2. Connect repo at https://dashboard.render.com"
-	@echo "  3. Set env vars: QDRANT_URL, QDRANT_API_KEY, ANTHROPIC_API_KEY"
-	@echo "  4. Render auto-detects render.yaml and deploys"
+	@echo "  2. Create Space at https://huggingface.co/spaces"
+	@echo "  3. Set secrets: QDRANT_URL, QDRANT_API_KEY, ANTHROPIC_API_KEY"
+	@echo "  4. Link GitHub repo (Settings -> Repository)"
+	@echo ""
+	@echo "Live: $(URL)"
+
+deploy-health:
+	@curl -sf $(URL)/health | python -m json.tool 2>/dev/null || \
+		(echo "Deployment not healthy at $(URL)" && exit 1)
 
 # ---------------------------------------------------------------------------
 # Human Evaluation
@@ -234,13 +280,17 @@ human-eval: check-env
 	@echo "=== HUMAN EVALUATION ==="
 	python scripts/human_eval.py --annotate
 
-human-eval-analyze:
+human-eval-analyze: check-env
 	@echo "=== HUMAN EVAL ANALYSIS ==="
 	python scripts/human_eval.py --analyze
 
 # ---------------------------------------------------------------------------
 # Quality
 # ---------------------------------------------------------------------------
+
+fmt:
+	ruff format sage/ scripts/ tests/
+	ruff check --fix sage/ scripts/ tests/
 
 lint:
 	ruff check sage/ scripts/ tests/
@@ -278,12 +328,14 @@ metrics-snapshot:
 	nq = json.load(open(r/'eval_natural_queries_latest.json', encoding='utf-8')) if (r/'eval_natural_queries_latest.json').exists() else {}; \
 	faith = json.load(open(r/'faithfulness_latest.json', encoding='utf-8')) if (r/'faithfulness_latest.json').exists() else {}; \
 	human = json.load(open(r/'human_eval_latest.json', encoding='utf-8')) if (r/'human_eval_latest.json').exists() else {}; \
+	load = json.load(open(r/'load_test_latest.json', encoding='utf-8')) if (r/'load_test_latest.json').exists() else {}; \
 	pm = nq.get('primary_metrics', {}); mm = faith.get('multi_metric', {}); \
 	print('=== SAGE METRICS ==='); \
 	print(f'NDCG@10:     {pm.get(\"ndcg_at_10\", \"n/a\")}'); \
 	print(f'Claim HHEM:  {mm.get(\"claim_level_avg_score\", \"n/a\")}'); \
 	print(f'Quote Verif: {mm.get(\"quote_verification_rate\", \"n/a\")}'); \
-	print(f'Human Eval:  {human.get(\"overall_helpfulness\", \"n/a\")}/5.0 (n={human.get(\"n_samples\", 0)})')"
+	print(f'Human Eval:  {human.get(\"overall_helpfulness\", \"n/a\")}/5.0 (n={human.get(\"n_samples\", 0)})'); \
+	print(f'P99 Latency: {load.get(\"p99_ms\", \"n/a\")}ms')"
 
 health:
 	@curl -sf http://localhost:$(PORT)/health | python -m json.tool 2>/dev/null || \
@@ -312,6 +364,22 @@ reset:
 	@echo "Done. Run 'make eval-all' to reproduce full evaluation suite."
 	@echo "  (Use 'make reset-hard' to also clear Qdrant + raw cache)"
 
+# Clear ALL local artifacts for pristine reproducibility (preserves Qdrant Cloud only)
+# Use this for complete fresh eval run
+reset-eval: reset
+	@echo "Clearing human eval and load test data..."
+	rm -rf data/human_eval/
+	rm -f data/eval_results/human_eval_*.json
+	rm -f data/eval_results/load_test_*.json
+	@echo "Clearing raw download cache..."
+	rm -f data/reviews_[0-9]*.parquet
+	rm -f data/reviews_full.parquet
+	@echo "Clearing local Qdrant storage..."
+	rm -rf data/qdrant_storage/
+	@echo "Clearing any remaining eval results..."
+	rm -rf data/eval_results/
+	@echo "Ground zero. Ready for: make eval-full"
+
 # ---------------------------------------------------------------------------
 # Load Testing
 # ---------------------------------------------------------------------------
@@ -326,18 +394,6 @@ load-test:
 load-test-quick:
 	@echo "=== QUICK LOAD TEST (retrieval only) ==="
 	python scripts/load_test.py --url $(URL) --requests 20 --no-explain
-
-# ---------------------------------------------------------------------------
-# Kaggle
-# ---------------------------------------------------------------------------
-
-kaggle-test:
-	@echo "=== TESTING KAGGLE PIPELINE (local, 100K) ==="
-	python scripts/kaggle_pipeline.py
-
-# ---------------------------------------------------------------------------
-# Reset
-# ---------------------------------------------------------------------------
 
 # Hard reset: remove EVERYTHING (ground zero for fresh start)
 reset-hard: reset
@@ -354,8 +410,6 @@ reset-hard: reset
 	@echo "Removing human eval data..."
 	rm -rf data/human_eval/
 	rm -f data/eval_results/human_eval_*.json
-	@echo "Removing e2e success results..."
-	rm -f data/eval_results/e2e_success_*.json
 	@echo "Removing any remaining eval results..."
 	rm -rf data/eval_results/
 	@echo "Hard reset complete. Project at ground zero."
@@ -420,15 +474,18 @@ help:
 	@echo "  make health          Check API health (requires running server)"
 	@echo ""
 	@echo "PIPELINE:"
-	@echo "  make data            Load, chunk, embed, and index reviews"
+	@echo "  make data            Load, chunk, embed, and index reviews (local)"
 	@echo "  make data-validate   Validate data outputs"
 	@echo "  make eda             Exploratory data analysis (queries Qdrant)"
+	@echo "  make kaggle-test     Test Kaggle pipeline locally (100K subset)"
 	@echo ""
 	@echo "EVALUATION (layered):"
 	@echo "  make eval-quick      Quick iteration: NDCG + HHEM only (~1 min)"
 	@echo "  make eval            Standard: metrics + explanation + faithfulness (~5 min)"
 	@echo "  make eval-all        Complete: everything automated (~15 min)"
 	@echo "                       Includes: EDA, ablations, baselines, delta, analysis"
+	@echo "  make eval-full       Full reproducibility: eval-all + human eval + load test"
+	@echo "                       Includes: 50-sample manual annotation (~1 hour)"
 	@echo ""
 	@echo "LOAD TESTING:"
 	@echo "  make load-test             Run 50 requests against production (P99 target)"
@@ -440,7 +497,8 @@ help:
 	@echo "  make serve-dev       Start API with auto-reload"
 	@echo "  make docker-build    Build Docker image"
 	@echo "  make docker-run      Run Docker container"
-	@echo "  make deploy-info     Show Render deployment instructions"
+	@echo "  make deploy-info     Show HuggingFace Spaces deployment info"
+	@echo "  make deploy-health   Check production deployment health"
 	@echo ""
 	@echo "HUMAN EVALUATION:"
 	@echo "  make human-eval-generate  Generate 50 eval samples (SEED=42)"
@@ -448,6 +506,7 @@ help:
 	@echo "  make human-eval-analyze   Compute results from ratings"
 	@echo ""
 	@echo "QUALITY:"
+	@echo "  make fmt             Auto-format code with ruff"
 	@echo "  make lint            Run ruff linter and formatter check"
 	@echo "  make typecheck       Run mypy type checking"
 	@echo "  make test            Run unit tests"
@@ -459,8 +518,9 @@ help:
 	@echo "  make qdrant-status   Check Qdrant status"
 	@echo ""
 	@echo "CLEANUP:"
-	@echo "  make reset           Clear local generated data (preserves Qdrant)"
-	@echo "  make reset-hard      Reset + clear Qdrant + raw data cache"
+	@echo "  make reset           Clear eval data (preserves human_eval, raw cache, Qdrant)"
+	@echo "  make reset-eval      Ground zero: clear ALL local artifacts (preserves Qdrant Cloud)"
+	@echo "  make reset-hard      Nuclear: clear everything INCLUDING Qdrant collection"
 	@echo ""
 	@echo "VARIABLES:"
 	@echo "  QUERY     Demo query (default: wireless headphones...)"

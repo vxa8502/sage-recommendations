@@ -1,0 +1,16 @@
+# Exclude assets from HuggingFace Spaces (kept in GitHub for docs)
+assets/
+
+# Development files
+home/
+scripts/
+tests/
+notebooks/
+data/
+
+# Config and docs
+*.md
+Makefile
+pyproject.toml
+.gitignore
+.github/

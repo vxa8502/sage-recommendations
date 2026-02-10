@@ -14,6 +14,9 @@ Usage:
     # Test without explanations (faster):
     python scripts/load_test.py --no-explain
 
+    # Save results to JSON (for reproducibility):
+    python scripts/load_test.py --save
+
 David's target: p99 < 500ms
 """
 
@@ -21,8 +24,11 @@ import argparse
 import statistics
 import sys
 import time
+from datetime import datetime
 
 import httpx
+
+from sage.config import RESULTS_DIR, save_results
 
 
 # Test queries covering different scenarios
@@ -107,21 +113,37 @@ def run_load_test(
     # Calculate statistics
     if latencies:
         results = {
+            "timestamp": datetime.now().isoformat(),
+            "config": {
+                "url": base_url,
+                "num_requests": num_requests,
+                "explain": explain,
+                "timeout_s": timeout,
+            },
             "total_requests": num_requests,
             "successful": len(latencies),
             "errors": errors,
             "cache_hits": cache_hits,
-            "min_ms": min(latencies),
-            "max_ms": max(latencies),
-            "mean_ms": statistics.mean(latencies),
-            "median_ms": statistics.median(latencies),
-            "p50_ms": percentile(latencies, 50),
-            "p95_ms": percentile(latencies, 95),
-            "p99_ms": percentile(latencies, 99),
-            "stdev_ms": statistics.stdev(latencies) if len(latencies) > 1 else 0,
+            "min_ms": round(min(latencies), 1),
+            "max_ms": round(max(latencies), 1),
+            "mean_ms": round(statistics.mean(latencies), 1),
+            "median_ms": round(statistics.median(latencies), 1),
+            "p50_ms": round(percentile(latencies, 50), 1),
+            "p95_ms": round(percentile(latencies, 95), 1),
+            "p99_ms": round(percentile(latencies, 99), 1),
+            "stdev_ms": round(statistics.stdev(latencies), 1)
+            if len(latencies) > 1
+            else 0,
         }
     else:
         results = {
+            "timestamp": datetime.now().isoformat(),
+            "config": {
+                "url": base_url,
+                "num_requests": num_requests,
+                "explain": explain,
+                "timeout_s": timeout,
+            },
             "total_requests": num_requests,
             "successful": 0,
             "errors": errors,
@@ -197,6 +219,11 @@ def main():
         default=500.0,
         help="Target p99 latency in ms (default: 500)",
     )
+    parser.add_argument(
+        "--save",
+        action="store_true",
+        help="Save results to data/eval_results/load_test_*.json",
+    )
 
     args = parser.parse_args()
 
@@ -223,7 +250,17 @@ def main():
         timeout=args.timeout,
     )
 
+    # Add pass/fail status
+    if results["successful"] > 0:
+        results["target_p99_ms"] = args.target_p99
+        results["pass"] = results["p99_ms"] <= args.target_p99
+
     print_results(results, target_p99_ms=args.target_p99)
+
+    if args.save:
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        saved_path = save_results(results, "load_test")
+        print(f"\nResults saved: {saved_path}")
 
 
 if __name__ == "__main__":

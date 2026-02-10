@@ -63,17 +63,3 @@ EVALUATION_QUERIES = (
 
 # Queries for failure analysis - focused on edge cases and challenging queries
 ANALYSIS_QUERIES = CORE_QUERIES + EDGE_CASE_QUERIES
-
-# Queries for end-to-end success rate evaluation - comprehensive coverage
-E2E_EVAL_QUERIES = (
-    CORE_QUERIES
-    + EDGE_CASE_QUERIES
-    + [
-        "tablet stand for kitchen",
-        "wireless mouse for laptop",
-        "HDMI cable for monitor",
-        "phone mount for car",
-        "screen protector for phone",
-        "backup battery for camping",
-    ]
-)
