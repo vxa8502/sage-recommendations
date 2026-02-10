@@ -31,6 +31,7 @@ assets/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
+!scripts/kaggle_pipeline.ipynb
 
 # Build
 *.egg-info/
