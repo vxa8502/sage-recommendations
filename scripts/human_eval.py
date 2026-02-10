@@ -374,6 +374,18 @@ def analyze_results():
         "timestamp": datetime.now().isoformat(),
         "n_samples": len(rated),
         "n_total": len(samples),
+        "methodology": {
+            "evaluator": "Single rater (developer/researcher)",
+            "instructions": "Rate each dimension 1-5 Likert: 1=strongly disagree, 5=strongly agree",
+            "dimensions": {
+                "comprehension": "I understood why this item was recommended",
+                "trust": "I trust this explanation is accurate",
+                "usefulness": "This explanation helped me make a decision",
+                "satisfaction": "I am satisfied with this explanation",
+            },
+            "sample_selection": "35 natural queries (balanced by category) + 15 config queries",
+            "inter_annotator_agreement": "N/A (single rater)",
+        },
         "dimensions": dimensions_results,
         "overall_helpfulness": round(overall, 2),
         "target": HELPFULNESS_TARGET,

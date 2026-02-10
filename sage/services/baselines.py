@@ -242,3 +242,54 @@ def load_product_embeddings_from_qdrant() -> dict[str, np.ndarray]:
         product_embeddings[product_id] = normalize_vectors(mean_vec)
 
     return product_embeddings
+
+
+def compute_item_popularity_from_qdrant(
+    normalize: bool = True,
+) -> dict[str, float] | dict[str, int]:
+    """
+    Compute item popularity (chunk count per product) from Qdrant.
+
+    This allows computing beyond-accuracy metrics (novelty, diversity)
+    without requiring local splits.
+
+    Args:
+        normalize: If True, return probabilities (0-1). If False, return raw counts.
+
+    Returns:
+        Dict mapping product_id to popularity (probability if normalize=True,
+        raw count if normalize=False).
+    """
+    from sage.adapters.vector_store import get_client
+
+    client = get_client()
+
+    # Scroll through all points (without vectors for speed)
+    counts: dict[str, int] = Counter()
+    offset = None
+
+    while True:
+        results, offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=1000,
+            offset=offset,
+            with_vectors=False,
+        )
+
+        for point in results:
+            product_id = point.payload.get("product_id")
+            if product_id:
+                counts[product_id] += 1
+
+        if offset is None:
+            break
+
+    if not normalize:
+        return dict(counts)
+
+    # Normalize to probabilities
+    total = sum(counts.values())
+    if total == 0:
+        return {}
+
+    return {product_id: count / total for product_id, count in counts.items()}

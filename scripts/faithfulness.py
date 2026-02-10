@@ -189,6 +189,18 @@ def run_evaluation(n_samples: int, run_ragas: bool = False):
             "faithfulness_std": ragas_report.std_score,
         }
 
+    # Document RAGAS metric limitations
+    results["ragas_limitations"] = {
+        "metrics_available": ["faithfulness"],
+        "metrics_unavailable": {
+            "answer_relevancy": "Requires embeddings model; RAGAS doesn't support Anthropic as embeddings provider",
+            "context_precision": "Requires ground-truth reference answers per query (not available)",
+            "context_recall": "Requires ground-truth reference answers per query (not available)",
+        },
+        "primary_metric": "claim_level_hhem",
+        "rationale": "Claim-level HHEM (96.8%) is more reliable than full-explanation RAGAS for citation-heavy explanations",
+    }
+
     ts_file = save_results(results, "faithfulness")
     logger.info("Saved: %s", ts_file)
 
@@ -349,6 +361,126 @@ def run_adjusted_calculation():
 
 
 # ============================================================================
+# SECTION: Grounding Delta Experiment
+# ============================================================================
+
+
+def run_grounding_delta():
+    """
+    Compare HHEM scores WITH vs WITHOUT evidence grounding.
+
+    This shows the value of RAG: how much does grounding reduce hallucination?
+    """
+    from sage.adapters.llm import get_llm_client
+    from sage.services import get_explanation_services
+    from sage.services.retrieval import get_candidates
+
+    log_banner(logger, "GROUNDING DELTA EXPERIMENT")
+    logger.info("Comparing hallucination rates WITH vs WITHOUT evidence grounding")
+
+    queries = EVALUATION_QUERIES[:10]
+    _, detector = get_explanation_services()
+    llm = get_llm_client()
+
+    with_evidence = []
+    without_evidence = []
+
+    for i, query in enumerate(queries, 1):
+        logger.info('[%d/%d] "%s"', i, len(queries), query)
+
+        products = get_candidates(
+            query=query,
+            k=1,
+            min_rating=4.0,
+            aggregation=AggregationMethod.MAX,
+        )
+        if not products:
+            continue
+
+        product = products[0]
+
+        # Get evidence chunks for this product
+        from sage.services.retrieval import retrieve_chunks
+
+        all_chunks = retrieve_chunks(query, limit=100)
+        # Filter to just this product's chunks
+        evidence = [c for c in all_chunks if c.product_id == product.product_id][
+            :MAX_EVIDENCE
+        ]
+        evidence_texts = [c.text for c in evidence]
+
+        if not evidence_texts:
+            continue
+
+        # Generate WITH evidence (grounded)
+        system_prompt = "You are a helpful product recommendation assistant."
+        grounded_user = f"""Based on customer reviews, explain why this product is good for: "{query}"
+
+EVIDENCE FROM REVIEWS:
+{chr(10).join(f"- {t}" for t in evidence_texts[:3])}
+
+Write a brief 2-3 sentence recommendation based ONLY on the evidence above."""
+
+        try:
+            grounded_response, _ = llm.generate(system_prompt, grounded_user)
+            grounded_hhem = detector.check_explanation(
+                evidence_texts, grounded_response
+            )
+            with_evidence.append(grounded_hhem.score)
+            logger.info("  WITH evidence: %.3f", grounded_hhem.score)
+        except Exception:
+            logger.exception("  Error with grounded generation")
+            continue
+
+        # Generate WITHOUT evidence (ungrounded)
+        ungrounded_user = f"""Recommend a product for: "{query}"
+
+Write a brief 2-3 sentence recommendation. You may make reasonable assumptions about the product."""
+
+        try:
+            ungrounded_response, _ = llm.generate(system_prompt, ungrounded_user)
+            ungrounded_hhem = detector.check_explanation(
+                evidence_texts, ungrounded_response
+            )
+            without_evidence.append(ungrounded_hhem.score)
+            logger.info("  WITHOUT evidence: %.3f", ungrounded_hhem.score)
+        except Exception:
+            logger.exception("  Error with ungrounded generation")
+
+    # Summary
+    log_banner(logger, "GROUNDING DELTA RESULTS")
+
+    if with_evidence and without_evidence:
+        with_mean = np.mean(with_evidence)
+        without_mean = np.mean(without_evidence)
+        delta = with_mean - without_mean
+
+        logger.info("Samples: %d", min(len(with_evidence), len(without_evidence)))
+        logger.info("WITH evidence (grounded):    %.3f mean HHEM", with_mean)
+        logger.info("WITHOUT evidence (halluc):   %.3f mean HHEM", without_mean)
+        logger.info("Delta (grounding benefit):   +%.3f", delta)
+        logger.info(
+            "Interpretation: Grounding %s hallucination by %.1f%%",
+            "reduces" if delta > 0 else "increases",
+            abs(delta) * 100,
+        )
+
+        # Save results
+        results = {
+            "n_samples": min(len(with_evidence), len(without_evidence)),
+            "with_evidence_mean": float(with_mean),
+            "without_evidence_mean": float(without_mean),
+            "delta": float(delta),
+            "with_evidence_scores": with_evidence,
+            "without_evidence_scores": without_evidence,
+        }
+        ts_file = save_results(results, "grounding_delta")
+        logger.info("Saved: %s", ts_file)
+    else:
+        logger.warning("Not enough samples for comparison")
+
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -361,12 +493,17 @@ def main():
     parser.add_argument(
         "--adjusted", action="store_true", help="Calculate adjusted metrics"
     )
+    parser.add_argument(
+        "--delta", action="store_true", help="Run grounding delta experiment"
+    )
     args = parser.parse_args()
 
     if args.analyze:
         run_failure_analysis()
     elif args.adjusted:
         run_adjusted_calculation()
+    elif args.delta:
+        run_grounding_delta()
     else:
         run_evaluation(n_samples=args.samples, run_ragas=args.ragas)
 

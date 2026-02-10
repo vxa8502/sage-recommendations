@@ -1,4 +1,4 @@
-.PHONY: all setup data data-validate eval eval-deep eval-quick demo demo-interview reset reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info human-eval-generate human-eval human-eval-analyze test lint typecheck ci info summary metrics-snapshot health help
+.PHONY: all setup data data-validate eval eval-all eval-quick demo demo-interview reset reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info human-eval-generate human-eval human-eval-analyze test lint typecheck ci info summary metrics-snapshot health load-test load-test-quick help
 
 # ---------------------------------------------------------------------------
 # Configurable Variables (override: make demo QUERY="gaming mouse")
@@ -9,6 +9,8 @@ TOP_K ?= 1
 SAMPLES ?= 10
 SEED ?= 42
 PORT ?= 8000
+URL ?= https://vxa8502-sage.hf.space
+REQUESTS ?= 50
 
 # ---------------------------------------------------------------------------
 # Environment Check
@@ -75,57 +77,94 @@ eda: check-env
 	python scripts/eda.py
 
 # ---------------------------------------------------------------------------
-# Evaluation Suite
+# Evaluation Suite (layered: quick → standard → complete)
 # ---------------------------------------------------------------------------
 
-# Standard evaluation: primary metrics, spot-checks, explanation tests, faithfulness
+# Quick: Fast iteration, no RAGAS (~1 min)
+#   - Primary retrieval metrics (NDCG, Hit@K, MRR)
+#   - Basic faithfulness (HHEM only, 5 samples)
+eval-quick: check-env
+	@echo "=== QUICK EVALUATION ===" && \
+	python scripts/build_natural_eval_dataset.py && \
+	python scripts/evaluation.py --dataset eval_natural_queries.json --section primary && \
+	python scripts/faithfulness.py --samples 5 && \
+	echo "=== QUICK EVAL COMPLETE ==="
+
+# Standard: Pre-commit validation (~5 min)
+#   - Primary retrieval metrics
+#   - Explanation tests (basic, gate, verify, cold-start)
+#   - Faithfulness (HHEM + RAGAS)
+#   - Spot checks
 eval: check-env
 	@echo "=== EVALUATION SUITE ===" && \
 	echo "" && \
-	echo "--- Building natural query evaluation dataset ---" && \
+	echo "--- [1/4] Retrieval metrics ---" && \
 	python scripts/build_natural_eval_dataset.py && \
-	echo "" && \
-	echo "--- Recommendation evaluation (natural queries) ---" && \
 	python scripts/evaluation.py --dataset eval_natural_queries.json --section primary && \
 	echo "" && \
-	echo "--- Explanation tests ---" && \
+	echo "--- [2/4] Explanation tests ---" && \
 	python scripts/explanation.py --section basic && \
 	python scripts/explanation.py --section gate && \
 	python scripts/explanation.py --section verify && \
 	python scripts/explanation.py --section cold && \
 	echo "" && \
-	echo "--- Faithfulness evaluation (HHEM + RAGAS) ---" && \
+	echo "--- [3/4] Faithfulness (HHEM + RAGAS) ---" && \
 	python scripts/faithfulness.py --samples $(SAMPLES) --ragas && \
 	echo "" && \
-	echo "--- Sanity checks (spot) ---" && \
+	echo "--- [4/4] Sanity checks ---" && \
 	python scripts/sanity_checks.py --section spot && \
 	echo "" && \
 	echo "=== EVALUATION COMPLETE ==="
 
-# Deep evaluation: all ablations, baselines, calibration, failure analysis
-eval-deep: check-env
-	@test -d data/eval || (echo "ERROR: Run 'make eval' first to build eval datasets" && exit 1)
-	@echo "=== DEEP EVALUATION (ablations + baselines) ===" && \
+# Complete: Full reproducible suite (~15 min)
+#   - EDA (production data stats + figures)
+#   - All retrieval metrics + ablations (aggregation, rating, K, weights)
+#   - Baseline comparison (Random, Popularity, ItemKNN)
+#   - All explanation tests
+#   - Faithfulness (HHEM + RAGAS)
+#   - Grounding delta (WITH vs WITHOUT evidence)
+#   - Failure analysis + adjusted metrics
+#   - All sanity checks (spot, adversarial, empty, calibration)
+#   - Human eval analysis (if annotations exist)
+#   - Summary report
+eval-all: check-env
+	@echo "=== COMPLETE EVALUATION SUITE ===" && \
 	echo "" && \
-	echo "--- Full recommendation evaluation (natural queries) ---" && \
+	echo "--- [1/9] EDA (production data) ---" && \
+	mkdir -p data/figures reports && \
+	python scripts/eda.py && \
+	echo "" && \
+	echo "--- [2/9] Retrieval metrics + ablations ---" && \
+	python scripts/build_natural_eval_dataset.py && \
 	python scripts/evaluation.py --dataset eval_natural_queries.json --section all && \
 	echo "" && \
-	echo "--- All sanity checks (incl. calibration) ---" && \
-	python scripts/sanity_checks.py --section all && \
+	echo "--- [3/9] Baseline comparison ---" && \
+	python scripts/evaluation.py --dataset eval_natural_queries.json --section primary --baselines && \
 	echo "" && \
-	echo "--- Faithfulness failure analysis ---" && \
+	echo "--- [4/9] Explanation tests ---" && \
+	python scripts/explanation.py --section basic && \
+	python scripts/explanation.py --section gate && \
+	python scripts/explanation.py --section verify && \
+	python scripts/explanation.py --section cold && \
+	echo "" && \
+	echo "--- [5/9] Faithfulness (HHEM + RAGAS) ---" && \
+	python scripts/faithfulness.py --samples $(SAMPLES) --ragas && \
+	echo "" && \
+	echo "--- [6/9] Grounding delta experiment ---" && \
+	python scripts/faithfulness.py --delta && \
+	echo "" && \
+	echo "--- [7/9] Failure analysis ---" && \
 	python scripts/faithfulness.py --analyze && \
 	python scripts/faithfulness.py --adjusted && \
 	echo "" && \
-	echo "=== DEEP EVALUATION COMPLETE ==="
-
-# Quick eval: skip RAGAS (faster iteration)
-eval-quick: check-env
-	@echo "=== QUICK EVALUATION (no RAGAS) ==="
-	python scripts/build_natural_eval_dataset.py && \
-	python scripts/evaluation.py --dataset eval_natural_queries.json --section primary && \
-	python scripts/faithfulness.py --samples 5
-	@echo "Quick eval complete"
+	echo "--- [8/9] All sanity checks ---" && \
+	python scripts/sanity_checks.py --section all && \
+	echo "" && \
+	echo "--- [9/9] Human eval analysis ---" && \
+	(python scripts/human_eval.py --analyze 2>/dev/null || echo "  (skipped - no annotations found)") && \
+	echo "" && \
+	python scripts/summary.py && \
+	echo "=== COMPLETE EVALUATION DONE ==="
 
 # ---------------------------------------------------------------------------
 # Demo
@@ -155,8 +194,9 @@ demo-interview: check-env
 # Full Pipeline
 # ---------------------------------------------------------------------------
 
-all: qdrant-up data eval demo
-	@python scripts/summary.py
+# Complete reproducible pipeline: data + full eval + demo
+all: qdrant-up data eval-all demo
+	@echo "=== FULL PIPELINE COMPLETE ==="
 
 # ---------------------------------------------------------------------------
 # API
@@ -255,6 +295,7 @@ health:
 # ---------------------------------------------------------------------------
 
 # Clear processed data, keep raw download cache and Qdrant Cloud data
+# After reset, run: make eval-all (full reproducible suite)
 reset:
 	@echo "Clearing processed data..."
 	rm -f data/reviews_prepared_*.parquet
@@ -263,10 +304,29 @@ reset:
 	rm -rf data/eval/
 	rm -f data/eval_results/eval_*.json
 	rm -f data/eval_results/faithfulness_*.json
-	@echo "  (human_eval_*.json preserved — use rm -rf data/eval_results/ to clear)"
+	rm -f data/eval_results/failure_analysis_*.json
+	rm -f data/eval_results/adjusted_faithfulness_*.json
+	rm -f data/eval_results/grounding_delta_*.json
+	@echo "  (human_eval_*.json preserved — run 'make human-eval' to re-annotate)"
 	rm -rf data/figures/
 	rm -f reports/eda_report.md
-	@echo "Done. (Raw cache + Qdrant preserved — use 'make reset-hard' to clear all)"
+	@echo "Done. Run 'make eval-all' to reproduce full evaluation suite."
+	@echo "  (Use 'make reset-hard' to also clear Qdrant + raw cache)"
+
+# ---------------------------------------------------------------------------
+# Load Testing
+# ---------------------------------------------------------------------------
+
+# Run load test against production (or local with URL=http://localhost:8000)
+# Target: P99 < 500ms
+load-test:
+	@echo "=== LOAD TEST ==="
+	python scripts/load_test.py --url $(URL) --requests $(REQUESTS)
+
+# Quick load test (20 requests, no explanations - tests retrieval only)
+load-test-quick:
+	@echo "=== QUICK LOAD TEST (retrieval only) ==="
+	python scripts/load_test.py --url $(URL) --requests 20 --no-explain
 
 # ---------------------------------------------------------------------------
 # Kaggle
@@ -363,10 +423,18 @@ help:
 	@echo "PIPELINE:"
 	@echo "  make data            Load, chunk, embed, and index reviews"
 	@echo "  make data-validate   Validate data outputs"
-	@echo "  make eda             Exploratory data analysis (generates figures)"
-	@echo "  make eval            Standard evaluation (SAMPLES=10 default)"
-	@echo "  make eval-deep       Deep evaluation (all ablations + baselines)"
-	@echo "  make eval-quick      Quick eval (skip RAGAS)"
+	@echo "  make eda             Exploratory data analysis (queries Qdrant)"
+	@echo ""
+	@echo "EVALUATION (layered):"
+	@echo "  make eval-quick      Quick iteration: NDCG + HHEM only (~1 min)"
+	@echo "  make eval            Standard: metrics + explanation + faithfulness (~5 min)"
+	@echo "  make eval-all        Complete: everything automated (~15 min)"
+	@echo "                       Includes: EDA, ablations, baselines, delta, analysis"
+	@echo ""
+	@echo "LOAD TESTING:"
+	@echo "  make load-test             Run 50 requests against production (P99 target)"
+	@echo "  make load-test URL=...     Test against custom URL"
+	@echo "  make load-test-quick       20 requests, no explanations (retrieval only)"
 	@echo ""
 	@echo "API:"
 	@echo "  make serve           Start API server (PORT=8000)"
@@ -396,8 +464,10 @@ help:
 	@echo "  make reset-hard      Reset + clear Qdrant + raw data cache"
 	@echo ""
 	@echo "VARIABLES:"
-	@echo "  QUERY    Demo query (default: wireless headphones...)"
-	@echo "  TOP_K    Number of results (default: 1)"
-	@echo "  SAMPLES  Faithfulness eval samples (default: 10)"
-	@echo "  SEED     Random seed for human eval (default: 42)"
-	@echo "  PORT     API port (default: 8000)"
+	@echo "  QUERY     Demo query (default: wireless headphones...)"
+	@echo "  TOP_K     Number of results (default: 1)"
+	@echo "  SAMPLES   Faithfulness eval samples (default: 10)"
+	@echo "  SEED      Random seed for human eval (default: 42)"
+	@echo "  PORT      API port (default: 8000)"
+	@echo "  URL       Load test target (default: https://vxa8502-sage.hf.space)"
+	@echo "  REQUESTS  Load test request count (default: 50)"

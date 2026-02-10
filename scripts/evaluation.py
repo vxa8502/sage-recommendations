@@ -28,6 +28,7 @@ from sage.services.baselines import (
     ItemKNNBaseline,
     PopularityBaseline,
     RandomBaseline,
+    compute_item_popularity_from_qdrant,
     load_product_embeddings_from_qdrant,
 )
 from sage.config import get_logger, log_banner, log_section, log_kv
@@ -351,18 +352,25 @@ def main():
     total_items = len(item_embeddings)
     logger.info("Products in catalog: %d", total_items)
 
-    # Try to load splits for beyond-accuracy metrics (optional)
-    item_popularity = None
+    # Try to load splits for baseline comparison (optional)
     train_records = None
     all_products = None
+    item_counts = None  # Raw counts for baseline comparison
     try:
         train_df, _, _ = load_splits()
         train_records = train_df.to_dict("records")
         all_products = list(train_df["parent_asin"].unique())
         item_popularity = compute_item_popularity(train_records, item_key="parent_asin")
-        logger.info("Loaded splits for beyond-accuracy metrics")
+        logger.info("Loaded splits for baseline comparison")
     except FileNotFoundError:
-        logger.info("Splits not available - beyond-accuracy metrics will be skipped")
+        # Fall back to Qdrant-based popularity for beyond-accuracy metrics
+        logger.info("Splits not available - computing popularity from Qdrant")
+        item_popularity = compute_item_popularity_from_qdrant(normalize=True)
+        item_counts = compute_item_popularity_from_qdrant(normalize=False)
+        all_products = list(item_embeddings.keys())
+        logger.info(
+            "Computed popularity for %d products from Qdrant", len(item_popularity)
+        )
 
     # Load eval cases
     logger.info("Loading evaluation dataset: %s", args.dataset)
@@ -403,14 +411,20 @@ def main():
             "ndcg_at_10": best_ndcg,
         }
 
-    # Baseline comparison (requires splits)
+    # Baseline comparison
     if args.baselines:
-        if train_records is None:
-            logger.warning(
-                "Skipping baselines - requires local splits (run 'make splits')"
-            )
-        else:
+        if train_records is None and item_counts is not None:
+            # Create pseudo-interactions from Qdrant counts for baseline comparison
+            logger.info("Using Qdrant-based counts for baseline comparison")
+            train_records = [
+                {"parent_asin": pid}
+                for pid, count in item_counts.items()
+                for _ in range(count)
+            ]
+        if train_records is not None:
             run_baseline_comparison(cases, train_records, all_products, item_embeddings)
+        else:
+            logger.warning("Skipping baselines - no data available")
 
     # Save results (uses dataset stem as prefix for both timestamped and latest files)
     prefix = Path(args.dataset).stem
