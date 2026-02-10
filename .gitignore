@@ -6,8 +6,20 @@ __pycache__/
 *.pyc
 .Python
 
-# Data (too large for git)
-data/
+# Data (large files - ignore selectively)
+# Use /data/ prefix to ONLY match top-level data/, not sage/data/
+/data/splits/
+/data/cache/
+/data/qdrant_storage/
+/data/figures/
+/data/eval/
+/data/human_eval/
+
+# But TRACK eval results (small JSONs, source of truth for metrics)
+!/data/eval_results/
+
+# Assets (PNGs break HF deployment - hosted on assets-only branch)
+assets/
 
 # IDE
 .vscode/

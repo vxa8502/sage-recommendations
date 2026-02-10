@@ -1,0 +1,332 @@
+{
+  "cases": [
+    {
+      "case_id": 1,
+      "query": "wireless headphones with noise cancellation",
+      "product_id": "B01EL7VTC0",
+      "explanation": "Reviewers describe these as \"the best noise cancellation, wireless headphones on the market\" [review_137128] and \"Best Bluetooth headphones set with noise cancellation\" [review_117666]. One user notes \"when playing music via Bluetooth mild background sound does seem to be suppressed\" [review_291616].",
+      "evidence_texts": [
+        "These are the best noise cancellation, wireless headphones on the market. They offer audiophile quality sound not usually found with wireless headphones. They are very comfortable to wear for long periods of time and strangely enough, my ears do not sweat or become hot while wearing them. (I do not exercise with these on). You can change the volume, pause, skip tracks and take phone calls with the headset on. The battery life is impressive and the build quality is great.  These are worth every penny. I would give it 6 stars if I could!!  Way to go Bose!",
+        "Best Bluetooth headphones set with noise cancellation. Very comfortable for long time.",
+        "I'm not sure what I should have expected from the noise cancellation. I have found that when playing music via Bluetooth mild background sound does seem to be suppressed, but louder sounds come through. I tested the noise cancellation playing a variety of white sounds on my iPhone while playing music via my MacBook. The sounds do seem to be suppressed at low volume, but are easy to hear at higher volume. My conclusion is that noise cancellation is limited even in these highly rated earphones. They are superb earphones, well built, with great sound quality, but not sure they are worth the price."
+      ],
+      "hhem_score": 0.13946935534477234,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 2,
+      "query": "wireless headphones with noise cancellation",
+      "product_id": "B0C7V6PQ5D",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"wireless headphones with noise cancellation\".",
+      "evidence_texts": [
+        "These seem to be good wireless noise cancelling headphones.  I have been using them a few days and I am very happy with the results.  The background noise is almost all cancelled out when I listen to music.  The clarity and quality of the music is very good thru these headphones.  The headphones sit comfortably on my head and over my ears.  These are lightweight.  The headphone comes with the following:  1 Srhythm Over-Ear Bluetooth Headphone,  1 USB charging cable,  1 3.5mm Audio cable,  1 Airplane adapter,  1 Carrying Zip Case,  and 1 User manual.  I recommend these headphones and I think they are well worth the money."
+      ],
+      "hhem_score": 0.47767794132232666,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 3,
+      "query": "laptop charger for MacBook",
+      "product_id": "B08PNSRG33",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"laptop charger for MacBook\".",
+      "evidence_texts": [
+        "I always liked the old MacBooks with their magnetic charging cable feature...before they switched to USB C.  And I really like the current all-aluminum Acer Chromebooks, which cosmetically are a MacBook clone (they are a premium Chromebook).  This adapter works great and rekindles the MacBook magnetic charging idea.  The adapter looks great and works great!  Well done!"
+      ],
+      "hhem_score": 0.376436322927475,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 4,
+      "query": "laptop charger for MacBook",
+      "product_id": "B0BLMFG5D2",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"laptop charger for MacBook\".",
+      "evidence_texts": [
+        "Note that this model is the standard USB A charger. The other Apple version has a USB-C connector and fits the MacBook Pro and other more recent notebook computers that only have USB-C ports. Be sure you order the right one."
+      ],
+      "hhem_score": 0.2948443591594696,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 5,
+      "query": "USB hub with multiple ports",
+      "product_id": "B0BVQQY5KD",
+      "explanation": "This product \"allows 4 devices with USB-A connectors to connect to a single USB-C port\" [review_288811] and \"provides the means of making these connections including devices that operate at 10Gps speeds\" [review_288811]. The reviewer notes it \"makes a very good accessory for connecting USB-A devices\" [review_288811].",
+      "evidence_texts": [
+        "This is a hub that allows 4 devices with USB-A connectors to connect to a single USB-C port on another device, which would usually be a computer.",
+        "In this case, power and video transmission is not supported. Even though most of the new devices like solid state drives are using USB-C connectors there still exists a lot of equipment with USB-A connectors that have to connected. This Hub provides the means of making these connections including devices that operate at 10Gps speeds. Since this is not a powered hub the power to the connected devices is limited. It is unlikely that more than two solid state drives can be connected without affecting their performance. Lower power devices like mice and keyboards are easily accommodated. It is constructed very nicely and makes a very good accessory for connecting USB-A devices."
+      ],
+      "hhem_score": 0.9468567371368408,
+      "is_hallucinated": false
+    },
+    {
+      "case_id": 6,
+      "query": "USB hub with multiple ports",
+      "product_id": "B00483WRZ6",
+      "explanation": "Users report \"it's great to have 10 ports\" [review_49478] and describe \"The hub has 6 regular USB ports on one side, and 4 on the side where the power line heads off to the wall plug\" [review_183047]. One reviewer notes \"it has performed flawlessly\" [review_49478] after a year of use.",
+      "evidence_texts": [
+        "The hub has 6 regular USB ports on one side, and 4 on the side where the power line heads off to the wall plug. In addition, one side has the mini-USB connection for the line to the USB source--probably but not necessarily the computer--so there are technically 11 USB ports on this hub, of which one has a specific use. I already have two 4-port USB 1.0 hubs for my older equipment, and two 5-port USB 2.0 hubs. After I reorganize all the cables to nowhere or everywhere, I'll be using the Plugable 10-port hub and one of the 5-port USB 2.0 hubs, with a couple of ports to spare for the first time in years.",
+        "I've been using this hub for about a year now and it has performed flawlessly. With so many devices using USB, it's great to have 10 ports. This hub has enough ports that I can leave the iPod and Camera cords plugged in and just attach the devices when needed.",
+        "The hub arrived quickly from the vendor. I waded into my spaghetti, extracted the old hub and put in my new hub. Many of my connections I have routed behind a shelf so I found the 6 connections on one side to work well with those. That left the two rotating ports and 2 facing outward-I can access the remainder to use for charging things etc. The rotating ports did help orienting the unit so I can easily access those ports. The USB 3.0 TB HD thinks the hub is dandy."
+      ],
+      "hhem_score": 0.8917474150657654,
+      "is_hallucinated": false
+    },
+    {
+      "case_id": 7,
+      "query": "portable battery pack for travel",
+      "product_id": "B078XDLDNM",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"portable battery pack for travel\".",
+      "evidence_texts": [
+        "Excellent for use with portable battery packs."
+      ],
+      "hhem_score": 0.25542503595352173,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 8,
+      "query": "portable battery pack for travel",
+      "product_id": "B071YYK9CB",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"portable battery pack for travel\".",
+      "evidence_texts": [
+        "Excellent for use with portable battery packs."
+      ],
+      "hhem_score": 0.25542503595352173,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 9,
+      "query": "bluetooth speaker with good bass",
+      "product_id": "B081HC253G",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"bluetooth speaker with good bass\".",
+      "evidence_texts": [
+        "Love this Bluetooth speaker has a good amount of bass and clear and loud. Can put on a shelf and looks nice."
+      ],
+      "hhem_score": 0.41683968901634216,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 10,
+      "query": "bluetooth speaker with good bass",
+      "product_id": "B08CS391BR",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"bluetooth speaker with good bass\".",
+      "evidence_texts": [
+        "Nice loud bluetooth speaker with very loud bass."
+      ],
+      "hhem_score": 0.2693043053150177,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 11,
+      "query": "cheap but good quality earbuds",
+      "product_id": "B07S764D9V",
+      "explanation": "Reviewers describe these as \"the best cheap earbuds on the market\" [review_33223] and note they are \"cheap (less than $10) and solid\" [review_99276]. One customer simply calls them \"Great cheap earbuds\" [review_221704].",
+      "evidence_texts": [
+        "These are probably the best cheap earbuds on the market. They sound fairly good, they don't fall out of my ears, and they are comfortable. I've used earbuds that cost a lot more but fail at those criteria.<br /><br />The cords seem a bit fragile, but that's really all I can complain about.",
+        "I was looking for earbuds that were cheap (less than $10) and solid.  These are it.  They fit well, they block (some) of the background noise, and they are well-constructed.  I especially like the plug, as it's  at a right angle, which prevents me from accidentally pulling the wire free of the plug when I take out the plug.  Good design.<br /><br />These are NOT noise cancelling earbuds.  They block noise because they're in your ear.",
+        "Great cheap earbuds"
+      ],
+      "hhem_score": 0.10299108922481537,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 12,
+      "query": "cheap but good quality earbuds",
+      "product_id": "B072JJNYQY",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"cheap but good quality earbuds\".",
+      "evidence_texts": [
+        "These are great, cheap wireless earbuds.  The sound quality is pretty good for the price.  No complaints so far.  My wife and I both have a pair of these."
+      ],
+      "hhem_score": 0.40427908301353455,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 13,
+      "query": "durable phone case that looks nice",
+      "product_id": "B085LCT6HY",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"durable phone case that looks nice\".",
+      "evidence_texts": [
+        "Nice little case. Very durable and nice looking."
+      ],
+      "hhem_score": 0.40621230006217957,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 14,
+      "query": "durable phone case that looks nice",
+      "product_id": "B00APU8IY0",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"durable phone case that looks nice\".",
+      "evidence_texts": [
+        "These cases are sharp looking and very durable, and well made.  The best part of it is the price.  I have one for my Nexus 7 as well."
+      ],
+      "hhem_score": 0.3042883574962616,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 15,
+      "query": "fast charging cable that won't break",
+      "product_id": "B07MLVKBQM",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"fast charging cable that won't break\".",
+      "evidence_texts": [
+        "Great fast charging cable. Seems very durable."
+      ],
+      "hhem_score": 0.2593702971935272,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 16,
+      "query": "fast charging cable that won't break",
+      "product_id": "B0982Q1WZ8",
+      "explanation": "I cannot provide a meaningful recommendation for this product. The available review evidence is too brief (15 tokens) to support a well-grounded explanation for your query about \"fast charging cable that won't break\".",
+      "evidence_texts": [
+        "Very good durable fast charging cable",
+        "durable and fast charging"
+      ],
+      "hhem_score": 0.07533111423254013,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 17,
+      "query": "comfortable headphones for long sessions",
+      "product_id": "B08HTNC8PJ",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"comfortable headphones for long sessions\".",
+      "evidence_texts": [
+        "Awesome, simple headphones. Very comfy for long periods"
+      ],
+      "hhem_score": 0.5048479437828064,
+      "is_hallucinated": false
+    },
+    {
+      "case_id": 18,
+      "query": "comfortable headphones for long sessions",
+      "product_id": "B016XJCQR6",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"comfortable headphones for long sessions\".",
+      "evidence_texts": [
+        "Nice headphones, I use them to listen to online lectures. Sound is good and is heard in both ears. Pretty comfortable - I can go about 2.5 hours before they get uncomfortable. I Like the single cord to headset."
+      ],
+      "hhem_score": 0.3649515211582184,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 19,
+      "query": "quiet keyboard for office",
+      "product_id": "B0BK3LYMR2",
+      "explanation": "Reviewers describe it as \"super quiet\" [review_151577] and \"the quietest I've ever owned\" [review_320508]. One notes \"this keyboard is pretty quiet, no clacking noise\" [review_322050] and calls it \"a perfect office keyboard\" [review_320508].",
+      "evidence_texts": [
+        "I purchased this keyboard and mouse combo for my home office.  It's super quiet and feels great to type on.  I liked it so much I ended up purchasing a second one for the business office.",
+        "Both the keyboard and mouse are the quietest I've ever owned. I wish all my co-workers would make the switch to these. It is a perfect office keyboard and mouse, it just works and works well. Also, this keyboard has drain holes! If you spill something on it, your chances of still having a working keyboard are muuuuch higher with this keyboard.",
+        "This keyboard is pretty quiet, no clacking noise.  Instead you here a rubbery membrane squish from a key being pressed, which is also audible but not noisy.  The typing experience on this keyboard is not pleasant due to the stiff membrane, requiring much more effort/force to push down individual keys.  Typing fast and typing a lot on this keyboard would not be recommended because it's not easy to type on this keyboard.<br /><br />The silent mouse has silent buttons as well as a silent scroll wheel.  I mention this because I bought a separate Logitech silent mouse and that scroll wheel is loud."
+      ],
+      "hhem_score": 0.5948902368545532,
+      "is_hallucinated": false
+    },
+    {
+      "case_id": 20,
+      "query": "quiet keyboard for office",
+      "product_id": "B004MF11MU",
+      "explanation": "Reviewers describe it as a \"Good, quiet keyboard\" [review_155782] with \"Very responsive keys\" [review_155782]. One user notes \"It's fast, easy to type\" [review_245043].",
+      "evidence_texts": [
+        "Good, quiet keyboard.  Very responsive keys.",
+        "I purchased this keyboard back in 2018 and haven't had to change a battery nor charge it at all.  The natural light coming in from the windows or the lamps on your desk are enough to keep it going.<br />It's fast, easy to type and use the function keys, and works at a long distance from the computer.<br />The only complaint is that the keyboard isn't wide enough as it puts your hands a little too close together.<br />It's worth getting."
+      ],
+      "hhem_score": 0.38308340311050415,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 21,
+      "query": "headphones that don't hurt ears",
+      "product_id": "B00JB31OUW",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"headphones that don't hurt ears\".",
+      "evidence_texts": [
+        "Finally, headphones that don't hurt my ears, because they don't sit ON my ears.  I have very small ear canals, and have always been unable to use earbuds because they either don't stay in or they are very painful.  Other headphones become very painful after just a short time of listening.  My only wish is that they were bluetooth capable, but that's something I can deal with.  The sound is wonderful, and the comfort is absolutely heavenly.  Thank you, Bose!!!"
+      ],
+      "hhem_score": 0.40339213609695435,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 22,
+      "query": "headphones that don't hurt ears",
+      "product_id": "B07KQWX947",
+      "explanation": "Reviewers describe these as \"lightweight and comfortable headphones\" [review_292476]. One customer notes they are \"really good sounding\" [review_292476] with \"excellent\" sound quality [review_142177].",
+      "evidence_texts": [
+        "Koss PortaPro headphones are really good sounding, lightweight and comfortable headphones that don't break the bank.",
+        "Folds great, sound is very good;  no need to spend $350 on other headphones. These don't cancel noise but the sound on my iPod is excellent."
+      ],
+      "hhem_score": 0.24604828655719757,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 23,
+      "query": "charger that actually works",
+      "product_id": "B07NPPSXN3",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"charger that actually works\".",
+      "evidence_texts": [
+        "Seems like an official charger and it works!"
+      ],
+      "hhem_score": 0.2389219105243683,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 24,
+      "query": "charger that actually works",
+      "product_id": "B072FHJVT2",
+      "explanation": "I cannot provide a meaningful recommendation for this product. The available review evidence is too brief (33 tokens) to support a well-grounded explanation for your query about \"charger that actually works\".",
+      "evidence_texts": [
+        "Works really good this charger",
+        "It\u2019s a basic android type charger. Nothing insanely special about it but it does the job as it should."
+      ],
+      "hhem_score": 0.4941137433052063,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 25,
+      "query": "waterproof speaker for shower",
+      "product_id": "B0BW4PFM58",
+      "explanation": "One reviewer states \"I personally use it in my shower to listen to podcasts and audiobooks\" [review_139921] and notes \"The volume is loud enough to overpower the running water\" [review_139921]. However, they clarify \"It is not WATERPROOF\" and recommend \"I keep in the bathroom, just not under the showerhead\" [review_139921].",
+      "evidence_texts": [
+        "This is not a beach party speaker, it's not big enough for that task. If you want a portable party/beach speaker you need to buy a larger speaker which will require a much larger battery. I personally use it in my shower to listen to podcasts and audiobooks more than anything. It is not WATERPROOF, it never states that in the description. The image may be a little deceptive, it will handle a bit of splash. IPX 5: Protected against water jets - Water projected at all angles through a 6.3mm nozzle at a flow rate of 12.5 liters/min at a pressure of 30kN/m2 for 3 minutes from a distance of 3 meters. In order to survive being underwater or in water it needs X-8 or X-7. I keep in the bathroom, just not under the showerhead. It has rubber feet to keep it from vibrating around. The volume is loud enough to overpower the running water, little to almost no distortion at high volume.",
+        "This is not a beach party speaker, it's not big enough for that task. If you want a portable party/beach speaker you need to buy a larger speaker which will require a much larger battery. I personally use it in my shower to listen to podcasts and audiobooks more than anything. It is not WATERPROOF, it never states that in the description. The image may be a little deceptive, it will handle a bit of splash. IPX 5: Protected against water jets - Water projected at all angles through a 6.3mm nozzle at a flow rate of 12.5 liters/min at a pressure of 30kN/m2 for 3 minutes from a distance of 3 meters. In order to survive being underwater or in water it needs X-8 or X-7. I keep in the bathroom, just not under the showerhead. It has rubber feet to keep it from vibrating around. The volume is loud enough to overpower the running water, little to almost no distortion at high volume.",
+        "These speakers are great. Clear sound, even at the highest volume.  Water proofing seems to work fine and its very shock resistant in that I dropped it from a 7 foot shelf in the shower and it didn't skip a beat."
+      ],
+      "hhem_score": 0.9651408791542053,
+      "is_hallucinated": false
+    },
+    {
+      "case_id": 26,
+      "query": "waterproof speaker for shower",
+      "product_id": "B0C1J4XGB1",
+      "explanation": "Customers say \"I bought it for the shower and I have not been disappointed\" [review_110364] and \"This is a nice speaker for your shower\" [review_122829]. One reviewer notes \"It is military grade waterproof\" [review_110364], though warns \"if it breaks it's not water resistant anymore\" [review_170353] regarding the charging port cover.",
+      "evidence_texts": [
+        "This speaker is a great buy for the money. I bought it for the shower and I have not been disappointed.<br /><br />It is military grade waterproof. FYI- I do not have it in a spot in the shower that it is getting directly hit with water, but it is in a spot that it gets wet.<br /><br />I also like the features on it. You can pause songs or skip to the next one. Pickup or hangup on phone calls if you use this as a portable speaker. The size is great for travel as well. I have even taken this outside with me when I am sitting in the backyard. I am thinking about buying another for moving around and keeping one in shower since the price is so reasonable.",
+        "This is a nice speaker for your shower. Has a good sound, good battery and the ability to play/pause, skip/reverse and control volume. My helpful hint, when recharging it is to take the speaker and suction cup off together, if you try to take the speaker off of the suction cup, you run the risk of breaking the suction cup. (This happened to the last one I had and then that rolled off the soap dish and broke.)",
+        "Nice battery life. good sound. The speaker is located in the back so when stuck to my shower wall it echos the sound in the shower / tub. Only downside is be careful of the rubber plug for the charging port, if it breaks it's not water resistant anymore."
+      ],
+      "hhem_score": 0.4655941128730774,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 27,
+      "query": "gift for someone who likes music",
+      "product_id": "B0BMQN7L6B",
+      "explanation": "Customers say \"I gave this as a gift to someone who loves listening to music, and they love it!\" [review_165326] and call it \"A great Christmas present!\" [review_92937]. One buyer noted they \"Bought as a Christmas gift. My niece loves it and has started buying vinyls.\" [review_279946]",
+      "evidence_texts": [
+        "I gave this as a gift to someone who loves listening to music, and they love it!",
+        "A great Christmas present! Great for someone starting their vinyl collection",
+        "Bought as a Christmas gift.  My niece loves it and has started buying vinyls."
+      ],
+      "hhem_score": 0.1792474240064621,
+      "is_hallucinated": true
+    },
+    {
+      "case_id": 28,
+      "query": "gift for someone who likes music",
+      "product_id": "B08HTNC8PJ",
+      "explanation": "I cannot provide a confident recommendation for this product based on the available review evidence. Only 1 review excerpt(s) were found, which is insufficient to make a well-grounded recommendation for your query about \"gift for someone who likes music\".",
+      "evidence_texts": [
+        "It was a gift for my niece. She likes these to listen to music while at home."
+      ],
+      "hhem_score": 0.2865367531776428,
+      "is_hallucinated": true
+    }
+  ],
+  "n_failures": 23
+}

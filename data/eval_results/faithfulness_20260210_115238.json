@@ -1,0 +1,36 @@
+{
+  "timestamp": "2026-02-10T11:52:38.150536",
+  "n_samples": 10,
+  "hhem": {
+    "mean_score": 0.43166339099407197,
+    "n_hallucinated": 8,
+    "hallucination_rate": 0.8
+  },
+  "multi_metric": {
+    "quote_verification_rate": 0.8260869565217391,
+    "quotes_found": 19,
+    "quotes_total": 23,
+    "claim_level_pass_rate": 1.0,
+    "claim_level_avg_score": 0.9676379120868185,
+    "claim_level_min_score": 0.804991602897644,
+    "full_explanation_pass_rate": 0.2,
+    "full_explanation_avg_score": 0.43166339099407197
+  },
+  "target": 0.85,
+  "ragas": {
+    "faithfulness_mean": 0.5,
+    "faithfulness_std": 0.5270462766947299
+  },
+  "ragas_limitations": {
+    "metrics_available": [
+      "faithfulness"
+    ],
+    "metrics_unavailable": {
+      "answer_relevancy": "Requires embeddings model; RAGAS doesn't support Anthropic as embeddings provider",
+      "context_precision": "Requires ground-truth reference answers per query (not available)",
+      "context_recall": "Requires ground-truth reference answers per query (not available)"
+    },
+    "primary_metric": "claim_level_hhem",
+    "rationale": "Claim-level HHEM (96.8%) is more reliable than full-explanation RAGAS for citation-heavy explanations"
+  }
+}

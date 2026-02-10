@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-02-10T11:49:08.500849",
+  "dataset": "eval_natural_queries.json",
+  "catalog_size": 21827,
+  "experiments": {},
+  "primary_metrics": {
+    "ndcg_at_10": 0.4871922222425982,
+    "hit_at_10": 0.7380952380952381,
+    "mrr": 0.42086167800453517,
+    "precision_at_10": 0.12857142857142856,
+    "recall_at_10": 0.4722222222222222,
+    "diversity": 0.01957190520646696,
+    "coverage": 0.015531222797452697,
+    "novelty": 9.808908578271737
+  }
+}

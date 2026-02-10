@@ -1,4 +1,4 @@
-.PHONY: all setup data data-validate eval eval-all eval-full eval-quick demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-generate human-eval human-eval-analyze fmt test lint typecheck ci info summary metrics-snapshot health load-test load-test-quick kaggle-test help
+.PHONY: all setup data data-validate eval eval-all eval-full eval-quick eval-summary demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-workflow human-eval-generate human-eval human-eval-analyze human-eval-status fmt test lint typecheck ci info metrics-snapshot health load-test load-test-quick kaggle-test help
 
 # ---------------------------------------------------------------------------
 # Configurable Variables (override: make demo QUERY="gaming mouse")
@@ -165,45 +165,29 @@ eval-all: check-env
 	python scripts/summary.py && \
 	echo "=== COMPLETE EVALUATION DONE ==="
 
-# Full reproducibility: eval-all + human eval + load test (~15 min + ~1 hour manual)
+# Full reproducibility: eval-all + load test (~17 min, fully automated)
+# Human evaluation is a SEPARATE workflow (see: make human-eval-workflow)
 # Run after: make reset-eval
-# This is the COMPLETE evaluation for portfolio close-out
 eval-full: check-env
 	@echo "=== FULL REPRODUCIBLE EVALUATION ===" && \
 	echo "" && \
 	echo "=== PART 1: AUTOMATED METRICS (~15 min) ===" && \
 	$(MAKE) eval-all && \
 	echo "" && \
-	echo "=== PART 2: HUMAN EVALUATION ===" && \
-	echo "" && \
-	echo "--- Generating 50 samples ---" && \
-	python scripts/human_eval.py --generate --force && \
-	echo "" && \
-	echo "--- Interactive annotation (50 samples, ~1 hour) ---" && \
-	echo "Rate each sample 1-5 on: comprehension, trust, usefulness, satisfaction" && \
-	echo "Press Ctrl+C to pause and resume later with 'make human-eval'" && \
-	echo "" && \
-	python scripts/human_eval.py --annotate && \
-	echo "" && \
-	echo "--- Computing human eval results ---" && \
-	python scripts/human_eval.py --analyze && \
-	echo "" && \
-	echo "=== PART 3: LOAD TEST ===" && \
+	echo "=== PART 2: LOAD TEST ===" && \
 	python scripts/load_test.py --url $(URL) --requests $(REQUESTS) --save && \
 	echo "" && \
-	echo "=== PART 4: FINAL SUMMARY ===" && \
-	python scripts/summary.py && \
-	echo "" && \
-	echo "=== FULL REPRODUCIBLE EVALUATION COMPLETE ===" && \
+	echo "=== AUTOMATED EVALUATION COMPLETE ===" && \
 	echo "" && \
 	echo "Results saved to: data/eval_results/" && \
 	echo "  - eval_natural_queries_latest.json  (NDCG, Hit@K, MRR)" && \
 	echo "  - faithfulness_latest.json          (HHEM, RAGAS)" && \
 	echo "  - grounding_delta_latest.json       (WITH vs WITHOUT evidence)" && \
-	echo "  - human_eval_latest.json            (50-sample ratings)" && \
 	echo "  - load_test_latest.json             (P99 latency)" && \
 	echo "" && \
-	echo "To verify docs match results: check README.md and home/*.md"
+	echo "NEXT STEPS:" && \
+	echo "  1. make human-eval-workflow   # ~1 hour manual annotation" && \
+	echo "  2. make eval-summary          # view complete results"
 
 # ---------------------------------------------------------------------------
 # Demo
@@ -269,20 +253,53 @@ deploy-health:
 		(echo "Deployment not healthy at $(URL)" && exit 1)
 
 # ---------------------------------------------------------------------------
-# Human Evaluation
+# Human Evaluation (separate workflow from automated eval)
 # ---------------------------------------------------------------------------
 
+# Complete human eval workflow: generate → annotate → analyze
+# Run this AFTER make eval-full completes
+human-eval-workflow: check-env
+	@echo "=== HUMAN EVALUATION WORKFLOW ===" && \
+	echo "" && \
+	echo "This is a separate ~1 hour manual process." && \
+	echo "You can pause anytime with Ctrl+C and resume with 'make human-eval'" && \
+	echo "" && \
+	echo "--- Step 1/3: Generating 50 samples ---" && \
+	python scripts/human_eval.py --generate --seed $(SEED) && \
+	echo "" && \
+	echo "--- Step 2/3: Interactive annotation ---" && \
+	echo "Rate each sample 1-5 on: comprehension, trust, usefulness, satisfaction" && \
+	echo "" && \
+	python scripts/human_eval.py --annotate && \
+	echo "" && \
+	echo "--- Step 3/3: Computing results ---" && \
+	python scripts/human_eval.py --analyze && \
+	echo "" && \
+	echo "=== HUMAN EVALUATION COMPLETE ===" && \
+	echo "Results: data/eval_results/human_eval_latest.json" && \
+	echo "" && \
+	echo "Run 'make eval-summary' to see updated metrics."
+
+# Generate samples only (non-blocking)
 human-eval-generate: check-env
 	@echo "=== GENERATING HUMAN EVAL SAMPLES ==="
 	python scripts/human_eval.py --generate --seed $(SEED)
 
+# Interactive annotation (can pause with Ctrl+C, resume anytime)
 human-eval: check-env
 	@echo "=== HUMAN EVALUATION ==="
+	@echo "Pause anytime with Ctrl+C. Resume with 'make human-eval'"
+	@echo ""
 	python scripts/human_eval.py --annotate
 
+# Compute results from annotations
 human-eval-analyze: check-env
 	@echo "=== HUMAN EVAL ANALYSIS ==="
 	python scripts/human_eval.py --analyze
+
+# Check annotation progress
+human-eval-status:
+	@python scripts/human_eval.py --status 2>/dev/null || echo "No samples yet. Run: make human-eval-generate"
 
 # ---------------------------------------------------------------------------
 # Quality
@@ -318,7 +335,8 @@ info:
 	print(f'Qdrant: {QDRANT_URL}'); \
 	print(f'LLM: {LLM_PROVIDER} ({ANTHROPIC_MODEL if LLM_PROVIDER == \"anthropic\" else OPENAI_MODEL})')"
 
-summary:
+# Comprehensive evaluation summary (handles missing human eval gracefully)
+eval-summary:
 	@python scripts/summary.py
 
 metrics-snapshot:
@@ -468,10 +486,10 @@ help:
 	@echo "  make demo-interview            3-query showcase (includes cache hit)"
 	@echo ""
 	@echo "INFO & METRICS:"
-	@echo "  make info            Show version, models, and URLs"
-	@echo "  make summary         Print evaluation summary"
-	@echo "  make metrics-snapshot Quick metrics display"
-	@echo "  make health          Check API health (requires running server)"
+	@echo "  make info              Show version, models, and URLs"
+	@echo "  make eval-summary      Print comprehensive evaluation results"
+	@echo "  make metrics-snapshot  Quick metrics display"
+	@echo "  make health            Check API health (requires running server)"
 	@echo ""
 	@echo "PIPELINE:"
 	@echo "  make data            Load, chunk, embed, and index reviews (local)"
@@ -484,8 +502,9 @@ help:
 	@echo "  make eval            Standard: metrics + explanation + faithfulness (~5 min)"
 	@echo "  make eval-all        Complete: everything automated (~15 min)"
 	@echo "                       Includes: EDA, ablations, baselines, delta, analysis"
-	@echo "  make eval-full       Full reproducibility: eval-all + human eval + load test"
-	@echo "                       Includes: 50-sample manual annotation (~1 hour)"
+	@echo "  make eval-full       Full automated eval + load test (~17 min)"
+	@echo "                       Does NOT include human eval (see below)"
+	@echo "  make eval-summary    View comprehensive results (handles missing data)"
 	@echo ""
 	@echo "LOAD TESTING:"
 	@echo "  make load-test             Run 50 requests against production (P99 target)"
@@ -500,9 +519,11 @@ help:
 	@echo "  make deploy-info     Show HuggingFace Spaces deployment info"
 	@echo "  make deploy-health   Check production deployment health"
 	@echo ""
-	@echo "HUMAN EVALUATION:"
+	@echo "HUMAN EVALUATION (separate workflow, ~1 hour):"
+	@echo "  make human-eval-workflow  Complete workflow: generate → annotate → analyze"
+	@echo "  make human-eval-status    Check annotation progress"
 	@echo "  make human-eval-generate  Generate 50 eval samples (SEED=42)"
-	@echo "  make human-eval           Rate samples interactively"
+	@echo "  make human-eval           Rate samples interactively (Ctrl+C to pause)"
 	@echo "  make human-eval-analyze   Compute results from ratings"
 	@echo ""
 	@echo "QUALITY:"

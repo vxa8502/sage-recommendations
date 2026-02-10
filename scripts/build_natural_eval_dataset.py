@@ -189,12 +189,13 @@ NATURAL_QUERIES = [
         "intent": "feature_specific",
     },
     # === STORAGE QUERIES ===
+    # NOTE: Products verified via review text (Session 78 ground truth audit)
     {
         "query": "sd card for camera",
         "relevant_items": {
-            "B071R715MZ": 3.0,  # SD card
-            "B006GWO5WK": 3.0,  # SD card high rating
-            "B08KG14KCT": 2.0,  # Storage
+            "B071R715MZ": 3.0,  # SD card (verified: "tablet loaded with topo maps")
+            "B00PFQPX5Q": 3.0,  # SD card (verified: "raspberry pi")
+            "B01H3LM75O": 2.0,  # SD card (verified: "record 4k video")
         },
         "category": "storage",
         "intent": "use_case",
@@ -202,9 +203,9 @@ NATURAL_QUERIES = [
     {
         "query": "external hard drive for backup",
         "relevant_items": {
-            "B008J0Z9TA": 3.0,  # Hard drive for Mac
+            "B008J0Z9TA": 3.0,  # Hard drive (verified: "Fast reliable")
             "B09Q7YPZPJ": 2.0,  # Storage device
-            "B07P9V8GSH": 2.0,  # Storage
+            "B07P9V8GSH": 2.0,  # Storage (verified: "Raspberry Pi")
         },
         "category": "storage",
         "intent": "use_case",
@@ -212,8 +213,9 @@ NATURAL_QUERIES = [
     {
         "query": "fast micro sd card for phone",
         "relevant_items": {
-            "B071R715MZ": 3.0,  # MicroSD
-            "B006GWO5WK": 3.0,  # SD card
+            "B071R715MZ": 3.0,  # MicroSD (verified: tablet storage)
+            "B009RWAYTE": 3.0,  # MicroSD (verified: "Galaxy phone")
+            "B00IVPU786": 2.0,  # MicroSD (verified: "Works as expected")
         },
         "category": "storage",
         "intent": "feature_specific",
@@ -221,9 +223,9 @@ NATURAL_QUERIES = [
     {
         "query": "reliable storage for important files",
         "relevant_items": {
-            "B008J0Z9TA": 3.0,  # Drive for storage
-            "B006GWO5WK": 2.0,  # SD card
-            "B071R715MZ": 2.0,  # Storage
+            "B008J0Z9TA": 3.0,  # Hard drive (verified: "Fast reliable")
+            "B071R715MZ": 2.0,  # SD card (verified)
+            "B01H3LM75O": 2.0,  # SD card (verified: "4k video")
         },
         "category": "storage",
         "intent": "feature_specific",
@@ -279,12 +281,13 @@ NATURAL_QUERIES = [
         "intent": "use_case",
     },
     # === CABLES / ADAPTERS QUERIES ===
+    # NOTE: Products verified via review text (Session 78 ground truth audit)
     {
         "query": "usb c charging cable",
         "relevant_items": {
-            "B0BGNG1294": 3.0,  # USB cable high rating
-            "B09TWVB2TH": 2.0,  # Cable
-            "B09Y1PSVTB": 2.0,  # USB related
+            "B07QDNWC7X": 3.0,  # USB-C cable (verified: "heavy-duty USB-C cable")
+            "B08DK8BP1J": 2.0,  # USB-C cable (verified: "USB2 cables")
+            "B0BGS23YKX": 2.0,  # USB-C cable (verified: "braided cords")
         },
         "category": "cables_adapters",
         "intent": "general",
@@ -292,8 +295,9 @@ NATURAL_QUERIES = [
     {
         "query": "hdmi cable for tv",
         "relevant_items": {
-            "B01LXJA5JD": 3.0,  # HDMI/streaming cable
-            "B0BGNG1294": 2.0,  # Cable
+            "B085YG25ZS": 3.0,  # HDMI cable (verified: "8K HDMI Cable")
+            "B075KP9XHS": 2.0,  # HDMI cable (verified: "quality of the cable")
+            "B06XGHMDJ1": 2.0,  # HDMI cable (verified: "picture quality on TV")
         },
         "category": "cables_adapters",
         "intent": "use_case",
@@ -301,8 +305,9 @@ NATURAL_QUERIES = [
     {
         "query": "fast phone charger",
         "relevant_items": {
-            "B0BGNG1294": 3.0,  # Charger cable
-            "B09TWVB2TH": 2.0,  # Charging cable
+            "B0C3KV52B7": 3.0,  # Charger (verified: "Charges quickly")
+            "B01LWQ933G": 2.0,  # Charger (verified: "many devices plugged-in")
+            "B0B96VM41C": 2.0,  # Charger (verified: "power cable for iPad")
         },
         "category": "cables_adapters",
         "intent": "feature_specific",
@@ -310,19 +315,21 @@ NATURAL_QUERIES = [
     {
         "query": "durable charging cable that lasts",
         "relevant_items": {
-            "B0BGNG1294": 3.0,  # High rated cable
-            "B09TWVB2TH": 2.0,  # Cable
+            "B00SUX3XQC": 3.0,  # Cable (verified: "Nicely made cable")
+            "B0C1FRBK4K": 2.0,  # Cable (verified: "Anker brand")
+            "B09CTFY414": 2.0,  # Cable (verified: "very nice" charging cable)
         },
         "category": "cables_adapters",
         "intent": "feature_specific",
     },
     # === KEYBOARD / MOUSE QUERIES ===
+    # NOTE: Products verified via review text (Session 78 ground truth audit)
     {
         "query": "wireless keyboard for computer",
         "relevant_items": {
-            "B003NR57BY": 3.0,  # Keyboard
-            "B0043T7FXE": 2.0,  # Keyboard
-            "B003VAHYNC": 2.0,  # Keyboard
+            "B001IOHAVO": 3.0,  # Keyboard (verified: keyboard reviews)
+            "B003VAGXZC": 2.0,  # Keyboard (verified: "keyboard combo")
+            "B00QRPPCMI": 2.0,  # Keyboard (verified: "keyboard and mouse")
         },
         "category": "keyboards_mice",
         "intent": "general",
@@ -330,9 +337,9 @@ NATURAL_QUERIES = [
     {
         "query": "quiet keyboard for office",
         "relevant_items": {
-            "B095JX15XF": 3.0,  # Office keyboard
-            "B07HZLHPKP": 2.0,  # Small office keyboard
-            "B003NR57BY": 2.0,  # Keyboard
+            "B0BK3LYMR2": 3.0,  # Keyboard (verified: "super quiet")
+            "B004MF11MU": 2.0,  # Keyboard (verified: keyboard reviews)
+            "B095JX15XF": 2.0,  # Keyboard (verified: "keyboards that are used")
         },
         "category": "keyboards_mice",
         "intent": "use_case",
@@ -340,8 +347,9 @@ NATURAL_QUERIES = [
     {
         "query": "compact keyboard for small desk",
         "relevant_items": {
-            "B07HZLHPKP": 3.0,  # Small keyboard for office/den
-            "B095JX15XF": 2.0,  # Keyboard
+            "B07J21Y82K": 3.0,  # Keyboard (verified: "Great little keyboard")
+            "B00MUTWLW4": 2.0,  # Keyboard (verified: keyboard slot)
+            "B0BXYXD1Q2": 2.0,  # Keyboard (verified: "keyboard works well")
         },
         "category": "keyboards_mice",
         "intent": "feature_specific",

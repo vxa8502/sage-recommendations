@@ -23,7 +23,7 @@ This report analyzes the actual data deployed in production, ensuring all statis
 
 Amazon reviews exhibit a characteristic J-shaped distribution, heavily skewed toward 5-star ratings.
 
-![Rating Distribution](https://raw.githubusercontent.com/vxa8502/sage/assets-only/rating_distribution.png)
+![Rating Distribution](../assets/rating_distribution.png)
 
 | Rating | Count | Percentage |
 |--------|-------|------------|
@@ -44,7 +44,7 @@ Amazon reviews exhibit a characteristic J-shaped distribution, heavily skewed to
 
 Chunk lengths affect retrieval quality and context window usage.
 
-![Chunk Lengths](https://raw.githubusercontent.com/vxa8502/sage/assets-only/chunk_lengths.png)
+![Chunk Lengths](../assets/chunk_lengths.png)
 
 **Statistics:**
 - Median chunk length: 169 characters (~42 tokens)
@@ -57,7 +57,7 @@ Chunk lengths affect retrieval quality and context window usage.
 
 Reviews are chunked based on length: short reviews stay whole, longer reviews are split semantically.
 
-![Chunks per Review](https://raw.githubusercontent.com/vxa8502/sage/assets-only/chunks_per_review.png)
+![Chunks per Review](../assets/chunks_per_review.png)
 
 | Metric | Value |
 |--------|-------|
@@ -76,7 +76,7 @@ Reviews are chunked based on length: short reviews stay whole, longer reviews ar
 
 Review timestamps enable chronological analysis and temporal evaluation splits.
 
-![Temporal Distribution](https://raw.githubusercontent.com/vxa8502/sage/assets-only/temporal_distribution.png)
+![Temporal Distribution](../assets/temporal_distribution.png)
 
 ---
 

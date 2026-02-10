@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-02-10T12:47:05.801626",
+  "n_samples": 50,
+  "n_total": 50,
+  "methodology": {
+    "evaluator": "Single rater (developer/researcher)",
+    "instructions": "Rate each dimension 1-5 Likert: 1=strongly disagree, 5=strongly agree",
+    "dimensions": {
+      "comprehension": "I understood why this item was recommended",
+      "trust": "I trust this explanation is accurate",
+      "usefulness": "This explanation helped me make a decision",
+      "satisfaction": "I am satisfied with this explanation"
+    },
+    "sample_selection": "35 natural queries (balanced by category) + 15 config queries",
+    "inter_annotator_agreement": "N/A (single rater)"
+  },
+  "dimensions": {
+    "comprehension": {
+      "mean": 4.3,
+      "std": 0.68,
+      "min": 3,
+      "max": 5
+    },
+    "trust": {
+      "mean": 4.02,
+      "std": 0.71,
+      "min": 2,
+      "max": 5
+    },
+    "usefulness": {
+      "mean": 3.06,
+      "std": 1.72,
+      "min": 1,
+      "max": 5
+    },
+    "satisfaction": {
+      "mean": 3.04,
+      "std": 1.67,
+      "min": 1,
+      "max": 5
+    }
+  },
+  "overall_helpfulness": 3.6,
+  "target": 3.5,
+  "pass": true,
+  "hhem_trust_correlation": {
+    "spearman_r": 0.1237,
+    "p_value": 0.3919
+  }
+}

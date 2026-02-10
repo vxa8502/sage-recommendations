@@ -1,0 +1,23 @@
+{
+  "timestamp": "2026-02-10T11:56:34.441501",
+  "config": {
+    "url": "https://vxa8502-sage.hf.space",
+    "num_requests": 50,
+    "explain": true,
+    "timeout_s": 30.0
+  },
+  "total_requests": 50,
+  "successful": 50,
+  "errors": 0,
+  "cache_hits": 41,
+  "min_ms": 74.0,
+  "max_ms": 431.6,
+  "mean_ms": 97.8,
+  "median_ms": 88.4,
+  "p50_ms": 88.4,
+  "p95_ms": 121.5,
+  "p99_ms": 283.1,
+  "stdev_ms": 49.6,
+  "target_p99_ms": 500.0,
+  "pass": true
+}
