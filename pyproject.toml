@@ -30,7 +30,14 @@ pipeline = [
     "ragas>=0.1.0",
     "requests>=2.28.0",
 ]
-dev = ["pytest>=7.0.0", "pytest-asyncio>=0.21.0", "httpx>=0.25.0"]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",
+    "mypy>=1.0.0",
+    "ruff>=0.1.0",
+    "types-requests>=2.28.0",
+]
 api = [
     "anthropic>=0.18.0",
     "fastapi>=0.109.0",
