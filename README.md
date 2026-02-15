@@ -29,6 +29,8 @@ A recommendation system that refuses to hallucinate.
 
 **Try it:** [vxa8502-sage.hf.space](https://vxa8502-sage.hf.space) (API explorer with Swagger UI)
 
+![Demo](https://raw.githubusercontent.com/vxa8502/sage-recommendations/assets-only/demo_screenshot.png)
+
 ---
 
 ## The Problem
