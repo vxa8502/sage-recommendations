@@ -14,7 +14,7 @@ app_port: 7860
 
 # Sage
 
-A recommendation system that refuses to hallucinate.
+A recommendation system that refuses to hallucinate. Every claim is a verified quote from real customer reviews. When evidence is sparse, it refuses rather than guesses.
 
 ```json
 {
@@ -27,17 +27,7 @@ A recommendation system that refuses to hallucinate.
 }
 ```
 
-**Try it:** [vxa8502-sage.hf.space](https://vxa8502-sage.hf.space) (API explorer with Swagger UI)
-
-![Demo](https://raw.githubusercontent.com/vxa8502/sage-recommendations/assets-only/demo_screenshot.png)
-
----
-
-## The Problem
-
-Product recommendations without explanations are black boxes. Users see "You might like X" but never learn *why*. When you ask an LLM to explain, it confidently invents features and fabricates reviews.
-
-**Sage is different:** Every claim is a verified quote from real customer reviews. When evidence is sparse, it refuses rather than guesses. Human evaluation scored trust at **4.0/5** because honesty beats confident fabrication.
+**Try it:** [vxa8502-sage.hf.space](https://vxa8502-sage.hf.space)
 
 ---
 
@@ -49,9 +39,7 @@ Product recommendations without explanations are black boxes. Users see "You mig
 | Claim-level faithfulness (HHEM) | > 0.85 | 0.968 | Pass |
 | Human evaluation (n=50) | > 3.5/5 | 3.6/5 | Pass |
 | P99 latency (production) | < 500ms | 283ms | Pass |
-| Median latency (cached) | < 100ms | 88ms | Pass |
-
-**Grounding impact:** Explanations generated WITH evidence score 73% on HHEM. WITHOUT evidence: 2.6%. RAG grounding reduces hallucination by 70 percentage points.
+| Grounding impact | - | +70pp | WITH evidence: 73% vs WITHOUT: 2.6% |
 
 ---
 
@@ -86,75 +74,33 @@ User Query: "wireless earbuds for running"
 
 ---
 
-## Why This Architecture?
+## Limitations
 
-The key insight: **hallucination happens when evidence is weak, not when the model is bad.**
-
-When you give an LLM one short review as context, it fills in the gaps with plausible-sounding fabrications. The solution is refusing to explain when evidence is insufficient.
-
-| Decision | Alternative | Why This Choice |
-|----------|-------------|-----------------|
-| **E5-small** (384-dim) | E5-large, BGE-large | Faster inference, same accuracy on product reviews. Latency > marginal gains. |
-| **Qdrant** | Pinecone, Weaviate | Free cloud tier, payload filtering, clean Python SDK. |
-| **Semantic chunking** | Fixed-window | Preserves complete arguments; better quote verification. |
-| **HHEM** (Vectara) | GPT-4 judge, NLI models | Purpose-built for RAG hallucination; no API cost. |
-| **Claim-level evaluation** | Full-explanation | Isolates which claims hallucinate; more actionable. |
-| **Quality gate** (refuse) | Always answer | 64% refusal rate → 4.0/5 trust. Honesty > coverage. |
-
----
-
-## Known Limitations
-
-| Limitation | Impact | Mitigation |
-|------------|--------|------------|
-| **Single category** (Electronics) | Can't recommend across categories | Architecture supports multi-category; data constraint only |
-| **No image features** | Misses visual product attributes | Could add CLIP embeddings in future |
-| **English only** | Non-English reviews have lower retrieval quality | E5 is primarily English-trained |
-| **Cache invalidation manual** | Stale explanations possible | TTL-based expiry (1 hour); manual `/cache/clear` |
-| **Cold start latency** | First request ~10s (HF Spaces wake) | Subsequent requests P99 < 500ms; cache hits 88ms |
-| **No user personalization** | Same results for all users | Would need user history for collaborative filtering |
+| Constraint | Behavior |
+|------------|----------|
+| Insufficient evidence (< 2 chunks) | Refuses to explain |
+| Low relevance (top score < 0.7) | Refuses to explain |
+| Single category (Electronics) | Architecture supports multi-category; data constraint only |
+| No image features | Text-only retrieval |
+| English only | E5 primarily English-trained |
+| Cold start | First request ~10s (HF wake), then P99 < 500ms |
 
 ---
 
 ## Quick Start
 
-### Docker (recommended)
-
 ```bash
-git clone https://github.com/vxa8502/sage-recommendations
-cd sage-recommendations
-cp .env.example .env
-# Edit .env: add ANTHROPIC_API_KEY (or OPENAI_API_KEY)
-
-docker compose up
-curl http://localhost:8000/health
+git clone https://github.com/vxa8502/sage-recommendations && cd sage-recommendations
+cp .env.example .env   # Then add ANTHROPIC_API_KEY or OPENAI_API_KEY
 ```
 
-### Local Development
+**Docker:** `docker compose up`
 
+**Local:**
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,pipeline,api,anthropic]"
-
-cp .env.example .env
-# Edit .env: add API keys
-
-make qdrant-up          # Start local Qdrant
-make data               # Load data (or use Qdrant Cloud)
-make serve              # Start API at localhost:8000
-```
-
-### Environment Variables
-
-```bash
-# Required (one of)
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-LLM_PROVIDER=anthropic   # or "openai"
-
-# Optional: Qdrant Cloud (instead of local)
-QDRANT_URL=https://xxx.cloud.qdrant.io
-QDRANT_API_KEY=...
+make qdrant-up && make data && make serve
 ```
 
 ---
@@ -169,42 +115,15 @@ curl -X POST https://vxa8502-sage.hf.space/recommend \
   -d '{"query": "wireless earbuds for running", "k": 3, "explain": true}'
 ```
 
-Returns ranked products with:
-- Explanation grounded in customer reviews
-- HHEM confidence score (0-1)
-- Quote verification results
-- Evidence chunks with citations
+Returns products with grounded explanations, HHEM confidence scores, and verified citations.
 
 ### POST /recommend/stream
 
 Server-sent events for token-by-token explanation streaming.
 
-### GET /health
+### GET /health, /metrics, /cache/stats
 
-```json
-{"status": "healthy", "qdrant_connected": true, "llm_reachable": true}
-```
-
-### GET /metrics
-
-Prometheus metrics including `sage_requests_total`, `sage_request_latency_seconds`, `sage_cache_events_total`, `sage_errors_total`.
-
-### GET /cache/stats
-
-```json
-{
-  "size": 42,
-  "max_entries": 1000,
-  "exact_hits": 10,
-  "semantic_hits": 5,
-  "misses": 27,
-  "evictions": 0,
-  "hit_rate": 0.35,
-  "ttl_seconds": 3600.0,
-  "similarity_threshold": 0.92,
-  "avg_semantic_similarity": 0.95
-}
-```
+Health check, Prometheus metrics, and cache statistics.
 
 ---
 
@@ -212,10 +131,8 @@ Prometheus metrics including `sage_requests_total`, `sage_request_latency_second
 
 ```bash
 make eval          # ~5 min: standard pre-commit
-make eval-full     # ~17 min: complete automated suite + load test
+make eval-full     # ~17 min: complete suite + load test
 ```
-
-See `make help` for all targets (including `eval-quick`, `load-test`).
 
 ---
 
@@ -235,19 +152,6 @@ scripts/
 ├── human_eval.py   # Interactive human evaluation
 ├── load_test.py    # P99 latency benchmarking
 ```
-
----
-
-## Failure Modes (By Design)
-
-| Condition | System Behavior |
-|-----------|-----------------|
-| Insufficient evidence (< 2 chunks) | Refuses to explain |
-| Low relevance (top score < 0.7) | Refuses to explain |
-| Quote not found in evidence | Falls back to paraphrased claims |
-| HHEM score < 0.5 | Flags as uncertain |
-
-The system refuses to hallucinate rather than confidently stating unsupported claims.
 
 ---
 

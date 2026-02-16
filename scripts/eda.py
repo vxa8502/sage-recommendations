@@ -285,16 +285,6 @@ def generate_report(stats: dict, collection_info: dict) -> None:
     # Rating stats
     rating_dist = stats["rating_dist"]
     total_ratings = sum(rating_dist.values())
-    five_star_pct = (
-        rating_dist.get(5.0, rating_dist.get(5, 0)) / total_ratings * 100
-        if total_ratings
-        else 0
-    )
-    one_star_pct = (
-        rating_dist.get(1.0, rating_dist.get(1, 0)) / total_ratings * 100
-        if total_ratings
-        else 0
-    )
 
     # Length stats
     lengths = stats["text_lengths"]
@@ -319,14 +309,10 @@ def generate_report(stats: dict, collection_info: dict) -> None:
     report_content = f"""# Exploratory Data Analysis: Production Data
 
 **Source:** Qdrant Cloud (Collection: `{collection_info.get("name", COLLECTION_NAME)}`)
-**Status:** {collection_info.get("status", "unknown")}
-**Generated from live production data**
 
 ---
 
 ## Dataset Overview
-
-This report analyzes the actual data deployed in production, ensuring all statistics match what the recommendation system uses.
 
 | Metric | Value |
 |--------|-------|
@@ -339,86 +325,48 @@ This report analyzes the actual data deployed in production, ensuring all statis
 
 ## Rating Distribution
 
-Amazon reviews exhibit a characteristic J-shaped distribution, heavily skewed toward 5-star ratings.
-
-![Rating Distribution](../assets/rating_distribution.png)
+![Rating Distribution](https://raw.githubusercontent.com/vxa8502/sage-recommendations/assets-only/rating_distribution.png)
 
 | Rating | Count | Percentage |
 |--------|-------|------------|
 {chr(10).join(rating_lines)}
 
-**Key Observations:**
-- 5-star ratings: {five_star_pct:.1f}% of chunks
-- 1-star ratings: {one_star_pct:.1f}% of chunks
-- This polarization is typical for e-commerce review data
-
 ---
 
 ## Chunk Length Analysis
 
-Chunk lengths affect retrieval quality and context window usage.
+![Chunk Lengths](https://raw.githubusercontent.com/vxa8502/sage-recommendations/assets-only/chunk_lengths.png)
 
-![Chunk Lengths](../assets/chunk_lengths.png)
-
-**Statistics:**
-- Median chunk length: {median_chars:,} characters (~{median_tokens} tokens)
-- Mean chunk length: {mean_chars:,} characters
-- Most chunks fit comfortably within embedding model context
+Median: {median_chars:,} chars (~{median_tokens} tokens), Mean: {mean_chars:,} chars
 
 ---
 
 ## Chunking Distribution
 
-Reviews are chunked based on length: short reviews stay whole, longer reviews are split semantically.
-
-![Chunks per Review](../assets/chunks_per_review.png)
+![Chunks per Review](https://raw.githubusercontent.com/vxa8502/sage-recommendations/assets-only/chunks_per_review.png)
 
 | Metric | Value |
 |--------|-------|
 | Single-chunk reviews | {single_chunk_reviews:,} |
 | Multi-chunk reviews | {multi_chunk_reviews:,} |
-| Expansion ratio | {expansion_ratio:.2f}x |
 
-**Chunking Strategy:**
-- Reviews < 200 tokens: No chunking (embedded whole)
-- Reviews 200-500 tokens: Semantic chunking
-- Reviews > 500 tokens: Semantic + sliding window
+**Strategy:** <200 tokens whole; 200-500 semantic chunking; >500 sliding window.
 
 ---
 
 ## Temporal Distribution
 
-Review timestamps enable chronological analysis and temporal evaluation splits.
-
-![Temporal Distribution](../assets/temporal_distribution.png)
+![Temporal Distribution](https://raw.githubusercontent.com/vxa8502/sage-recommendations/assets-only/temporal_distribution.png)
 
 ---
 
 ## Data Quality
 
-The production dataset has been through 5-core filtering (users and items with 5+ interactions) and quality checks:
-
-- All chunks have valid text content
-- All ratings are in [1, 5] range
-- All product identifiers present
-- Deterministic chunk IDs (MD5 hash of review_id + chunk_index)
+5-core filtered (users and items with 5+ interactions). All chunks have valid text, ratings in [1,5], product IDs present, deterministic chunk IDs (MD5).
 
 ---
 
-## Summary
-
-This production EDA confirms the deployed data characteristics:
-
-1. **Scale:** {total_chunks:,} chunks across {unique_products:,} products
-2. **Quality:** 5-core filtered, validated payloads
-3. **Distribution:** J-shaped ratings, typical e-commerce pattern
-4. **Chunking:** {expansion_ratio:.2f}x expansion from reviews to chunks
-
-The data matches what the recommendation API queries in real-time.
-
----
-
-*Report generated from Qdrant Cloud. Run `make eda` to regenerate.*
+*Run `make eda` to regenerate.*
 """
 
     report_path = REPORTS_DIR / "eda_report.md"
