@@ -131,20 +131,21 @@ def compute_stats(client, sample_size: int | None = None) -> dict:
 
     for payload in scroll_all_payloads(client, limit=sample_size):
         review_id = payload.get("review_id")
-        if review_id and review_id not in review_ratings:
-            review_ratings[review_id] = payload.get("rating")
+        rating = payload.get("rating")
 
-        ratings.append(payload.get("rating"))
+        # Track one rating per review (for review-level distribution)
+        if review_id and review_id not in review_ratings:
+            review_ratings[review_id] = rating
+
+        ratings.append(rating)
         text_lengths.append(len(payload.get("text", "")))
         timestamps.append(payload.get("timestamp", 0))
         product_ids.add(payload.get("product_id"))
-        review_ids.add(payload.get("review_id"))
+        review_ids.add(review_id)
 
         # Track chunks per review
-        review_id = payload.get("review_id")
-        total_chunks = payload.get("total_chunks", 1)
         if review_id:
-            chunks_per_review[review_id] = total_chunks
+            chunks_per_review[review_id] = payload.get("total_chunks", 1)
 
     print(f"  Scanned {len(ratings):,} total chunks")
 
@@ -280,6 +281,17 @@ def generate_figures(stats: dict) -> None:
         print(f"  Saved: {FIGURES_DIR / 'temporal_distribution.png'}")
 
 
+def _compute_temporal_range(timestamps: list) -> dict:
+    """Extract start/end dates from millisecond timestamps."""
+    valid = [t for t in timestamps if t and t > 0]
+    if not valid:
+        return {"start_date": None, "end_date": None}
+    return {
+        "start_date": datetime.fromtimestamp(min(valid) / 1000).strftime("%Y-%m-%d"),
+        "end_date": datetime.fromtimestamp(max(valid) / 1000).strftime("%Y-%m-%d"),
+    }
+
+
 def save_eda_stats(stats: dict, collection_info: dict) -> Path:
     """Save EDA statistics to JSON using existing save_results pattern.
 
@@ -304,14 +316,7 @@ def save_eda_stats(stats: dict, collection_info: dict) -> Path:
             if unique_reviews
             else 0.0,
         },
-        "temporal": {
-            "start_date": datetime.fromtimestamp(
-                min(t for t in stats["timestamps"] if t > 0) / 1000
-            ).strftime("%Y-%m-%d"),
-            "end_date": datetime.fromtimestamp(
-                max(t for t in stats["timestamps"] if t > 0) / 1000
-            ).strftime("%Y-%m-%d"),
-        },
+        "temporal": _compute_temporal_range(stats["timestamps"]),
         "rating_distribution": stats["rating_dist"],
         "chunk_length": {
             "median_chars": int(np.median(stats["text_lengths"])),
