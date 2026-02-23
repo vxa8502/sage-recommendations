@@ -2,13 +2,13 @@
 Pure chunking logic for text processing.
 
 This module contains the core chunking algorithms with no external dependencies
-except numpy for similarity calculations. The embedder is passed in as a parameter
+except numpy for similarity calculations.
+The embedder is passed in as a parameter
 for semantic chunking.
 
 Chunking strategy by text length:
-- Short (<200 tokens): No chunking
-- Medium (200-500 tokens): Semantic chunking at topic boundaries
-- Long (>500 tokens): Semantic + sliding window fallback
+- Short (≤200 tokens): No chunking
+- Longer texts: Semantic chunking, with sliding window fallback for oversized chunks
 """
 
 import re
@@ -20,7 +20,6 @@ from sage.config import CHARS_PER_TOKEN
 
 # Chunking thresholds (tokens)
 NO_CHUNK_THRESHOLD = 200  # Texts under this: no chunking
-SEMANTIC_THRESHOLD = 500  # Texts under this: semantic only
 MAX_CHUNK_TOKENS = 400  # Chunks larger than this get sliding window
 
 # Semantic chunking config
@@ -139,12 +138,10 @@ def compute_sentence_similarities(
 
     embeddings = embedder.embed_passages(sentences, show_progress=False)
 
-    similarities = []
-    for i in range(len(embeddings) - 1):
-        sim = float(np.dot(embeddings[i], embeddings[i + 1]))
-        similarities.append(sim)
-
-    return similarities
+    return [
+        float(np.dot(embeddings[i], embeddings[i + 1]))
+        for i in range(len(embeddings) - 1)
+    ]
 
 
 def find_split_points(
@@ -198,13 +195,13 @@ def semantic_chunk(
     if not similarities:
         return [text]
 
-    split_points = find_split_points(similarities, threshold_percentile)
+    split_points = set(find_split_points(similarities, threshold_percentile))
 
     # Build chunks from split points
     chunks = []
     current_sentences = [sentences[0]]
 
-    for i, sim in enumerate(similarities):
+    for i in range(len(similarities)):
         if i in split_points:
             chunks.append(" ".join(current_sentences))
             current_sentences = [sentences[i + 1]]
@@ -221,26 +218,23 @@ def chunk_text(
     text: str,
     embedder=None,
     no_chunk_threshold: int = NO_CHUNK_THRESHOLD,
-    semantic_threshold: int = SEMANTIC_THRESHOLD,
     max_chunk_tokens: int = MAX_CHUNK_TOKENS,
 ) -> list[str]:
     """
     Chunk text using tiered strategy based on length.
 
     Strategy:
-    1. Short texts (<200 tokens): No chunking
-    2. Medium texts (200-500 tokens): Semantic chunking
-    3. Long texts (>500 tokens): Semantic + sliding window fallback
+    1. Short texts (<=no_chunk_threshold): No chunking
+    2. Longer texts: Semantic chunking at topic boundaries
 
-    If no embedder is provided, falls back to sliding window for all
-    texts that need chunking.
+    Oversized chunks (>max_chunk_tokens) get sliding window applied.
+    Falls back to sliding window if no embedder or embedder fails.
 
     Args:
         text: Text to chunk.
         embedder: Optional embedder for semantic chunking.
-        no_chunk_threshold: Texts under this aren't chunked.
-        semantic_threshold: Texts under this use semantic only.
-        max_chunk_tokens: Chunks larger than this get sliding window.
+        no_chunk_threshold: Texts under this aren't chunked (default 200).
+        max_chunk_tokens: Chunks larger than this get sliding window (default 400).
 
     Returns:
         List of chunk texts.
@@ -260,7 +254,10 @@ def chunk_text(
         return sliding_window_chunk(text)
 
     # Semantic chunking
-    chunks = semantic_chunk(text, embedder)
+    try:
+        chunks = semantic_chunk(text, embedder)
+    except Exception:
+        chunks = sliding_window_chunk(text)
 
     # Apply sliding window to oversized chunks
     final_chunks = []
