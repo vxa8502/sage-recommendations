@@ -144,8 +144,8 @@ def filter_5_core(df: pd.DataFrame, min_interactions: int = 5) -> pd.DataFrame:
 
     # Log summary with retention stats
     end_len = len(df)
-    end_user_count = df["user_id"].nunique() if not df.empty else 0
-    end_item_count = df["parent_asin"].nunique() if not df.empty else 0
+    end_user_count = df["user_id"].nunique()
+    end_item_count = df["parent_asin"].nunique()
     retention_pct = (end_len / start_len * 100) if start_len > 0 else 0
 
     logger.info(

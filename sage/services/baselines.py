@@ -241,6 +241,8 @@ def load_product_embeddings_from_qdrant() -> dict[str, np.ndarray]:
         mean_vec = np.mean(vectors, axis=0)
         product_embeddings[product_id] = normalize_vectors(mean_vec)
 
+    client.close()
+
     return product_embeddings
 
 
@@ -291,5 +293,7 @@ def compute_item_popularity_from_qdrant(
     total = sum(counts.values())
     if total == 0:
         return {}
+
+    client.close()
 
     return {product_id: count / total for product_id, count in counts.items()}
