@@ -16,14 +16,25 @@ class TestEstimateTokens:
         assert estimate_tokens("") == 0
 
     def test_short_text(self):
-        # "hello" = 5 chars / 4 chars_per_token = 1
-        assert estimate_tokens("hello") == 1
+        assert estimate_tokens("hello") == 1  # 5 chars // 4 = 1
 
-    def test_longer_text(self):
-        text = "This is a sample sentence with several words."
-        tokens = estimate_tokens(text)
-        assert tokens > 0
-        assert tokens == len(text) // 4
+    def test_boundary_values(self):
+        """Integer division boundaries at CHARS_PER_TOKEN multiples."""
+        assert estimate_tokens("abc") == 0  # 3 // 4 = 0 (under boundary)
+        assert estimate_tokens("abcd") == 1  # 4 // 4 = 1 (exact boundary)
+        assert estimate_tokens("12345") == 1  # 5 // 4 = 1 (over boundary)
+        assert estimate_tokens("abcdefg") == 1  # 7 // 4 = 1 (under next)
+        assert estimate_tokens("abcdefgh") == 2  # 8 // 4 = 2 (exact boundary)
+
+    def test_larger_inputs(self):
+        assert estimate_tokens("This is a test.") == 3  # 15 // 4 = 3
+        assert estimate_tokens("A" * 100) == 25  # 100 // 4 = 25
+
+    def test_unicode_characters(self):
+        """Python len() counts code points, not bytes."""
+        assert estimate_tokens("🎉") == 0  # 1 code point // 4 = 0
+        assert estimate_tokens("Hi 🎉") == 1  # 4 code points // 4 = 1
+        assert estimate_tokens("😀" * 8) == 2  # 8 code points // 4 = 2
 
 
 class TestSplitSentences:
