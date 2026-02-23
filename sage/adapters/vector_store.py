@@ -49,8 +49,8 @@ def get_client():
     QdrantClient = qdrant.QdrantClient
 
     if QDRANT_API_KEY:
-        return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
-    return QdrantClient(url=QDRANT_URL)
+        return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=120)
+    return QdrantClient(url=QDRANT_URL, timeout=120)
 
 
 def create_collection(client, collection_name: str = COLLECTION_NAME) -> None:

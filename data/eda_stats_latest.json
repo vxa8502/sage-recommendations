@@ -1,0 +1,30 @@
+{
+  "timestamp": "2026-02-23T11:15:52.816501",
+  "collection": "sage_reviews",
+  "summary": {
+    "total_chunks": 423165,
+    "unique_reviews": 334282,
+    "unique_products": 21827,
+    "expansion_ratio": 1.27
+  },
+  "temporal": {
+    "start_date": "2000-05-26",
+    "end_date": "2023-03-19"
+  },
+  "rating_distribution": {
+    "1.0": 23323,
+    "2.0": 14461,
+    "3.0": 23323,
+    "4.0": 49924,
+    "5.0": 223251
+  },
+  "chunk_length": {
+    "median_chars": 169,
+    "mean_chars": 258,
+    "median_tokens": 42
+  },
+  "chunking": {
+    "single_chunk_reviews": 303550,
+    "multi_chunk_reviews": 30732
+  }
+}
