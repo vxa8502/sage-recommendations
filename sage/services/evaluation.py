@@ -27,6 +27,8 @@ from sage.utils import normalize_vectors
 # Core ranking metrics
 def dcg_at_k(relevances: list[float], k: int) -> float:
     """Compute Discounted Cumulative Gain at K."""
+    if k <= 0:
+        raise ValueError(f"k must be positive, got {k}")
     relevances = relevances[:k]
     if not relevances:
         return 0.0
