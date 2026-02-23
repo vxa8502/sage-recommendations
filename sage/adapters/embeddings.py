@@ -146,6 +146,58 @@ class E5Embedder:
         """
         return self.embed_queries([query])[0]
 
+    def tokenize(self, text: str) -> list[int]:
+        """
+        Tokenize text using the model's tokenizer.
+
+        Args:
+            text: Text to tokenize.
+
+        Returns:
+            List of token IDs (excluding special tokens).
+        """
+        return self.model.tokenizer.encode(text, add_special_tokens=False)
+
+    def decode_tokens(self, tokens: list[int]) -> str:
+        """
+        Decode token IDs back to text.
+
+        Args:
+            tokens: List of token IDs.
+
+        Returns:
+            Decoded text string.
+        """
+        return self.model.tokenizer.decode(tokens)
+
+    def count_tokens(self, text: str) -> int:
+        """
+        Count tokens in text using the model's tokenizer.
+
+        Args:
+            text: Text to tokenize.
+
+        Returns:
+            Number of tokens (excluding special tokens).
+        """
+        return len(self.tokenize(text))
+
+    def truncate_to_tokens(self, text: str, max_tokens: int) -> str:
+        """
+        Truncate text to fit within a token budget.
+
+        Args:
+            text: Text to truncate.
+            max_tokens: Maximum tokens allowed.
+
+        Returns:
+            Truncated text that fits within the token budget.
+        """
+        tokens = self.tokenize(text)
+        if len(tokens) <= max_tokens:
+            return text
+        return self.decode_tokens(tokens[:max_tokens])
+
 
 @thread_safe_singleton
 def get_embedder() -> E5Embedder:

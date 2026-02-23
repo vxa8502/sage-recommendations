@@ -53,6 +53,12 @@ MIN_CANDIDATE_CHUNK_LIMIT = 100
 DEFAULT_SIMILARITY_WEIGHT = 0.8  # alpha: weight for semantic similarity
 DEFAULT_RATING_WEIGHT = 0.2  # beta: weight for normalized rating
 
+# E5-small max sequence length is 512 tokens. Reserve tokens for:
+#   - "query: " prefix (~2 tokens)
+#   - Special tokens [CLS], [SEP] (~2 tokens)
+# Effective budget for pseudo-query content: 508 tokens
+PSEUDO_QUERY_MAX_TOKENS = 508
+
 
 class RetrievalService(LazyServiceMixin):
     """
@@ -300,6 +306,57 @@ def recommend(
     )
 
 
+def _build_pseudo_query(
+    reviews: list[dict],
+    embedder: "E5Embedder",
+    max_tokens: int = PSEUDO_QUERY_MAX_TOKENS,
+) -> str:
+    """
+    Build a pseudo-query from user reviews with precise token budgeting.
+
+    Concatenates review texts while respecting E5-small's 512 token limit.
+    Uses the model's actual tokenizer for accurate counting.
+
+    Args:
+        reviews: List of review dicts with 'text' key.
+        embedder: E5Embedder instance for tokenization.
+        max_tokens: Maximum tokens for the pseudo-query content.
+
+    Returns:
+        Concatenated review text within token budget.
+    """
+    if not reviews:
+        return ""
+
+    texts = []
+    token_count = 0
+
+    for review in reviews:
+        text = review.get("text", "").strip()
+        if not text:
+            continue
+
+        # Tokenize once per review (DRY)
+        tokens = embedder.tokenize(text)
+
+        if token_count + len(tokens) <= max_tokens:
+            # Full review fits
+            texts.append(text)
+            token_count += len(tokens)
+        elif token_count < max_tokens:
+            # Partial fit: truncate to remaining budget
+            remaining = max_tokens - token_count
+            truncated = embedder.decode_tokens(tokens[:remaining])
+            if truncated.strip():
+                texts.append(truncated)
+            break
+        else:
+            # Budget exhausted
+            break
+
+    return " ".join(texts)
+
+
 def recommend_for_user(
     user_history: list[dict],
     top_k: int = DEFAULT_TOP_K,
@@ -333,9 +390,20 @@ def recommend_for_user(
     if not positive_reviews:
         positive_reviews = user_history
 
-    # Build pseudo-query from review texts
-    texts = [r.get("text", "")[:500] for r in positive_reviews[:5]]
-    pseudo_query = " ".join(texts)
+    # Limit to top 5 reviews for pseudo-query
+    selected_reviews = positive_reviews[:5]
+
+    # Lazy-load embedder if not provided (needed for tokenization)
+    if embedder is None:
+        from sage.adapters.embeddings import get_embedder
+
+        embedder = get_embedder()
+
+    # Build pseudo-query with token-aware truncation
+    pseudo_query = _build_pseudo_query(selected_reviews, embedder)
+
+    if not pseudo_query:
+        return []
 
     # Get products to exclude
     exclude: set[str] = {
