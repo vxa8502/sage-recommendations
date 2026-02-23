@@ -102,7 +102,17 @@ def filter_5_core(df: pd.DataFrame, min_interactions: int = 5) -> pd.DataFrame:
     Returns:
         Filtered DataFrame.
     """
-    prev_len = len(df) + 1
+    # Handle empty input
+    if df.empty:
+        logger.warning("Empty DataFrame passed to filter_5_core, returning empty.")
+        return df.reset_index(drop=True)
+
+    # Capture starting stats for retention logging
+    start_len = len(df)
+    start_user_count = df["user_id"].nunique()
+    start_item_count = df["parent_asin"].nunique()
+
+    prev_len = start_len + 1
     iteration = 0
 
     while len(df) < prev_len:
@@ -120,6 +130,38 @@ def filter_5_core(df: pd.DataFrame, min_interactions: int = 5) -> pd.DataFrame:
         df = df[df["parent_asin"].isin(valid_items)]
 
         logger.debug("  Iteration %d: %s reviews remaining", iteration, f"{len(df):,}")
+
+        # Warn if all data is filtered out
+        if df.empty:
+            logger.warning(
+                "All data filtered out after iteration %d! "
+                "Started with %s reviews. Check min_interactions=%d.",
+                iteration,
+                f"{start_len:,}",
+                min_interactions,
+            )
+            break
+
+    # Log summary with retention stats
+    end_len = len(df)
+    end_user_count = df["user_id"].nunique() if not df.empty else 0
+    end_item_count = df["parent_asin"].nunique() if not df.empty else 0
+    retention_pct = (end_len / start_len * 100) if start_len > 0 else 0
+
+    logger.info(
+        "5-core filtering: %d iterations, %s → %s reviews (%.1f%% retained)",
+        iteration,
+        f"{start_len:,}",
+        f"{end_len:,}",
+        retention_pct,
+    )
+    logger.info(
+        "  Users: %s → %s | Items: %s → %s",
+        f"{start_user_count:,}",
+        f"{end_user_count:,}",
+        f"{start_item_count:,}",
+        f"{end_item_count:,}",
+    )
 
     return df.reset_index(drop=True)
 
@@ -212,6 +254,13 @@ def clean_reviews(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
         Cleaned DataFrame.
     """
     original_len = len(df)
+
+    required_cols = ["text", "rating", "user_id", "parent_asin"]
+
+    # Check for required columns
+    for col in required_cols:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
 
     # Remove missing/empty text
     df = df[df["text"].notna()]
@@ -361,16 +410,48 @@ def create_temporal_splits(
 
     Returns:
         Tuple of (train_df, val_df, test_df).
+
+    Raises:
+        ValueError: If DataFrame is empty, missing timestamp column,
+            or ratios are invalid.
     """
+    # Validate ratios
+    if not 0 <= train_ratio <= 1:
+        raise ValueError(f"train_ratio must be between 0 and 1, got {train_ratio}")
+    if not 0 <= val_ratio <= 1:
+        raise ValueError(f"val_ratio must be between 0 and 1, got {val_ratio}")
+    if train_ratio + val_ratio > 1:
+        raise ValueError(
+            f"train_ratio + val_ratio must be <= 1, "
+            f"got {train_ratio} + {val_ratio} = {train_ratio + val_ratio}"
+        )
+
+    # Check for empty DataFrame before splitting
+    if df.empty:
+        raise ValueError("DataFrame is empty. Cannot create splits.")
+
+    # Validate timestamp column exists
+    if "timestamp" not in df.columns:
+        raise ValueError("DataFrame missing 'timestamp' column.")
+
     df = df.sort_values("timestamp").reset_index(drop=True)
 
     n = len(df)
-    train_end = int(n * train_ratio)
-    val_end = int(n * (train_ratio + val_ratio))
+    train_end = round(n * train_ratio)
+    val_end = round(n * (train_ratio + val_ratio))
 
     train_df = df.iloc[:train_end].reset_index(drop=True)
     val_df = df.iloc[train_end:val_end].reset_index(drop=True)
     test_df = df.iloc[val_end:].reset_index(drop=True)
+
+    # Warn about empty splits (can happen with small n)
+    if train_df.empty:
+        logger.warning("Train split is empty (n=%d, train_ratio=%.2f)", n, train_ratio)
+    if val_df.empty:
+        logger.warning("Validation split is empty (n=%d, val_ratio=%.2f)", n, val_ratio)
+    if test_df.empty:
+        test_ratio = 1 - train_ratio - val_ratio
+        logger.warning("Test split is empty (n=%d, test_ratio=%.2f)", n, test_ratio)
 
     if verbose:
         logger.info(
@@ -416,24 +497,44 @@ def verify_temporal_boundaries(
         Dict with timestamp ranges for each split.
 
     Raises:
-        AssertionError: If temporal boundaries overlap.
+        ValueError: If splits are empty, missing timestamp column, or overlap.
     """
+    # Check for empty splits FIRST
+    if train_df.empty:
+        raise ValueError("Train split is empty. Check split ratios.")
+    if val_df.empty:
+        raise ValueError("Validation split is empty. Check split ratios.")
+    if test_df.empty:
+        raise ValueError("Test split is empty. Check split ratios.")
+
+    # Validate timestamp column exists
+    if "timestamp" not in train_df.columns:
+        raise ValueError("Train split missing 'timestamp' column.")
+    if "timestamp" not in val_df.columns:
+        raise ValueError("Validation split missing 'timestamp' column.")
+    if "timestamp" not in test_df.columns:
+        raise ValueError("Test split missing 'timestamp' column.")
+
+    train_min = train_df["timestamp"].min()
     train_max = train_df["timestamp"].max()
     val_min = val_df["timestamp"].min()
     val_max = val_df["timestamp"].max()
     test_min = test_df["timestamp"].min()
+    test_max = test_df["timestamp"].max()
 
-    assert train_max < val_min, (
-        f"Train/val overlap! Train max: {train_max}, Val min: {val_min}"
-    )
-    assert val_max < test_min, (
-        f"Val/test overlap! Val max: {val_max}, Test min: {test_min}"
-    )
+    # Check for temporal leakage (raise when boundaries overlap)
+    if train_max >= val_min:
+        raise ValueError(
+            f"Train/val overlap! Train max: {train_max}, Val min: {val_min}"
+        )
+
+    if val_max >= test_min:
+        raise ValueError(f"Val/test overlap! Val max: {val_max}, Test min: {test_min}")
 
     boundaries = {
-        "train": (int(train_df["timestamp"].min()), int(train_max)),
+        "train": (int(train_min), int(train_max)),
         "val": (int(val_min), int(val_max)),
-        "test": (int(test_min), int(test_df["timestamp"].max())),
+        "test": (int(test_min), int(test_max)),
     }
 
     if verbose:
