@@ -15,6 +15,9 @@ __pycache__/
 /data/eval/
 /data/human_eval/
 
+# Timestamped EDA stats (keep only *_latest.json)
+/data/eda_stats_20*.json
+
 # But TRACK eval results (small JSONs, source of truth for metrics)
 !/data/eval_results/
 

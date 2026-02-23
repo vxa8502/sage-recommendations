@@ -370,9 +370,9 @@ reset:
 	rm -f data/eval_results/failure_analysis_*.json
 	rm -f data/eval_results/adjusted_faithfulness_*.json
 	rm -f data/eval_results/grounding_delta_*.json
+	rm -f data/eda_stats_*.json
 	@echo "  (human_eval_*.json preserved — run 'make human-eval' to re-annotate)"
 	rm -rf assets/*.png
-	rm -f reports/eda_report.md
 	@echo "Done. Run 'make eval-full' to reproduce full evaluation suite."
 	@echo "  (Use 'make reset-hard' to also clear Qdrant + raw cache)"
 
