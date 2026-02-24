@@ -77,7 +77,8 @@ def apply_weighted_ranking(
     """
     Apply weighted ranking combining similarity and rating signals.
 
-    Formula: final_score = alpha * normalized_similarity + beta * normalized_rating
+    Formula: final_score =
+        alpha * normalized_similarity + beta * normalized_rating
 
     Both signals are normalized to [0, 1] for fair weighting:
     - Similarity: min-max normalized within the candidate set

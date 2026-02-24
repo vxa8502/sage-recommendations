@@ -30,7 +30,7 @@ def _generate_point_id(review_id: str, chunk_index: int) -> str:
     """
     Generate a deterministic point ID from review_id and chunk_index.
 
-    Uses MD5 hash truncated to 32 chars for Qdrant compatibility.
+    Uses MD5 hash (32-char hex) for Qdrant compatibility.
     """
     key = f"{review_id}_{chunk_index}"
     return hashlib.md5(key.encode()).hexdigest()
