@@ -154,12 +154,11 @@ print(f"Uploading to: {qdrant_url[:40]}...")
 
 client = get_client()
 create_collection(client)
+create_payload_indexes(client)
 
 start = time.time()
 upload_chunks(client, chunks, embeddings)
 print(f"Upload complete in {time.time() - start:.1f}s")
-
-create_payload_indexes(client)
 
 info = get_collection_info(client)
 print("\nCollection info:")

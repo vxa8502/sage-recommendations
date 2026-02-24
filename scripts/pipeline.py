@@ -297,8 +297,8 @@ def run_pipeline(subset_size: int, force: bool):
 
     # Create collection and upload
     create_collection(client)
-    upload_chunks(client, chunks, embeddings)
     create_payload_indexes(client)
+    upload_chunks(client, chunks, embeddings)
 
     # Verify upload
     info = get_collection_info(client)

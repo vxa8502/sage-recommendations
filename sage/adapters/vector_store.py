@@ -101,11 +101,15 @@ def create_payload_indexes(client, collection_name: str = COLLECTION_NAME) -> No
     logger.info("Creating payload indexes...")
 
     for field_name, field_schema in indexes:
-        client.create_payload_index(
-            collection_name=collection_name,
-            field_name=field_name,
-            field_schema=field_schema,
-        )
+        try:
+            client.create_payload_index(
+                collection_name=collection_name,
+                field_name=field_name,
+                field_schema=field_schema,
+            )
+        except Exception as e:
+            logger.error("Failed to create index for %s: %s", field_name, e)
+            raise
 
     logger.info("Indexes created for: %s", ", ".join(f for f, _ in indexes))
 
