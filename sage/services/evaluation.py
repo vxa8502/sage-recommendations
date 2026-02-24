@@ -68,7 +68,7 @@ def mrr(recommended: list[str], relevant: set[str]) -> float:
 
 def precision_at_k(recommended: list[str], relevant: set[str], k: int) -> float:
     """Compute Precision@K: fraction of top-K that are relevant."""
-    top_k = recommended[:k]
+    top_k = set(recommended[:k])
     if not top_k:
         return 0.0
 
