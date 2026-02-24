@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from typing import TYPE_CHECKING
+from time import perf_counter
 
 if TYPE_CHECKING:
     import numpy as np
@@ -91,27 +92,22 @@ def create_payload_indexes(client, collection_name: str = COLLECTION_NAME) -> No
     """
     from qdrant_client.models import PayloadSchemaType
 
+    indexes = [
+        ("rating", PayloadSchemaType.FLOAT),
+        ("product_id", PayloadSchemaType.KEYWORD),
+        ("timestamp", PayloadSchemaType.INTEGER),
+    ]
+
     logger.info("Creating payload indexes...")
 
-    client.create_payload_index(
-        collection_name=collection_name,
-        field_name="rating",
-        field_schema=PayloadSchemaType.FLOAT,
-    )
+    for field_name, field_schema in indexes:
+        client.create_payload_index(
+            collection_name=collection_name,
+            field_name=field_name,
+            field_schema=field_schema,
+        )
 
-    client.create_payload_index(
-        collection_name=collection_name,
-        field_name="product_id",
-        field_schema=PayloadSchemaType.KEYWORD,
-    )
-
-    client.create_payload_index(
-        collection_name=collection_name,
-        field_name="timestamp",
-        field_schema=PayloadSchemaType.INTEGER,
-    )
-
-    logger.info("Indexes created for: rating, product_id, timestamp")
+    logger.info("Indexes created for: %s", ", ".join(f for f, _ in indexes))
 
 
 def upload_chunks(
@@ -134,31 +130,46 @@ def upload_chunks(
     from qdrant_client.models import PointStruct
     from tqdm import tqdm
 
-    points = []
+    start = perf_counter()
+    total_uploaded = 0
 
-    for chunk, embedding in zip(chunks, embeddings, strict=True):
-        point_id = _generate_point_id(chunk.review_id, chunk.chunk_index)
-        point = PointStruct(
-            id=point_id,
-            vector=embedding.tolist() if hasattr(embedding, "tolist") else embedding,
-            payload={
-                "text": chunk.text,
-                "review_id": chunk.review_id,
-                "product_id": chunk.product_id,
-                "rating": chunk.rating,
-                "timestamp": chunk.timestamp,
-                "chunk_index": chunk.chunk_index,
-                "total_chunks": chunk.total_chunks,
-            },
-        )
-        points.append(point)
+    for i in tqdm(range(0, len(chunks), batch_size), desc="Uploading to Qdrant"):
+        batch_chunks = chunks[i : i + batch_size]
+        batch_embeddings = embeddings[i : i + batch_size]
 
-    # Upload in batches
-    for i in tqdm(range(0, len(points), batch_size), desc="Uploading to Qdrant"):
-        batch = points[i : i + batch_size]
-        client.upsert(collection_name=collection_name, points=batch)
+        points = []
+        for chunk, embedding in zip(batch_chunks, batch_embeddings, strict=True):
+            point_id = _generate_point_id(chunk.review_id, chunk.chunk_index)
+            points.append(
+                PointStruct(
+                    id=point_id,
+                    vector=(
+                        embedding.tolist()
+                        if hasattr(embedding, "tolist")
+                        else embedding
+                    ),
+                    payload={
+                        "text": chunk.text,
+                        "review_id": chunk.review_id,
+                        "product_id": chunk.product_id,
+                        "rating": chunk.rating,
+                        "timestamp": chunk.timestamp,
+                        "chunk_index": chunk.chunk_index,
+                        "total_chunks": chunk.total_chunks,
+                    },
+                )
+            )
 
-    logger.info("Uploaded %d points to %s", len(points), collection_name)
+        client.upsert(collection_name=collection_name, points=points)
+        total_uploaded += len(points)
+
+    elapsed = perf_counter() - start
+    logger.info(
+        "Uploaded %d points to %s in %.2f seconds",
+        total_uploaded,
+        collection_name,
+        elapsed,
+    )
 
 
 def search(
