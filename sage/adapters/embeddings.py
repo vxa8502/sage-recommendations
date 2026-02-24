@@ -70,6 +70,9 @@ class E5Embedder:
         Returns:
             Numpy array of shape (n_texts, embedding_dim).
         """
+        if not texts:
+            raise ValueError("No texts provided for embedding.")
+
         if cache_path:
             cache_path = Path(cache_path)
 
@@ -123,6 +126,9 @@ class E5Embedder:
         Returns:
             Numpy array of shape (n_queries, embedding_dim).
         """
+        if not queries:
+            raise ValueError("No queries provided for embedding.")
+
         prefixed = [f"query: {q}" for q in queries]
 
         embeddings = self.model.encode(
