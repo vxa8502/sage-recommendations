@@ -465,7 +465,7 @@ def get_llm_client(provider: str | None = None) -> LLMClient:
     Raises:
         ValueError: If provider is not recognized.
     """
-    provider = provider or LLM_PROVIDER
+    provider = provider.lower().strip() if provider else LLM_PROVIDER
 
     if provider == PROVIDER_ANTHROPIC:
         return AnthropicClient()
