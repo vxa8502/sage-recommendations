@@ -363,31 +363,3 @@ def verify_citations(
         valid_citations=valid,
         invalid_citations=invalid,
     )
-
-
-def verify_explanation_full(
-    explanation: str,
-    evidence_ids: list[str],
-    evidence_texts: list[str],
-) -> tuple[VerificationResult, CitationVerificationResult, ForbiddenPhraseResult]:
-    """
-    Comprehensive verification of an explanation.
-
-    Performs three checks:
-    1. Quote verification: All quoted text exists in evidence
-    2. Citation verification: All citation IDs are valid and match sources
-    3. Forbidden phrase check: No editorial language violations
-
-    Args:
-        explanation: The generated explanation to verify.
-        evidence_ids: List of evidence IDs used in generation.
-        evidence_texts: List of evidence texts (parallel to evidence_ids).
-
-    Returns:
-        Tuple of (VerificationResult, CitationVerificationResult, ForbiddenPhraseResult).
-    """
-    quote_result = verify_explanation(explanation, evidence_texts)
-    citation_result = verify_citations(explanation, evidence_ids, evidence_texts)
-    phrase_result = check_forbidden_phrases(explanation)
-
-    return quote_result, citation_result, phrase_result

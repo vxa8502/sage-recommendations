@@ -68,7 +68,6 @@ from sage.core.verification import (
     verify_citation,
     verify_citations,
     verify_explanation,
-    verify_explanation_full,
     verify_quote_in_evidence,
 )
 
@@ -134,7 +133,6 @@ __all__ = [
     "verify_citation",
     "verify_citations",
     "verify_explanation",
-    "verify_explanation_full",
     "verify_quote_in_evidence",
     # Evidence
     "check_evidence_quality",
