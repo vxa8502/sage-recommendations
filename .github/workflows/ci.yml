@@ -36,5 +36,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -e ".[dev,api,anthropic,openai]"
+      - run: pip install -e ".[dev,api,anthropic,openai,pipeline]"
       - run: python -m pytest tests/ -v

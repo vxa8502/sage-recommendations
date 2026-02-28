@@ -313,7 +313,14 @@ typecheck:
 test:
 	$(PYTHON) -m pytest tests/ -v
 
-ci: lint typecheck test
+ci:
+	rm -rf .venv
+	python -m venv .venv
+	. .venv/bin/activate && pip install -e ".[dev,api,anthropic,openai,pipeline]" && \
+		$(RUFF) check sage/ scripts/ tests/ && \
+		$(RUFF) format --check sage/ scripts/ tests/ && \
+		$(MYPY) sage/ --ignore-missing-imports && \
+		$(PYTHON) -m pytest tests/ -v
 	@echo "All CI checks passed"
 
 # ---------------------------------------------------------------------------
