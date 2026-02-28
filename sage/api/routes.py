@@ -43,7 +43,7 @@ _MAX_EXPLAIN_WORKERS = 4
 # Per-worker timeout for explanation generation (prevents hung workers)
 _EXPLAIN_WORKER_TIMEOUT = 30.0
 
-# Request timeout in seconds. David's rule: 10s max end-to-end.
+# Request timeout in seconds. Target: 10s max end-to-end.
 # If the LLM hangs, cut it off and return what we have.
 REQUEST_TIMEOUT_SECONDS = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "10.0"))
 
@@ -750,8 +750,7 @@ async def recommend_stream(request: Request, body: RecommendationRequest):
     does not compute HHEM confidence scores. For cached or grounded
     responses, use the non-streaming ``POST /recommend`` endpoint.
 
-    David's rule: streaming is non-negotiable. Users perceive streaming
-    as 40% faster.
+    Streaming is non-negotiable. Users perceive streaming as 40% faster.
     """
     return StreamingResponse(
         _stream_recommendations(body, request.app),

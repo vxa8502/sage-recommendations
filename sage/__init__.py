@@ -1,8 +1,8 @@
 """
 Sage: RAG-Powered Product Recommendation System
 
-A portfolio-scale replica of Amazon Rufus demonstrating retrieval-augmented
-generation for explainable product recommendations.
+Retrieval-augmented generation for explainable product recommendations,
+inspired by Amazon Rufus architecture.
 
 Architecture:
     sage.core       - Pure domain logic (models, chunking, verification)
