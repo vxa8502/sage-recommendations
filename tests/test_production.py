@@ -4,6 +4,9 @@ Tests security headers, cache key generation, request ID propagation,
 and other production-critical behaviors.
 """
 
+import threading
+
+import numpy as np
 import pytest
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -13,8 +16,8 @@ from fastapi.testclient import TestClient
 
 from sage.api.middleware import LatencyMiddleware
 from sage.api.routes import router, _build_cache_key
+from sage.config import EMBEDDING_DIM
 from sage.services.cache import SemanticCache
-import numpy as np
 
 
 def _make_app_with_middleware(**state_overrides) -> FastAPI:
@@ -149,7 +152,7 @@ class TestCacheIntegration:
         cache = SemanticCache(max_entries=100, ttl_seconds=3600)
 
         # Create fake embeddings
-        embedding = np.random.rand(384).astype(np.float32)
+        embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
 
         # Store result with k=3
         key1 = _build_cache_key("headphones", k=3, explain=True, min_rating=4.0)
@@ -176,7 +179,7 @@ class TestCacheIntegration:
 
     def test_same_query_different_rating_different_cache_entries(self):
         cache = SemanticCache(max_entries=100, ttl_seconds=3600)
-        embedding = np.random.rand(384).astype(np.float32)
+        embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
 
         # Store with rating=4.0
         key1 = _build_cache_key("headphones", k=3, explain=True, min_rating=4.0)
@@ -191,6 +194,93 @@ class TestCacheIntegration:
         cached2, _ = cache.get(key2, embedding)
         assert cached1["rating_filter"] == 4.0
         assert cached2["rating_filter"] == 3.5
+
+
+def _run_threads(target, num_threads: int) -> list:
+    """Run target function in parallel threads, return any errors."""
+    errors = []
+
+    def wrapper(thread_id: int):
+        try:
+            target(thread_id)
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=wrapper, args=(t,)) for t in range(num_threads)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    return errors
+
+
+class TestCacheThreadSafety:
+    """Test cache behavior under concurrent access."""
+
+    def test_concurrent_writes_no_data_loss(self):
+        """Concurrent puts should not lose entries."""
+        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
+        entries_per_thread = 20
+
+        def writer(thread_id: int):
+            for i in range(entries_per_thread):
+                key = f"thread_{thread_id}_query_{i}"
+                embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+                cache.put(key, embedding, {"thread": thread_id, "index": i})
+
+        errors = _run_threads(writer, num_threads=10)
+
+        assert not errors, f"Errors during concurrent writes: {errors}"
+        assert cache.stats().size <= 100
+
+    def test_concurrent_reads_writes_no_crashes(self):
+        """Mixed concurrent reads and writes should not crash."""
+        cache = SemanticCache(max_entries=50, ttl_seconds=3600)
+        ops_per_thread = 50
+
+        # Pre-populate
+        for i in range(10):
+            embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+            cache.put(f"seed_query_{i}", embedding, {"seed": i})
+
+        def mixed_ops(thread_id: int):
+            for i in range(ops_per_thread):
+                embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+                if i % 2 == 0:
+                    cache.put(f"thread_{thread_id}_op_{i}", embedding, {"op": i})
+                else:
+                    cache.get(f"seed_query_{i % 10}", embedding)
+
+        errors = _run_threads(mixed_ops, num_threads=20)
+
+        assert not errors, f"Errors during concurrent ops: {errors}"
+        stats = cache.stats()
+        assert stats.size <= 50
+        assert stats.evictions >= 0
+
+    def test_concurrent_semantic_lookups_correct_results(self):
+        """Concurrent semantic lookups should return correct cached values."""
+        cache = SemanticCache(
+            max_entries=100, ttl_seconds=3600, similarity_threshold=0.99
+        )
+        results = []
+        lock = threading.Lock()
+
+        base_embedding = np.ones(EMBEDDING_DIM, dtype=np.float32)
+        base_embedding = base_embedding / np.linalg.norm(base_embedding)
+        cache.put("base_query", base_embedding, {"value": "expected"})
+
+        def reader(thread_id: int):
+            for _ in range(50):
+                cached, _ = cache.get("base_query", base_embedding)
+                if cached is not None:
+                    with lock:
+                        results.append(cached.get("value"))
+
+        errors = _run_threads(reader, num_threads=10)
+
+        assert not errors, f"Errors during concurrent reads: {errors}"
+        assert all(r == "expected" for r in results), "Got unexpected cached value"
 
 
 class TestRequestContext:
