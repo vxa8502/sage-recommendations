@@ -11,7 +11,7 @@ should significantly outperform all baselines.
 """
 
 import random
-from collections import Counter
+from collections import Counter, defaultdict
 
 import numpy as np
 import pandas as pd
@@ -150,8 +150,10 @@ class ItemKNNBaseline:
         # Compute similarities (dot product of normalized vectors = cosine)
         similarities = self.embeddings_norm @ query_emb
 
-        # Get top-k indices
-        top_indices = np.argsort(similarities)[::-1][:top_k]
+        # Get top-k indices (guard against top_k > catalog size)
+        k = min(top_k, len(self.product_ids))
+        top_indices = np.argpartition(similarities, -k)[-k:]
+        top_indices = top_indices[np.argsort(similarities[top_indices])[::-1]]
 
         return [self.product_ids[i] for i in top_indices]
 
@@ -196,6 +198,21 @@ def build_product_embeddings(
     return product_embeddings
 
 
+def _scroll_collection(client, with_vectors: bool = False):
+    """Yield all points from Qdrant collection via pagination."""
+    offset = None
+    while True:
+        results, offset = client.scroll(
+            collection_name=COLLECTION_NAME,
+            limit=1000,
+            offset=offset,
+            with_vectors=with_vectors,
+        )
+        yield from results
+        if offset is None:
+            break
+
+
 def load_product_embeddings_from_qdrant() -> dict[str, np.ndarray]:
     """
     Load chunk embeddings from Qdrant and aggregate to products.
@@ -207,43 +224,19 @@ def load_product_embeddings_from_qdrant() -> dict[str, np.ndarray]:
 
     client = get_client()
 
-    # Scroll through all points
-    all_points = []
-    offset = None
-
-    while True:
-        results, offset = client.scroll(
-            collection_name=COLLECTION_NAME,
-            limit=1000,
-            offset=offset,
-            with_vectors=True,
-        )
-
-        all_points.extend(results)
-
-        if offset is None:
-            break
-
-    # Group by product and aggregate
-    product_vectors: dict[str, list[np.ndarray]] = {}
-
-    for point in all_points:
+    # Group by product
+    product_vectors: dict[str, list[np.ndarray]] = defaultdict(list)
+    for point in _scroll_collection(client, with_vectors=True):
         product_id = point.payload.get("product_id")
-        vector = np.array(point.vector)
-
-        if product_id not in product_vectors:
-            product_vectors[product_id] = []
-        product_vectors[product_id].append(vector)
-
-    # Mean aggregation
-    product_embeddings = {}
-    for product_id, vectors in product_vectors.items():
-        mean_vec = np.mean(vectors, axis=0)
-        product_embeddings[product_id] = normalize_vectors(mean_vec)
+        product_vectors[product_id].append(np.array(point.vector))
 
     client.close()
 
-    return product_embeddings
+    # Mean aggregation + normalize
+    return {
+        product_id: normalize_vectors(np.mean(vectors, axis=0))
+        for product_id, vectors in product_vectors.items()
+    }
 
 
 def compute_item_popularity_from_qdrant(
@@ -266,34 +259,19 @@ def compute_item_popularity_from_qdrant(
 
     client = get_client()
 
-    # Scroll through all points (without vectors for speed)
-    counts: dict[str, int] = Counter()
-    offset = None
+    counts: Counter[str] = Counter(
+        point.payload.get("product_id")
+        for point in _scroll_collection(client, with_vectors=False)
+        if point.payload.get("product_id")
+    )
 
-    while True:
-        results, offset = client.scroll(
-            collection_name=COLLECTION_NAME,
-            limit=1000,
-            offset=offset,
-            with_vectors=False,
-        )
-
-        for point in results:
-            product_id = point.payload.get("product_id")
-            if product_id:
-                counts[product_id] += 1
-
-        if offset is None:
-            break
+    client.close()
 
     if not normalize:
         return dict(counts)
 
-    # Normalize to probabilities
     total = sum(counts.values())
     if total == 0:
         return {}
-
-    client.close()
 
     return {product_id: count / total for product_id, count in counts.items()}
