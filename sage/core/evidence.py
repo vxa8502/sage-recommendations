@@ -6,73 +6,44 @@ evidence is too thin. Thin evidence (1 chunk, few tokens) correlates
 strongly with LLM overclaiming.
 """
 
-from sage.config import CHARS_PER_TOKEN
+from sage.config import (
+    CHARS_PER_TOKEN,
+    MIN_EVIDENCE_CHUNKS,
+    MIN_EVIDENCE_TOKENS,
+    MIN_RETRIEVAL_SCORE,
+    get_logger,
+)
 from sage.core.models import EvidenceQuality, ProductScore, RefusalType
 
+logger = get_logger(__name__)
 
-# =============================================================================
-# Evidence Quality Thresholds
-#
-# These thresholds determine when the system refuses to generate an explanation
-# due to insufficient evidence. They prevent hallucination by declining to
-# explain when the LLM would be forced to fabricate claims.
-#
-# Threshold selection rationale based on failure analysis:
-# =============================================================================
 
-# Minimum number of evidence chunks required for explanation generation.
-#
-# Rationale:
-#   - Single-chunk evidence strongly correlates with LLM overclaiming
-#   - With 1 chunk, LLM has limited quotes to draw from, tends to paraphrase
-#     and add editorial language ("highly recommended", "excellent choice")
-#   - 2+ chunks provide diversity of reviewer perspectives
-#   - Testing showed 2 chunks reduces forbidden phrase rate by ~40%
-#
-# Sensitivity:
-#   - min_chunks=1: Low refusal rate, but ~70% forbidden phrase violations
-#   - min_chunks=2: Moderate refusal rate (~10-15% with proper retrieval)
-#   - min_chunks=3: High refusal rate (~30%), minimal quality improvement
-#
-# Note: If refusal rate exceeds 20%, check retrieval limit (should be >= 100)
-DEFAULT_MIN_CHUNKS = 2
-
-# Minimum total tokens across all evidence chunks.
-#
-# Rationale:
-#   - Very short evidence lacks specific claims for LLM to ground in
-#   - Average review chunk is ~100 tokens; 50 = half a typical chunk
-#   - Below 50 tokens, evidence is usually just star rating + 1 sentence
-#   - Insufficient detail for meaningful feature-level explanation
-#
-# Sensitivity:
-#   - min_tokens=25: Allows very thin evidence, higher hallucination risk
-#   - min_tokens=50: Requires ~1 substantive review excerpt
-#   - min_tokens=100: Requires ~2 substantive excerpts, may be too strict
-DEFAULT_MIN_TOKENS = 50
-
-# Minimum retrieval score for the top chunk (semantic similarity).
-#
-# Rationale:
-#   - Low scores indicate query-product semantic mismatch
-#   - Score distribution in evaluation set: mean=0.82, std=0.08
-#   - 0.7 is approximately mean - 1.5*std, catching severe mismatches
-#   - Below 0.7, retrieved evidence often discusses different product aspects
-#
-# Sensitivity:
-#   - min_score=0.6: Very permissive, allows tangential matches
-#   - min_score=0.7: Catches obvious mismatches (e.g., phone case for USB hub)
-#   - min_score=0.8: Strict, may reject valid but lower-confidence matches
-#
-# Note: This threshold rarely triggers with proper embedding model alignment
-DEFAULT_MIN_SCORE = 0.7
+def _log_refusal(
+    product_id: str,
+    chunk_count: int,
+    total_tokens: int,
+    top_score: float,
+    failures: list[RefusalType],
+) -> None:
+    """Log evidence gate refusal with structured fields."""
+    logger.info(
+        "evidence_gate_refused",
+        extra={
+            "product_id": product_id,
+            "chunk_count": chunk_count,
+            "total_tokens": total_tokens,
+            "top_score": round(top_score, 3),
+            "refusal_type": failures[0].value,
+            "all_failures": [f.value for f in failures],
+        },
+    )
 
 
 def check_evidence_quality(
     product: ProductScore,
-    min_chunks: int = DEFAULT_MIN_CHUNKS,
-    min_tokens: int = DEFAULT_MIN_TOKENS,
-    min_score: float = DEFAULT_MIN_SCORE,
+    min_chunks: int = MIN_EVIDENCE_CHUNKS,
+    min_tokens: int = MIN_EVIDENCE_TOKENS,
+    min_score: float = MIN_RETRIEVAL_SCORE,
 ) -> EvidenceQuality:
     """
     Check if evidence meets quality thresholds for explanation generation.
@@ -92,12 +63,23 @@ def check_evidence_quality(
     chunks = product.evidence
     chunk_count = len(chunks)
 
+    if not chunks:
+        _log_refusal(product.product_id, 0, 0, 0.0, [RefusalType.INSUFFICIENT_CHUNKS])
+        return EvidenceQuality(
+            is_sufficient=False,
+            chunk_count=0,
+            total_tokens=0,
+            top_score=0.0,
+            refusal_type=RefusalType.INSUFFICIENT_CHUNKS,
+        )
+
     # Calculate total tokens (estimate from char count)
     total_chars = sum(len(c.text) for c in chunks)
     total_tokens = total_chars // CHARS_PER_TOKEN
 
     # Get top retrieval score
-    top_score = product.score if product.score else 0.0
+    top_chunk = product.top_evidence
+    top_score = top_chunk.score if top_chunk else 0.0
 
     # Check thresholds using table-driven validation
     thresholds = [
@@ -106,15 +88,18 @@ def check_evidence_quality(
         (top_score < min_score, RefusalType.LOW_RELEVANCE),
     ]
 
-    for failed, refusal_type in thresholds:
-        if failed:
-            return EvidenceQuality(
-                is_sufficient=False,
-                chunk_count=chunk_count,
-                total_tokens=total_tokens,
-                top_score=top_score,
-                refusal_type=refusal_type,
-            )
+    # Collect all failures for debugging visibility
+    failures = [refusal_type for failed, refusal_type in thresholds if failed]
+
+    if failures:
+        _log_refusal(product.product_id, chunk_count, total_tokens, top_score, failures)
+        return EvidenceQuality(
+            is_sufficient=False,
+            chunk_count=chunk_count,
+            total_tokens=total_tokens,
+            top_score=top_score,
+            refusal_type=failures[0],
+        )
 
     return EvidenceQuality(
         is_sufficient=True,
