@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import string
 import threading
 import time
 from contextlib import contextmanager
@@ -229,7 +230,7 @@ def timed_operation(
 def normalize_text(text: str) -> str:
     """Normalize text for fuzzy matching.
 
-    Converts to lowercase and collapses whitespace.
+    Converts to lowercase, strips punctuation, and collapses whitespace.
 
     Args:
         text: Text to normalize.
@@ -237,7 +238,8 @@ def normalize_text(text: str) -> str:
     Returns:
         Normalized text string.
     """
-    return " ".join(text.lower().split())
+    text = text.lower().translate(str.maketrans("", "", string.punctuation))
+    return " ".join(text.split())
 
 
 def normalize_vectors(vectors: np.ndarray, eps: float = 1e-10) -> np.ndarray:

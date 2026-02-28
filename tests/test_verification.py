@@ -54,6 +54,14 @@ class TestNormalizeText:
     def test_strips(self):
         assert normalize_text("  hello  ") == "hello"
 
+    def test_strips_punctuation(self):
+        assert normalize_text("excellent!") == "excellent"
+        assert normalize_text("Hello, World!") == "hello world"
+
+    def test_strips_apostrophes(self):
+        assert normalize_text("don't") == "dont"
+        assert normalize_text("it's great") == "its great"
+
 
 class TestVerifyQuoteInEvidence:
     def test_exact_match(self):
@@ -74,6 +82,21 @@ class TestVerifyQuoteInEvidence:
     def test_empty_evidence(self):
         result = verify_quote_in_evidence("any quote", [])
         assert result.found is False
+
+    def test_punctuation_in_quote_matches_without(self):
+        evidence = ["The product is excellent"]
+        result = verify_quote_in_evidence("excellent!", evidence)
+        assert result.found is True
+
+    def test_punctuation_in_evidence_matches_without(self):
+        evidence = ["The product is excellent!"]
+        result = verify_quote_in_evidence("excellent", evidence)
+        assert result.found is True
+
+    def test_apostrophe_mismatch_matches(self):
+        evidence = ["I don't recommend this"]
+        result = verify_quote_in_evidence("dont recommend", evidence)
+        assert result.found is True
 
 
 class TestVerifyExplanation:

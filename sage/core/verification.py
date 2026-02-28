@@ -111,7 +111,7 @@ def extract_quotes(text: str, min_length: int = 4) -> list[str]:
 def verify_quote_in_evidence(
     quote: str,
     evidence_texts: list[str],
-    fuzzy_threshold: float = 0.8,
+    prefix_ratio: float = 0.8,
 ) -> QuoteVerification:
     """
     Verify a quote exists in the evidence.
@@ -122,7 +122,7 @@ def verify_quote_in_evidence(
     Args:
         quote: The quoted text to verify.
         evidence_texts: List of evidence texts to search.
-        fuzzy_threshold: Minimum word overlap for partial match (0-1).
+        prefix_ratio: Minimum word overlap for partial match (0-1).
 
     Returns:
         QuoteVerification with found status and source.
@@ -140,7 +140,7 @@ def verify_quote_in_evidence(
         quote_words = quote_norm.split()
         if len(quote_words) >= 3:
             # Check if first N words appear in evidence
-            n_words = max(3, int(len(quote_words) * fuzzy_threshold))
+            n_words = max(3, int(len(quote_words) * prefix_ratio))
             partial = " ".join(quote_words[:n_words])
             if partial in evidence_norm:
                 return QuoteVerification(quote=quote, found=True, source_text=evidence)
@@ -273,47 +273,24 @@ def verify_citation(
 
     # If no quote to verify, the ID match is sufficient
     if not quote_text:
-        source_text = evidence_texts[matching_indices[0]]
         return CitationResult(
             citation_id=citation_id,
             found=True,
             quote_text=quote_text,
-            source_text=source_text,
+            source_text=evidence_texts[matching_indices[0]],
         )
 
-    # Check quote against ALL chunks for this review ID
-    quote_norm = normalize_text(quote_text)
-    quote_words = quote_norm.split()
-    partial = " ".join(quote_words[:3]) if len(quote_words) >= 3 else None
+    # Check quote against all chunks for this review ID using shared logic
+    matching_texts = [
+        evidence_texts[i] for i in matching_indices if i < len(evidence_texts)
+    ]
+    result = verify_quote_in_evidence(quote_text, matching_texts)
 
-    for idx in matching_indices:
-        chunk_text = evidence_texts[idx] if idx < len(evidence_texts) else None
-        if not chunk_text:
-            continue
-        source_text = chunk_text
-        source_norm = normalize_text(source_text)
-
-        if quote_norm in source_norm:
-            return CitationResult(
-                citation_id=citation_id,
-                found=True,
-                quote_text=quote_text,
-                source_text=source_text,
-            )
-        if partial and partial in source_norm:
-            return CitationResult(
-                citation_id=citation_id,
-                found=True,
-                quote_text=quote_text,
-                source_text=source_text,
-            )
-
-    # Quote not found in any chunk for this review ID
     return CitationResult(
         citation_id=citation_id,
-        found=False,
+        found=result.found,
         quote_text=quote_text,
-        source_text=evidence_texts[matching_indices[0]],
+        source_text=result.source_text or evidence_texts[matching_indices[0]],
     )
 
 
