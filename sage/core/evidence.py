@@ -166,10 +166,14 @@ def generate_refusal_message(
         )
     elif "low_relevance" in reason:
         return (
-            f'I cannot recommend this product for your query about "{query}" because '
-            f"the available reviews do not appear to be sufficiently relevant "
-            f"(relevance score: {quality.top_score:.2f}). The reviews may discuss "
-            f"different aspects or product features than what you're looking for."
+            f'I found reviews for this product, but none of them discuss "{query}" '
+            f"specifically. The reviews I found focus on other features or use cases, "
+            f"so I can't give you a grounded answer about what you're asking.\n\n"
+            f"You could try:\n"
+            f'- Broadening your search (e.g., "wireless earbuds" instead of '
+            f'"wireless earbuds for running")\n'
+            f"- Asking about a specific feature mentioned in the product description\n"
+            f"- Searching for a different product that better matches your needs"
         )
     else:
         return (
