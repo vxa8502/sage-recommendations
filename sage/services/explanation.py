@@ -15,13 +15,11 @@ from sage.core import (
     ExplanationResult,
     ProductScore,
     StreamingExplanation,
-    VerificationResult,
     build_explanation_prompt,
     check_evidence_quality,
     check_forbidden_phrases,
     generate_refusal_message,
     verify_citations,
-    verify_explanation,
     STRICT_SYSTEM_PROMPT,
 )
 
@@ -187,8 +185,9 @@ class Explainer:
                 )
 
         # Verify citation IDs match provided evidence
+        citation_result = None
         if verify_citations_flag:
-            _verify_and_log_citations(
+            citation_result = _verify_and_log_citations(
                 explanation, evidence_ids, evidence_texts, product.product_id
             )
 
@@ -200,6 +199,7 @@ class Explainer:
             evidence_ids=evidence_ids,
             tokens_used=total_tokens,
             model=self.model,
+            citation_verification=citation_result,
         )
 
     def generate_explanation_stream(
@@ -258,67 +258,6 @@ class Explainer:
             evidence_ids=evidence_ids,
             model=self.model,
         )
-
-    def generate_explanation_verified(
-        self,
-        query: str,
-        product: ProductScore,
-        max_evidence: int = 3,
-        max_retries: int = 2,
-        enforce_quality_gate: bool = True,
-    ) -> tuple[ExplanationResult, VerificationResult]:
-        """
-        Generate an explanation with post-generation verification.
-
-        Args:
-            query: User's original query.
-            product: ProductScore with evidence chunks.
-            max_evidence: Maximum evidence chunks to include.
-            max_retries: Maximum regeneration attempts.
-            enforce_quality_gate: If True, check evidence quality first.
-
-        Returns:
-            Tuple of (ExplanationResult, VerificationResult).
-        """
-        # Check evidence quality gate first
-        if enforce_quality_gate:
-            quality = check_evidence_quality(product)
-            if not quality.is_sufficient:
-                result = _build_refusal_result(query, product, quality, max_evidence)
-                verification = VerificationResult(
-                    all_verified=True, quotes_found=0, quotes_missing=0
-                )
-                return result, verification
-
-        explanation, tokens, evidence_texts, evidence_ids, user_prompt = (
-            self._build_and_generate(query, product, max_evidence)
-        )
-        total_tokens = tokens
-
-        verification = verify_explanation(explanation, evidence_texts)
-
-        # Retry with stricter prompt if verification fails
-        attempts = 1
-        while not verification.all_verified and attempts <= max_retries:
-            explanation, tokens = self.client.generate(
-                system=STRICT_SYSTEM_PROMPT,
-                user=user_prompt,
-            )
-            total_tokens += tokens
-            verification = verify_explanation(explanation, evidence_texts)
-            attempts += 1
-
-        result = ExplanationResult(
-            explanation=explanation.strip(),
-            product_id=product.product_id,
-            query=query,
-            evidence_texts=evidence_texts,
-            evidence_ids=evidence_ids,
-            tokens_used=total_tokens,
-            model=self.model,
-        )
-
-        return result, verification
 
     def generate_explanations_batch(
         self,

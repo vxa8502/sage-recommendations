@@ -31,7 +31,6 @@ from sage.core import (
     AggregationMethod,
     ExplanationResult,
     ProductScore,
-    verify_citations,
 )
 from sage.services.retrieval import get_candidates
 
@@ -390,10 +389,11 @@ def _generate_explanation_for_product(
     explainer,
     detector,
 ) -> tuple:
-    """Generate explanation, HHEM score, and citation verification for a product.
+    """Generate explanation and HHEM score for a product.
 
     Thread-safe: LLM clients use httpx, HHEM model is read-only.
-    Returns (ExplanationResult, HallucinationResult, CitationVerificationResult).
+    Returns (ExplanationResult, HallucinationResult).
+    Citation verification is embedded in ExplanationResult.citation_verification.
     """
     er = explainer.generate_explanation(
         query=query,
@@ -404,8 +404,7 @@ def _generate_explanation_for_product(
         evidence_texts=er.evidence_texts,
         explanation=er.explanation,
     )
-    cr = verify_citations(er.explanation, er.evidence_ids, er.evidence_texts)
-    return er, hr, cr
+    return er, hr
 
 
 def _generate_explanations_parallel(
@@ -452,7 +451,6 @@ def _build_recommendation_with_explanation(
     product: ProductScore,
     er: ExplanationResult,
     hr,
-    cr,
 ) -> dict:
     """Build recommendation dict with explanation and confidence metrics."""
     rec = _build_product_dict(rank, product)
@@ -462,7 +460,9 @@ def _build_recommendation_with_explanation(
         "is_grounded": not hr.is_hallucinated,
         "threshold": hr.threshold,
     }
-    rec["citations_verified"] = cr.all_valid
+    rec["citations_verified"] = (
+        er.citation_verification.all_valid if er.citation_verification else None
+    )
     rec["evidence_sources"] = _build_evidence_list(er)
     return rec
 
@@ -504,8 +504,8 @@ def _sync_recommend(
             q, products, app.state.explainer, app.state.detector
         )
         recommendations = [
-            _build_recommendation_with_explanation(i, product, er, hr, cr)
-            for i, (product, (er, hr, cr)) in enumerate(explanation_results, 1)
+            _build_recommendation_with_explanation(i, product, er, hr)
+            for i, (product, (er, hr)) in enumerate(explanation_results, 1)
         ]
     else:
         recommendations = [

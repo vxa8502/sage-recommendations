@@ -170,6 +170,7 @@ class ExplanationResult:
     evidence_ids: list[str]
     tokens_used: int
     model: str
+    citation_verification: CitationVerificationResult | None = None
 
     def to_evidence_dicts(self) -> list[dict]:
         """Build serializable evidence list from ids and texts."""
@@ -223,6 +224,7 @@ class StreamingExplanation:
             evidence_ids=self.evidence_ids,
             tokens_used=0,  # Not available in streaming mode
             model=self.model,
+            citation_verification=None,  # Streaming skips verification for speed
         )
 
 
