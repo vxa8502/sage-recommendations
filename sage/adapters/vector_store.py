@@ -12,6 +12,7 @@ from time import perf_counter
 
 if TYPE_CHECKING:
     import numpy as np
+    from qdrant_client import QdrantClient
 
 from sage.core import Chunk
 from sage.config import (
@@ -21,7 +22,7 @@ from sage.config import (
     QDRANT_URL,
     get_logger,
 )
-from sage.utils import require_import
+from sage.utils import require_import, thread_safe_singleton
 
 logger = get_logger(__name__)
 
@@ -36,9 +37,10 @@ def _generate_point_id(review_id: str, chunk_index: int) -> str:
     return hashlib.md5(key.encode()).hexdigest()
 
 
-def get_client():
+@thread_safe_singleton
+def get_client() -> "QdrantClient":
     """
-    Create a Qdrant client connection.
+    Get or create the global Qdrant client connection.
 
     Returns:
         QdrantClient instance.
