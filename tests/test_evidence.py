@@ -13,10 +13,17 @@ class TestCheckEvidenceQuality:
         assert quality.failure_reason is None
 
     def test_too_few_chunks_fails(self, make_product):
-        product = make_product(score=0.85, n_chunks=1, text_len=300)
+        # Use values that OBVIOUSLY pass other thresholds
+        product = make_product(score=0.99, n_chunks=1, text_len=10000)
         quality = check_evidence_quality(product, min_chunks=2)
         assert quality.is_sufficient is False
         assert "chunk" in quality.failure_reason.lower()
+
+    def test_exact_min_chunks_passes(self, make_product):
+        """Boundary: exactly min_chunks should pass (verifies < not <=)."""
+        product = make_product(score=0.85, n_chunks=2, text_len=300)
+        quality = check_evidence_quality(product, min_chunks=2)
+        assert quality.is_sufficient is True
 
     def test_too_few_tokens_fails(self, make_product):
         product = make_product(score=0.85, n_chunks=3, text_len=5)
