@@ -29,6 +29,14 @@ class AggregationMethod(Enum):
     WEIGHTED_MEAN = "weighted_mean"
 
 
+class RefusalType(Enum):
+    """Reasons for refusing to generate an explanation due to insufficient evidence."""
+
+    INSUFFICIENT_CHUNKS = "insufficient_chunks"
+    INSUFFICIENT_TOKENS = "insufficient_tokens"
+    LOW_RELEVANCE = "low_relevance"
+
+
 @dataclass
 class Chunk:
     """
@@ -232,7 +240,7 @@ class EvidenceQuality:
     chunk_count: int
     total_tokens: int
     top_score: float
-    failure_reason: str | None = None
+    refusal_type: RefusalType | None = None
 
 
 # ============================================================================

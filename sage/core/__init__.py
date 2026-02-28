@@ -12,6 +12,7 @@ from sage.core.models import (
     Chunk,
     ProductScore,
     Recommendation,
+    RefusalType,
     RetrievedChunk,
     # Cold Start
     NewItem,
@@ -92,6 +93,7 @@ __all__ = [
     "Chunk",
     "ProductScore",
     "Recommendation",
+    "RefusalType",
     "RetrievedChunk",
     "NewItem",
     "UserPreferences",

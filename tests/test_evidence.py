@@ -3,6 +3,7 @@
 import pytest
 
 from sage.core.evidence import check_evidence_quality, generate_refusal_message
+from sage.core.models import RefusalType
 
 
 class TestCheckEvidenceQuality:
@@ -10,14 +11,14 @@ class TestCheckEvidenceQuality:
         product = make_product(score=0.85, n_chunks=3, text_len=300)
         quality = check_evidence_quality(product)
         assert quality.is_sufficient is True
-        assert quality.failure_reason is None
+        assert quality.refusal_type is None
 
     def test_too_few_chunks_fails(self, make_product):
         # Use values that OBVIOUSLY pass other thresholds
         product = make_product(score=0.99, n_chunks=1, text_len=10000)
         quality = check_evidence_quality(product, min_chunks=2)
         assert quality.is_sufficient is False
-        assert "chunk" in quality.failure_reason.lower()
+        assert quality.refusal_type == RefusalType.INSUFFICIENT_CHUNKS
 
     def test_exact_min_chunks_passes(self, make_product):
         """Boundary: exactly min_chunks should pass (verifies < not <=)."""
@@ -29,16 +30,13 @@ class TestCheckEvidenceQuality:
         product = make_product(score=0.85, n_chunks=3, text_len=5)
         quality = check_evidence_quality(product, min_tokens=50)
         assert quality.is_sufficient is False
-        assert "token" in quality.failure_reason.lower()
+        assert quality.refusal_type == RefusalType.INSUFFICIENT_TOKENS
 
     def test_low_relevance_fails(self, make_product):
         product = make_product(score=0.3, n_chunks=3, text_len=300)
         quality = check_evidence_quality(product, min_score=0.7)
         assert quality.is_sufficient is False
-        assert (
-            "relevance" in quality.failure_reason.lower()
-            or "score" in quality.failure_reason.lower()
-        )
+        assert quality.refusal_type == RefusalType.LOW_RELEVANCE
 
     def test_tracks_chunk_count(self, make_product):
         product = make_product(score=0.85, n_chunks=4, text_len=200)

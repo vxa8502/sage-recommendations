@@ -21,7 +21,7 @@ import argparse
 
 import numpy as np
 
-from sage.core import AggregationMethod, ProductScore, RetrievedChunk
+from sage.core import AggregationMethod, ProductScore, RefusalType, RetrievedChunk
 from sage.config import (
     LLM_PROVIDER,
     get_logger,
@@ -163,16 +163,17 @@ def run_quality_gate_tests():
 
     log_section(logger, "1. QUALITY CHECK FUNCTION")
     test_cases = [
-        (3, 100, 0.85, True, "sufficient"),
-        (1, 100, 0.85, False, "insufficient_chunks"),
-        (2, 10, 0.85, False, "insufficient_tokens"),
-        (3, 100, 0.5, False, "low_relevance"),
+        (3, 100, 0.85, True, None),
+        (1, 100, 0.85, False, RefusalType.INSUFFICIENT_CHUNKS),
+        (2, 10, 0.85, False, RefusalType.INSUFFICIENT_TOKENS),
+        (3, 100, 0.5, False, RefusalType.LOW_RELEVANCE),
     ]
 
-    for n_chunks, tok, score, expected, reason in test_cases:
+    for n_chunks, tok, score, expected, expected_type in test_cases:
         product = create_mock_product(n_chunks, tok, score)
         quality = check_evidence_quality(product)
         status = "PASS" if quality.is_sufficient == expected else "FAIL"
+        reason = expected_type.value if expected_type else "sufficient"
         logger.info(
             "[%s] %d chunks, %d tok, score=%.2f -> %s",
             status,
@@ -194,7 +195,7 @@ def run_quality_gate_tests():
         logger.info(
             "[%s] Refusal detected for %s",
             "PASS" if detected else "FAIL",
-            quality.failure_reason,
+            quality.refusal_type.value if quality.refusal_type else "unknown",
         )
         assert detected
 

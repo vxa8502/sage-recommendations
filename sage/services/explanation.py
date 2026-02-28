@@ -228,8 +228,11 @@ class Explainer:
         if enforce_quality_gate:
             quality = check_evidence_quality(product)
             if not quality.is_sufficient:
+                reason = (
+                    quality.refusal_type.value if quality.refusal_type else "unknown"
+                )
                 raise ValueError(
-                    f"Evidence quality insufficient: {quality.failure_reason}. "
+                    f"Evidence quality insufficient: {reason}. "
                     "Use generate_explanation() for structured refusal."
                 )
 

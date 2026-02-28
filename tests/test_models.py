@@ -5,6 +5,7 @@ from sage.core.models import (
     EvidenceQuality,
     NewItem,
     ProductScore,
+    RefusalType,
     RetrievedChunk,
     StreamingExplanation,
 )
@@ -135,7 +136,7 @@ class TestEvidenceQuality:
             top_score=0.9,
         )
         assert eq.is_sufficient is True
-        assert eq.failure_reason is None
+        assert eq.refusal_type is None
 
     def test_insufficient_with_reason(self):
         eq = EvidenceQuality(
@@ -143,7 +144,7 @@ class TestEvidenceQuality:
             chunk_count=1,
             total_tokens=20,
             top_score=0.3,
-            failure_reason="insufficient_chunks",
+            refusal_type=RefusalType.INSUFFICIENT_CHUNKS,
         )
         assert eq.is_sufficient is False
-        assert eq.failure_reason == "insufficient_chunks"
+        assert eq.refusal_type == RefusalType.INSUFFICIENT_CHUNKS

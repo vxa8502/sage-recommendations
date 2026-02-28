@@ -7,7 +7,7 @@ strongly with LLM overclaiming.
 """
 
 from sage.config import CHARS_PER_TOKEN
-from sage.core.models import EvidenceQuality, ProductScore
+from sage.core.models import EvidenceQuality, ProductScore, RefusalType
 
 
 # =============================================================================
@@ -101,25 +101,19 @@ def check_evidence_quality(
 
     # Check thresholds using table-driven validation
     thresholds = [
-        (
-            chunk_count < min_chunks,
-            f"insufficient_chunks: {chunk_count} < {min_chunks}",
-        ),
-        (
-            total_tokens < min_tokens,
-            f"insufficient_tokens: {total_tokens} < {min_tokens}",
-        ),
-        (top_score < min_score, f"low_relevance: {top_score:.3f} < {min_score}"),
+        (chunk_count < min_chunks, RefusalType.INSUFFICIENT_CHUNKS),
+        (total_tokens < min_tokens, RefusalType.INSUFFICIENT_TOKENS),
+        (top_score < min_score, RefusalType.LOW_RELEVANCE),
     ]
 
-    for failed, reason in thresholds:
+    for failed, refusal_type in thresholds:
         if failed:
             return EvidenceQuality(
                 is_sufficient=False,
                 chunk_count=chunk_count,
                 total_tokens=total_tokens,
                 top_score=top_score,
-                failure_reason=reason,
+                refusal_type=refusal_type,
             )
 
     return EvidenceQuality(
@@ -149,24 +143,25 @@ def generate_refusal_message(
     Returns:
         Refusal message string.
     """
-    reason = quality.failure_reason or ""
+    sanitized = query.replace('"', "'")
+    safe_query = sanitized if len(sanitized) <= 100 else sanitized[:97] + "..."
 
-    if "insufficient_chunks" in reason:
+    if quality.refusal_type == RefusalType.INSUFFICIENT_CHUNKS:
         return (
             f"I cannot provide a confident recommendation for this product based on "
             f"the available review evidence. Only {quality.chunk_count} review excerpt(s) "
             f"were found, which is insufficient to make a well-grounded recommendation "
-            f'for your query about "{query}".'
+            f'for your query about "{safe_query}".'
         )
-    elif "insufficient_tokens" in reason:
+    elif quality.refusal_type == RefusalType.INSUFFICIENT_TOKENS:
         return (
             f"I cannot provide a meaningful recommendation for this product. "
             f"The available review evidence is too brief ({quality.total_tokens} tokens) "
-            f'to support a well-grounded explanation for your query about "{query}".'
+            f'to support a well-grounded explanation for your query about "{safe_query}".'
         )
-    elif "low_relevance" in reason:
+    elif quality.refusal_type == RefusalType.LOW_RELEVANCE:
         return (
-            f'I found reviews for this product, but none of them discuss "{query}" '
+            f'I found reviews for this product, but none of them discuss "{safe_query}" '
             f"specifically. The reviews I found focus on other features or use cases, "
             f"so I can't give you a grounded answer about what you're asking.\n\n"
             f"You could try:\n"
@@ -178,5 +173,5 @@ def generate_refusal_message(
     else:
         return (
             f"I cannot provide a recommendation for this product due to "
-            f'insufficient review evidence for your query about "{query}".'
+            f'insufficient review evidence for your query about "{safe_query}".'
         )
