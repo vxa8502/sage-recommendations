@@ -49,6 +49,9 @@ REQUEST_TIMEOUT_SECONDS = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "10.0"))
 # Per-product timeout for streaming (allows partial results on timeout)
 STREAM_PRODUCT_TIMEOUT = float(os.getenv("STREAM_PRODUCT_TIMEOUT", "15.0"))
 
+# Default minimum rating filter (positive reviews only)
+DEFAULT_MIN_RATING = 4.0
+
 logger = get_logger(__name__)
 
 router = APIRouter()
@@ -73,10 +76,9 @@ async def root():
 class RequestFilters(BaseModel):
     """Optional filters for recommendation requests."""
 
-    category: str | None = Field(None, description="Product category filter")
-    min_price: float | None = Field(None, ge=0, description="Minimum price")
-    max_price: float | None = Field(None, ge=0, description="Maximum price (budget)")
-    min_rating: float = Field(4.0, ge=1.0, le=5.0, description="Minimum rating filter")
+    min_rating: float = Field(
+        DEFAULT_MIN_RATING, ge=1.0, le=5.0, description="Minimum rating filter"
+    )
 
 
 class RecommendationRequest(BaseModel):
@@ -84,9 +86,6 @@ class RecommendationRequest(BaseModel):
 
     query: str = Field(
         ..., min_length=1, max_length=500, description="Natural language search query"
-    )
-    user_id: str | None = Field(
-        None, description="Optional user ID for personalization"
     )
     k: int = Field(3, ge=1, le=10, description="Number of products to return")
     filters: RequestFilters | None = Field(None, description="Optional filters")
@@ -135,6 +134,8 @@ class RecommendationResponse(BaseModel):
 
     query: str
     recommendations: list[RecommendationItem]
+    requested_count: int
+    returned_count: int
 
 
 class HealthResponse(BaseModel):
@@ -181,6 +182,11 @@ class CacheStatsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+def _get_min_rating(request: RecommendationRequest) -> float:
+    """Extract min_rating from request, defaulting to DEFAULT_MIN_RATING."""
+    return request.filters.min_rating if request.filters else DEFAULT_MIN_RATING
+
+
 def _fetch_products(
     request: RecommendationRequest,
     app,
@@ -190,11 +196,10 @@ def _fetch_products(
 
     This is a blocking call - run via asyncio.to_thread() in async handlers.
     """
-    min_rating = request.filters.min_rating if request.filters else 4.0
     return get_candidates(
         query=request.query,
         k=request.k,
-        min_rating=min_rating,
+        min_rating=_get_min_rating(request),
         aggregation=AggregationMethod.MAX,
         client=app.state.qdrant,
         embedder=app.state.embedder,
@@ -439,10 +444,12 @@ def _generate_explanations_parallel(
                     product.product_id,
                     _EXPLAIN_WORKER_TIMEOUT,
                 )
+                record_error("explanation_timeout")
             except Exception:
                 logger.exception(
                     "Explanation failed for product %s", product.product_id
                 )
+                record_error("explanation_failure")
     return results
 
 
@@ -479,7 +486,7 @@ def _sync_recommend(
     cache = app.state.cache
     q = body.query
     explain = body.explain
-    min_rating = body.filters.min_rating if body.filters else 4.0
+    min_rating = _get_min_rating(body)
     cache_key = _build_cache_key(q, body.k, explain, min_rating)
 
     # Check cache before any heavy work (explain path only).
@@ -493,7 +500,12 @@ def _sync_recommend(
 
     products = _fetch_products(body, app, query_embedding=query_embedding)
     if not products:
-        return {"query": q, "recommendations": []}
+        return {
+            "query": q,
+            "recommendations": [],
+            "requested_count": body.k,
+            "returned_count": 0,
+        }
 
     # Build recommendations with or without explanations
     if explain:
@@ -512,7 +524,12 @@ def _sync_recommend(
             _build_product_dict(i, product) for i, product in enumerate(products, 1)
         ]
 
-    result = {"query": q, "recommendations": recommendations}
+    result = {
+        "query": q,
+        "recommendations": recommendations,
+        "requested_count": body.k,
+        "returned_count": len(recommendations),
+    }
 
     # Store in cache (explain path only)
     if explain:
@@ -533,7 +550,7 @@ def _sync_recommend(
 async def recommend(request: Request, body: RecommendationRequest):
     """Return product recommendations with optional grounded explanations.
 
-    Accepts JSON body with query, optional user_id, filters, and k.
+    Accepts JSON body with query, filters, and k.
     Async handler with 10s timeout - if LLM hangs, returns partial results.
     """
     app = request.app
@@ -744,7 +761,7 @@ async def _stream_recommendations(
 async def recommend_stream(request: Request, body: RecommendationRequest):
     """Stream product recommendations with explanations via SSE.
 
-    Accepts JSON body with query, optional user_id, filters, and k.
+    Accepts JSON body with query, filters, and k.
 
     The streaming path does not check or populate the semantic cache and
     does not compute HHEM confidence scores. For cached or grounded

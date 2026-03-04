@@ -124,6 +124,8 @@ class TestRecommendEndpoint:
         assert resp.status_code == 200
         data = resp.json()
         assert data["recommendations"] == []
+        assert data["requested_count"] == 3  # default k
+        assert data["returned_count"] == 0
 
     @patch("sage.api.routes.get_candidates")
     def test_returns_products_without_explain(
@@ -136,6 +138,8 @@ class TestRecommendEndpoint:
             assert resp.status_code == 200
             data = resp.json()
             assert len(data["recommendations"]) == 1
+            assert data["requested_count"] == 3  # default k
+            assert data["returned_count"] == 1
             rec = data["recommendations"][0]
             assert rec["product_id"] == "P1"
             assert rec["rank"] == 1
@@ -160,6 +164,9 @@ class TestRecommendEndpoint:
             assert resp.status_code == 200
             data = resp.json()
             assert len(data["recommendations"]) == 1
+            # Partial result: requested 5, got 1
+            assert data["requested_count"] == 5
+            assert data["returned_count"] == 1
 
     @patch("sage.api.routes.get_candidates")
     def test_explainer_unavailable_returns_503(
@@ -536,3 +543,387 @@ class TestStreamingEndpoint:
             assert metadata["verified"] is False
             assert metadata["cache"] is False
             assert metadata["hhem"] is False
+
+
+class TestCacheHitPath:
+    """E2e tests for cache hit behavior through the /recommend endpoint.
+
+    These tests verify that:
+    - Identical queries return cached responses (exact hit)
+    - Similar queries return cached responses (semantic hit)
+    - Different queries do not hit cache (miss)
+    """
+
+    @pytest.fixture
+    def mock_embedder(self):
+        """Embedder that returns controllable embeddings."""
+        from sage.config import EMBEDDING_DIM
+        import numpy as np
+
+        embedder = MagicMock()
+
+        def embed_single_query(text: str) -> np.ndarray:
+            # Return consistent embedding based on text hash for reproducibility
+            # Similar texts get similar embeddings via small perturbations
+            np.random.seed(hash(text.lower().strip()) % (2**32))
+            base = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+            return base / np.linalg.norm(base)
+
+        embedder.embed_single_query = embed_single_query
+        return embedder
+
+    @pytest.fixture
+    def mock_explainer_with_result(self, sample_product):
+        """Explainer that returns valid ExplanationResult."""
+        from sage.core.models import ExplanationResult
+
+        explainer = MagicMock()
+        explainer.client = MagicMock()
+
+        def generate_explanation(query, product, max_evidence):
+            return ExplanationResult(
+                explanation="Great product with excellent reviews.",
+                product_id=product.product_id,
+                query=query,
+                evidence_texts=["Good quality", "Highly recommend"],
+                evidence_ids=["r1", "r2"],
+                tokens_used=50,
+                model="test-model",
+                citation_verification=None,
+            )
+
+        explainer.generate_explanation = generate_explanation
+        return explainer
+
+    @pytest.fixture
+    def mock_detector_with_result(self):
+        """Detector that returns valid HallucinationResult."""
+        from sage.core.models import HallucinationResult
+
+        detector = MagicMock()
+
+        def check_explanation(evidence_texts, explanation):
+            return HallucinationResult(
+                score=0.85,
+                is_hallucinated=False,
+                threshold=0.5,
+                explanation=explanation,
+                premise_length=len(" ".join(evidence_texts)),
+            )
+
+        detector.check_explanation = check_explanation
+        return detector
+
+    @patch("sage.api.routes.get_candidates")
+    def test_identical_query_returns_exact_cache_hit(
+        self,
+        mock_get_candidates,
+        sample_product,
+        mock_embedder,
+        mock_explainer_with_result,
+        mock_detector_with_result,
+    ):
+        """Second identical query should return cached response (exact hit)."""
+        from sage.services.cache import SemanticCache
+
+        mock_get_candidates.return_value = [sample_product]
+        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
+
+        app = _make_app(
+            embedder=mock_embedder,
+            explainer=mock_explainer_with_result,
+            detector=mock_detector_with_result,
+            cache=cache,
+        )
+
+        with TestClient(app) as c:
+            # First request - should miss cache and populate it
+            resp1 = c.post(
+                "/recommend",
+                json={"query": "wireless headphones", "k": 3, "explain": True},
+            )
+            assert resp1.status_code == 200
+            data1 = resp1.json()
+
+            # Verify cache was populated
+            stats_after_first = cache.stats()
+            assert stats_after_first.misses == 1
+            assert stats_after_first.size == 1
+
+            # Second identical request - should hit cache
+            resp2 = c.post(
+                "/recommend",
+                json={"query": "wireless headphones", "k": 3, "explain": True},
+            )
+            assert resp2.status_code == 200
+            data2 = resp2.json()
+
+            # Verify exact cache hit
+            stats_after_second = cache.stats()
+            assert stats_after_second.exact_hits == 1
+            assert stats_after_second.misses == 1  # Still just 1 miss
+
+            # Responses should be identical
+            assert data1 == data2
+
+            # get_candidates should only be called once (first request)
+            assert mock_get_candidates.call_count == 1
+
+    @patch("sage.api.routes.get_candidates")
+    def test_similar_query_returns_semantic_cache_hit(
+        self,
+        mock_get_candidates,
+        sample_product,
+        mock_explainer_with_result,
+        mock_detector_with_result,
+    ):
+        """Similar query (high cosine similarity) should return semantic cache hit."""
+        from sage.services.cache import SemanticCache
+        from sage.config import EMBEDDING_DIM
+        import numpy as np
+
+        mock_get_candidates.return_value = [sample_product]
+
+        # Create embedder that returns similar embeddings for similar queries
+        embedder = MagicMock()
+        base_embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+        base_embedding = base_embedding / np.linalg.norm(base_embedding)
+
+        def embed_with_similarity(text: str) -> np.ndarray:
+            # "wireless headphones" and "best wireless headphones" get very similar embeddings
+            # Other queries get different embeddings
+            if "wireless headphones" in text.lower():
+                # Small perturbation for similar queries (cosine sim > 0.95)
+                noise = np.random.rand(EMBEDDING_DIM).astype(np.float32) * 0.05
+                result = base_embedding + noise
+                return result / np.linalg.norm(result)
+            else:
+                # Completely different embedding
+                different = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+                return different / np.linalg.norm(different)
+
+        embedder.embed_single_query = embed_with_similarity
+
+        # Use a lower similarity threshold to ensure semantic hits
+        cache = SemanticCache(
+            max_entries=100, ttl_seconds=3600, similarity_threshold=0.90
+        )
+
+        app = _make_app(
+            embedder=embedder,
+            explainer=mock_explainer_with_result,
+            detector=mock_detector_with_result,
+            cache=cache,
+        )
+
+        with TestClient(app) as c:
+            # First request
+            resp1 = c.post(
+                "/recommend",
+                json={"query": "wireless headphones", "k": 3, "explain": True},
+            )
+            assert resp1.status_code == 200
+
+            stats_after_first = cache.stats()
+            assert stats_after_first.misses == 1
+            assert stats_after_first.size == 1
+
+            # Second request with similar query (should get semantic hit)
+            resp2 = c.post(
+                "/recommend",
+                json={"query": "best wireless headphones", "k": 3, "explain": True},
+            )
+            assert resp2.status_code == 200
+
+            # Verify semantic cache hit
+            stats_after_second = cache.stats()
+            assert stats_after_second.semantic_hits == 1
+            assert stats_after_second.misses == 1  # Still just 1 miss
+
+            # get_candidates called only once (semantic hit reused first result)
+            assert mock_get_candidates.call_count == 1
+
+    @patch("sage.api.routes.get_candidates")
+    def test_different_query_does_not_hit_cache(
+        self,
+        mock_get_candidates,
+        sample_product,
+        mock_embedder,
+        mock_explainer_with_result,
+        mock_detector_with_result,
+    ):
+        """Completely different query should miss cache."""
+        from sage.services.cache import SemanticCache
+
+        mock_get_candidates.return_value = [sample_product]
+        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
+
+        app = _make_app(
+            embedder=mock_embedder,
+            explainer=mock_explainer_with_result,
+            detector=mock_detector_with_result,
+            cache=cache,
+        )
+
+        with TestClient(app) as c:
+            # First request
+            resp1 = c.post(
+                "/recommend",
+                json={"query": "wireless headphones", "k": 3, "explain": True},
+            )
+            assert resp1.status_code == 200
+
+            # Second request with completely different query
+            resp2 = c.post(
+                "/recommend",
+                json={"query": "gaming laptop", "k": 3, "explain": True},
+            )
+            assert resp2.status_code == 200
+
+            # Both should be cache misses
+            stats = cache.stats()
+            assert stats.misses == 2
+            assert stats.exact_hits == 0
+            assert stats.semantic_hits == 0
+            assert stats.size == 2  # Both cached separately
+
+            # get_candidates called twice (no cache hits)
+            assert mock_get_candidates.call_count == 2
+
+    @patch("sage.api.routes.get_candidates")
+    def test_same_query_different_k_no_exact_cache_hit(
+        self,
+        mock_get_candidates,
+        sample_product,
+        mock_embedder,
+        mock_explainer_with_result,
+        mock_detector_with_result,
+    ):
+        """Same query with different k parameter should not get exact cache hit.
+
+        Note: The semantic cache (L2) matches on embedding similarity alone,
+        so identical query text with different k values will get a semantic hit.
+        This test verifies L1 (exact) correctly differentiates by cache key.
+        """
+        from sage.services.cache import SemanticCache
+
+        mock_get_candidates.return_value = [sample_product]
+        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
+
+        app = _make_app(
+            embedder=mock_embedder,
+            explainer=mock_explainer_with_result,
+            detector=mock_detector_with_result,
+            cache=cache,
+        )
+
+        with TestClient(app) as c:
+            # First request with k=3
+            resp1 = c.post(
+                "/recommend",
+                json={"query": "headphones", "k": 3, "explain": True},
+            )
+            assert resp1.status_code == 200
+
+            # Second request with k=5 (different cache key)
+            resp2 = c.post(
+                "/recommend",
+                json={"query": "headphones", "k": 5, "explain": True},
+            )
+            assert resp2.status_code == 200
+
+            # L1 (exact) should not hit - different k means different cache key
+            stats = cache.stats()
+            assert stats.exact_hits == 0
+
+            # L2 (semantic) will hit because embeddings are identical for same text.
+            # This is current design - semantic match ignores k/explain/rating params.
+            # First request is a miss, second gets semantic hit.
+            assert stats.misses == 1
+            assert stats.semantic_hits == 1
+
+    @patch("sage.api.routes.get_candidates")
+    def test_explain_false_does_not_use_cache(
+        self,
+        mock_get_candidates,
+        sample_product,
+        mock_embedder,
+    ):
+        """Requests with explain=False should bypass cache entirely."""
+        from sage.services.cache import SemanticCache
+
+        mock_get_candidates.return_value = [sample_product]
+        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
+
+        app = _make_app(
+            embedder=mock_embedder,
+            cache=cache,
+        )
+
+        with TestClient(app) as c:
+            # Two identical requests with explain=False
+            resp1 = c.post(
+                "/recommend",
+                json={"query": "headphones", "explain": False},
+            )
+            assert resp1.status_code == 200
+
+            resp2 = c.post(
+                "/recommend",
+                json={"query": "headphones", "explain": False},
+            )
+            assert resp2.status_code == 200
+
+            # Cache should be untouched (explain=False bypasses cache)
+            stats = cache.stats()
+            assert stats.size == 0
+            assert stats.misses == 0
+            assert stats.exact_hits == 0
+
+            # Both requests hit get_candidates
+            assert mock_get_candidates.call_count == 2
+
+    @patch("sage.api.routes.get_candidates")
+    @patch("sage.api.routes.record_cache_event")
+    def test_cache_metrics_recorded_correctly(
+        self,
+        mock_record_cache_event,
+        mock_get_candidates,
+        sample_product,
+        mock_embedder,
+        mock_explainer_with_result,
+        mock_detector_with_result,
+    ):
+        """Verify cache hit/miss metrics are recorded via record_cache_event."""
+        from sage.services.cache import SemanticCache
+
+        mock_get_candidates.return_value = [sample_product]
+        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
+
+        app = _make_app(
+            embedder=mock_embedder,
+            explainer=mock_explainer_with_result,
+            detector=mock_detector_with_result,
+            cache=cache,
+        )
+
+        with TestClient(app) as c:
+            # First request - cache miss
+            c.post(
+                "/recommend",
+                json={"query": "headphones", "explain": True},
+            )
+
+            # Verify miss was recorded
+            mock_record_cache_event.assert_called_with("miss")
+
+            mock_record_cache_event.reset_mock()
+
+            # Second identical request - cache hit
+            c.post(
+                "/recommend",
+                json={"query": "headphones", "explain": True},
+            )
+
+            # Verify hit was recorded
+            mock_record_cache_event.assert_called_with("hit_exact")
