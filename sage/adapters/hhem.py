@@ -202,7 +202,7 @@ class HallucinationDetector:
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=512,
+                max_length=HHEM_MAX_TOKENS,
             ).to(self.device)
 
             with self._torch.no_grad():

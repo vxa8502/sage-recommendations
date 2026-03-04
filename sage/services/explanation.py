@@ -96,6 +96,11 @@ class Explainer:
         self.client = client or get_llm_client(provider)
         self.model = getattr(self.client, "model", "unknown")
 
+    def _generate_timed(self, system: str, user: str) -> tuple[str, int]:
+        """Run LLM generation with timing metrics."""
+        with timed_operation("LLM generation", logger, observe_llm_duration):
+            return self.client.generate(system=system, user=user)
+
     def _build_and_generate(
         self,
         query: str,
@@ -111,11 +116,7 @@ class Explainer:
             build_explanation_prompt(query, product, max_evidence)
         )
 
-        with timed_operation("LLM generation", logger, observe_llm_duration):
-            explanation, tokens = self.client.generate(
-                system=system_prompt,
-                user=user_prompt,
-            )
+        explanation, tokens = self._generate_timed(system_prompt, user_prompt)
         logger.info("Generated for %s: %d tokens", product.product_id, tokens)
 
         return explanation, tokens, evidence_texts, evidence_ids, user_prompt
@@ -167,9 +168,8 @@ class Explainer:
                     product.product_id,
                     phrase_check.violations,
                 )
-                explanation, tokens = self.client.generate(
-                    system=STRICT_SYSTEM_PROMPT,
-                    user=user_prompt,
+                explanation, tokens = self._generate_timed(
+                    STRICT_SYSTEM_PROMPT, user_prompt
                 )
                 total_tokens += tokens
                 phrase_check = check_forbidden_phrases(explanation)
