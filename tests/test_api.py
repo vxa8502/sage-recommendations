@@ -4,6 +4,7 @@ Uses a test app with mocked state to avoid loading heavy models.
 """
 
 from types import SimpleNamespace
+from typing import Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -11,7 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from sage.api.routes import router
-from sage.core.models import ProductScore, RetrievedChunk
+from sage.core.models import ProductScore, RetrievedChunk, StreamingExplanation
 
 
 def _make_app(**state_overrides) -> FastAPI:
@@ -215,6 +216,53 @@ def _parse_sse_events(response) -> list[tuple[str, dict]]:
     return events
 
 
+def _get_event(events: list[tuple[str, dict]], event_type: str) -> dict:
+    """Get first event of given type, or raise StopIteration."""
+    return next(e[1] for e in events if e[0] == event_type)
+
+
+def _get_events(events: list[tuple[str, dict]], event_type: str) -> list[dict]:
+    """Get all events of given type."""
+    return [e[1] for e in events if e[0] == event_type]
+
+
+def _make_stream_generator(
+    tokens: list[str] | None = None,
+) -> Callable[..., StreamingExplanation]:
+    """Create a mock generate_explanation_stream function.
+
+    Args:
+        tokens: Tokens to yield. Defaults to ["Test token."].
+    """
+    if tokens is None:
+        tokens = ["Test token."]
+
+    def generator(query, product, max_evidence) -> StreamingExplanation:
+        return StreamingExplanation(
+            token_iterator=iter(tokens),
+            product_id=product.product_id,
+            query=query,
+            evidence_texts=["Evidence text"],
+            evidence_ids=["r1"],
+            model="test-model",
+        )
+
+    return generator
+
+
+def _make_mock_explainer(
+    stream_fn: Callable[..., StreamingExplanation] | None = None,
+) -> MagicMock:
+    """Create a mock explainer with optional custom stream function."""
+    mock = MagicMock()
+    mock.client = MagicMock()
+    if stream_fn is not None:
+        mock.generate_explanation_stream = stream_fn
+    else:
+        mock.generate_explanation_stream = _make_stream_generator()
+    return mock
+
+
 class TestStreamingEndpoint:
     """Tests for POST /recommend/stream SSE endpoint."""
 
@@ -238,28 +286,10 @@ class TestStreamingEndpoint:
     @patch("sage.api.routes.get_candidates")
     def test_streams_product_tokens_and_done(self, mock_get_candidates, sample_product):
         """Verify streaming sends product, token, evidence, and done events."""
-        from sage.core.models import StreamingExplanation
-
         mock_get_candidates.return_value = [sample_product]
-
-        # Create a mock streaming explanation that yields tokens
         tokens = ["Great ", "noise ", "cancellation."]
 
-        def mock_generate_stream(query, product, max_evidence):
-            return StreamingExplanation(
-                token_iterator=iter(tokens),
-                product_id=product.product_id,
-                query=query,
-                evidence_texts=["Good sound quality"],
-                evidence_ids=["r1"],
-                model="test-model",
-            )
-
-        mock_explainer = MagicMock()
-        mock_explainer.client = MagicMock()
-        mock_explainer.generate_explanation_stream = mock_generate_stream
-
-        app = _make_app(explainer=mock_explainer)
+        app = _make_app(explainer=_make_mock_explainer(_make_stream_generator(tokens)))
         with TestClient(app) as c:
             resp = c.post(
                 "/recommend/stream",
@@ -277,48 +307,26 @@ class TestStreamingEndpoint:
             assert "done" in event_types, "Should end with done event"
 
             # Verify we got all tokens
-            token_events = [e for e in events if e[0] == "token"]
+            token_events = _get_events(events, "token")
             assert len(token_events) == len(tokens)
-            token_texts = [e[1]["text"] for e in token_events]
-            assert token_texts == tokens
+            assert [e["text"] for e in token_events] == tokens
 
             # Verify product data
-            product_events = [e for e in events if e[0] == "product"]
+            product_events = _get_events(events, "product")
             assert len(product_events) == 1
-            assert product_events[0][1]["product_id"] == "P1"
+            assert product_events[0]["product_id"] == "P1"
 
             # Verify done status
-            done_events = [e for e in events if e[0] == "done"]
-            assert done_events[-1][1]["status"] == "complete"
+            assert _get_event(events, "done")["status"] == "complete"
 
     @patch("sage.api.routes.get_candidates")
     def test_streams_evidence_after_tokens(self, mock_get_candidates, sample_product):
         """Verify evidence event is sent after tokens complete."""
-        from sage.core.models import StreamingExplanation
-
         mock_get_candidates.return_value = [sample_product]
 
-        def mock_generate_stream(query, product, max_evidence):
-            return StreamingExplanation(
-                token_iterator=iter(["Test explanation."]),
-                product_id=product.product_id,
-                query=query,
-                evidence_texts=["Review text here"],
-                evidence_ids=["r1"],
-                model="test-model",
-            )
-
-        mock_explainer = MagicMock()
-        mock_explainer.client = MagicMock()
-        mock_explainer.generate_explanation_stream = mock_generate_stream
-
-        app = _make_app(explainer=mock_explainer)
+        app = _make_app(explainer=_make_mock_explainer())
         with TestClient(app) as c:
-            resp = c.post(
-                "/recommend/stream",
-                json={"query": "test", "k": 1},
-            )
-
+            resp = c.post("/recommend/stream", json={"query": "test", "k": 1})
             events = _parse_sse_events(resp)
             event_types = [e[0] for e in events]
 
@@ -330,30 +338,201 @@ class TestStreamingEndpoint:
             assert evidence_idx > token_idx, "Evidence should come after tokens"
 
     @patch("sage.api.routes.get_candidates")
-    def test_explainer_unavailable_sends_error_event(self, mock_get_candidates):
+    def test_explainer_unavailable_sends_error_event(
+        self, mock_get_candidates, sample_product
+    ):
         """Verify error event when explainer is None."""
-        mock_get_candidates.return_value = [
-            ProductScore(
-                product_id="P1",
-                score=0.9,
-                chunk_count=1,
-                avg_rating=4.5,
-                evidence=[],
-            )
-        ]
+        mock_get_candidates.return_value = [sample_product]
 
         app = _make_app(explainer=None)
         with TestClient(app) as c:
-            resp = c.post(
-                "/recommend/stream",
-                json={"query": "test"},
-            )
-
+            resp = c.post("/recommend/stream", json={"query": "test"})
             events = _parse_sse_events(resp)
             event_types = [e[0] for e in events]
 
             assert "error" in event_types
             assert "done" in event_types
+            assert "unavailable" in _get_event(events, "error")["detail"].lower()
 
-            error_event = next(e for e in events if e[0] == "error")
-            assert "unavailable" in error_event[1]["detail"].lower()
+    @patch("sage.api.routes.get_candidates")
+    def test_strict_event_ordering(self, mock_get_candidates, sample_product):
+        """Verify event sequence: metadata -> product -> tokens -> evidence -> done."""
+        mock_get_candidates.return_value = [sample_product]
+
+        app = _make_app(explainer=_make_mock_explainer())
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test", "k": 1})
+            events = _parse_sse_events(resp)
+            event_types = [e[0] for e in events]
+
+            # Verify metadata is first, done is last
+            assert event_types[0] == "metadata", "First event must be metadata"
+            assert event_types[-1] == "done", "Last event must be done"
+
+            # Verify ordering: metadata < product < tokens < evidence < done
+            indices = {t: event_types.index(t) for t in event_types}
+            assert indices["metadata"] < indices["product"]
+            assert indices["product"] < indices["token"]
+            assert indices["token"] < indices["evidence"]
+            assert indices["evidence"] < indices["done"]
+
+    @patch("sage.api.routes.get_candidates")
+    def test_multiple_products_event_flow(self, mock_get_candidates):
+        """Verify correct event sequence with multiple products."""
+        products = [
+            ProductScore(
+                product_id="P1", score=0.9, chunk_count=2, avg_rating=4.5, evidence=[]
+            ),
+            ProductScore(
+                product_id="P2", score=0.8, chunk_count=1, avg_rating=4.0, evidence=[]
+            ),
+        ]
+        mock_get_candidates.return_value = products
+
+        app = _make_app(explainer=_make_mock_explainer())
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test", "k": 2})
+            events = _parse_sse_events(resp)
+
+            # Should have 2 product events and 2 evidence events
+            product_events = _get_events(events, "product")
+            assert len(product_events) == 2
+            assert product_events[0]["product_id"] == "P1"
+            assert product_events[1]["product_id"] == "P2"
+            assert len(_get_events(events, "evidence")) == 2
+
+            # Verify interleaved: P1 product → P1 evidence → P2 product
+            def idx(event_type: str, predicate=lambda e: True) -> int:
+                return next(
+                    i
+                    for i, e in enumerate(events)
+                    if e[0] == event_type and predicate(e[1])
+                )
+
+            p1_product = idx("product", lambda d: d["product_id"] == "P1")
+            p2_product = idx("product", lambda d: d["product_id"] == "P2")
+            p1_evidence = next(
+                i for i, e in enumerate(events) if e[0] == "evidence" and i > p1_product
+            )
+            assert p1_product < p1_evidence < p2_product
+
+    @patch("sage.api.routes.get_candidates")
+    @patch("sage.api.routes.STREAM_PRODUCT_TIMEOUT", 0.001)
+    def test_timeout_sends_error_event(self, mock_get_candidates, sample_product):
+        """Verify timeout error event when explanation generation takes too long."""
+        import time
+
+        mock_get_candidates.return_value = [sample_product]
+
+        def slow_generator(query, product, max_evidence):
+            def slow_tokens():
+                time.sleep(1)  # Sleep longer than timeout
+                yield "Never reached"
+
+            return StreamingExplanation(
+                token_iterator=slow_tokens(),
+                product_id=product.product_id,
+                query=query,
+                evidence_texts=["Evidence"],
+                evidence_ids=["r1"],
+                model="test-model",
+            )
+
+        app = _make_app(explainer=_make_mock_explainer(slow_generator))
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test", "k": 1})
+            events = _parse_sse_events(resp)
+            event_types = [e[0] for e in events]
+
+            assert "error" in event_types, "Should have error event for timeout"
+            error = _get_event(events, "error")
+            assert "timed out" in error["detail"].lower()
+            assert "product_id" in error, "Timeout error should include product_id"
+
+            assert "done" in event_types
+            assert _get_event(events, "done")["status"] == "complete"
+
+    @patch("sage.api.routes.get_candidates")
+    def test_quality_gate_refusal_sends_refusal_event(
+        self, mock_get_candidates, sample_product
+    ):
+        """Verify refusal event when quality gate rejects thin evidence."""
+        mock_get_candidates.return_value = [sample_product]
+
+        def refusing_generator(query, product, max_evidence):
+            raise ValueError("Insufficient evidence: only 1 chunk with 45 tokens")
+
+        app = _make_app(explainer=_make_mock_explainer(refusing_generator))
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test", "k": 1})
+            events = _parse_sse_events(resp)
+            event_types = [e[0] for e in events]
+
+            assert "refusal" in event_types, "Should have refusal event"
+            assert "insufficient" in _get_event(events, "refusal")["detail"].lower()
+            assert _get_event(events, "done")["status"] == "complete"
+
+    @patch("sage.api.routes.get_candidates")
+    def test_explanation_error_sends_error_event(
+        self, mock_get_candidates, sample_product
+    ):
+        """Verify error event when explanation generation fails unexpectedly."""
+        mock_get_candidates.return_value = [sample_product]
+
+        def failing_generator(query, product, max_evidence):
+            raise RuntimeError("LLM API connection failed")
+
+        app = _make_app(explainer=_make_mock_explainer(failing_generator))
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test", "k": 1})
+            events = _parse_sse_events(resp)
+
+            assert "error" in [e[0] for e in events]
+            error = _get_event(events, "error")
+            assert "detail" in error
+            assert "failed" in error["detail"].lower()
+
+    @patch("sage.api.routes._fetch_products")
+    def test_candidate_generation_failure_sends_error(self, mock_fetch_products):
+        """Verify error event when candidate generation fails."""
+        mock_fetch_products.side_effect = Exception("Qdrant connection lost")
+
+        app = _make_app()
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test"})
+            events = _parse_sse_events(resp)
+            event_types = [e[0] for e in events]
+
+            assert "metadata" in event_types, "Should still emit metadata"
+            assert "error" in event_types, "Should have error event"
+            assert "done" in event_types, "Should have done event"
+            assert "retrieve" in _get_event(events, "error")["detail"].lower()
+            assert _get_event(events, "done")["status"] == "error"
+
+    @patch("sage.api.routes.get_candidates", return_value=[])
+    def test_empty_results_done_payload_schema(self, mock_get_candidates):
+        """Verify done event payload for empty results."""
+        app = _make_app()
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "obscure query"})
+            events = _parse_sse_events(resp)
+
+            done = _get_event(events, "done")
+            assert done["query"] == "obscure query"
+            assert done["recommendations"] == []
+
+    @patch("sage.api.routes.get_candidates")
+    def test_metadata_event_payload(self, mock_get_candidates, sample_product):
+        """Verify metadata event contains expected fields."""
+        mock_get_candidates.return_value = [sample_product]
+
+        app = _make_app(explainer=_make_mock_explainer())
+        with TestClient(app) as c:
+            resp = c.post("/recommend/stream", json={"query": "test"})
+            events = _parse_sse_events(resp)
+
+            # Streaming endpoint skips verification/caching
+            metadata = _get_event(events, "metadata")
+            assert metadata["verified"] is False
+            assert metadata["cache"] is False
+            assert metadata["hhem"] is False
