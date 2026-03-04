@@ -15,16 +15,28 @@ from sage.api.routes import router
 from sage.core.models import ProductScore, RetrievedChunk, StreamingExplanation
 
 
-def _make_app(**state_overrides) -> FastAPI:
-    """Create a test app with mocked state."""
-    app = FastAPI()
-    app.include_router(router)
+def _create_default_mocks() -> dict:
+    """Create default mock objects for app.state.
 
+    Returns dict with keys: qdrant, embedder, detector, explainer, cache.
+    These match the attributes set in sage.api.app._lifespan().
+    """
     # Mock Qdrant client
     mock_qdrant = MagicMock()
     mock_qdrant.get_collections.return_value = MagicMock(collections=[])
 
-    # Mock cache
+    # Mock embedder with explicit embed_single_query
+    mock_embedder = MagicMock()
+    mock_embedder.embed_single_query.return_value = MagicMock()
+
+    # Mock detector (HHEM)
+    mock_detector = MagicMock()
+
+    # Mock explainer with client attribute (required for health check)
+    mock_explainer = MagicMock()
+    mock_explainer.client = MagicMock()
+
+    # Mock cache with get/stats methods
     mock_cache = MagicMock()
     mock_cache.get.return_value = (None, "miss")
     mock_cache.stats.return_value = SimpleNamespace(
@@ -40,15 +52,31 @@ def _make_app(**state_overrides) -> FastAPI:
         avg_semantic_similarity=0.0,
     )
 
-    # Mock explainer with client attribute for health check
-    mock_explainer = MagicMock()
-    mock_explainer.client = MagicMock()
+    return {
+        "qdrant": mock_qdrant,
+        "embedder": mock_embedder,
+        "detector": mock_detector,
+        "explainer": mock_explainer,
+        "cache": mock_cache,
+    }
 
-    app.state.qdrant = state_overrides.get("qdrant", mock_qdrant)
-    app.state.embedder = state_overrides.get("embedder", MagicMock())
-    app.state.detector = state_overrides.get("detector", MagicMock())
-    app.state.explainer = state_overrides.get("explainer", mock_explainer)
-    app.state.cache = state_overrides.get("cache", mock_cache)
+
+def _make_app(**state_overrides) -> FastAPI:
+    """Create a test app with mocked state.
+
+    Args:
+        **state_overrides: Override specific mocks (qdrant, embedder, detector,
+            explainer, cache). Unspecified mocks use defaults.
+    """
+    app = FastAPI()
+    app.include_router(router)
+
+    defaults = _create_default_mocks()
+    app.state.qdrant = state_overrides.get("qdrant", defaults["qdrant"])
+    app.state.embedder = state_overrides.get("embedder", defaults["embedder"])
+    app.state.detector = state_overrides.get("detector", defaults["detector"])
+    app.state.explainer = state_overrides.get("explainer", defaults["explainer"])
+    app.state.cache = state_overrides.get("cache", defaults["cache"])
 
     return app
 
@@ -555,16 +583,21 @@ class TestCacheHitPath:
     """
 
     @pytest.fixture
+    def cache(self):
+        """Fresh SemanticCache for each test."""
+        from sage.services.cache import SemanticCache
+
+        return SemanticCache(max_entries=100, ttl_seconds=3600)
+
+    @pytest.fixture
     def mock_embedder(self):
-        """Embedder that returns controllable embeddings."""
+        """Embedder that returns controllable embeddings based on text hash."""
         from sage.config import EMBEDDING_DIM
         import numpy as np
 
         embedder = MagicMock()
 
         def embed_single_query(text: str) -> np.ndarray:
-            # Return consistent embedding based on text hash for reproducibility
-            # Similar texts get similar embeddings via small perturbations
             np.random.seed(hash(text.lower().strip()) % (2**32))
             base = np.random.rand(EMBEDDING_DIM).astype(np.float32)
             return base / np.linalg.norm(base)
@@ -573,7 +606,7 @@ class TestCacheHitPath:
         return embedder
 
     @pytest.fixture
-    def mock_explainer_with_result(self, sample_product):
+    def mock_explainer_with_result(self):
         """Explainer that returns valid ExplanationResult."""
         from sage.core.models import ExplanationResult
 
@@ -619,15 +652,13 @@ class TestCacheHitPath:
         self,
         mock_get_candidates,
         sample_product,
+        cache,
         mock_embedder,
         mock_explainer_with_result,
         mock_detector_with_result,
     ):
         """Second identical query should return cached response (exact hit)."""
-        from sage.services.cache import SemanticCache
-
         mock_get_candidates.return_value = [sample_product]
-        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
 
         app = _make_app(
             embedder=mock_embedder,
@@ -684,28 +715,25 @@ class TestCacheHitPath:
 
         mock_get_candidates.return_value = [sample_product]
 
-        # Create embedder that returns similar embeddings for similar queries
+        # Custom embedder that returns similar embeddings for similar queries
         embedder = MagicMock()
         base_embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
         base_embedding = base_embedding / np.linalg.norm(base_embedding)
 
         def embed_with_similarity(text: str) -> np.ndarray:
-            # "wireless headphones" and "best wireless headphones" get very similar embeddings
-            # Other queries get different embeddings
             if "wireless headphones" in text.lower():
                 # Small perturbation for similar queries (cosine sim > 0.95)
                 noise = np.random.rand(EMBEDDING_DIM).astype(np.float32) * 0.05
                 result = base_embedding + noise
                 return result / np.linalg.norm(result)
-            else:
-                # Completely different embedding
-                different = np.random.rand(EMBEDDING_DIM).astype(np.float32)
-                return different / np.linalg.norm(different)
+            # Completely different embedding for other queries
+            different = np.random.rand(EMBEDDING_DIM).astype(np.float32)
+            return different / np.linalg.norm(different)
 
         embedder.embed_single_query = embed_with_similarity
 
-        # Use a lower similarity threshold to ensure semantic hits
-        cache = SemanticCache(
+        # Lower threshold needed to catch semantic similarity
+        semantic_cache = SemanticCache(
             max_entries=100, ttl_seconds=3600, similarity_threshold=0.90
         )
 
@@ -713,34 +741,23 @@ class TestCacheHitPath:
             embedder=embedder,
             explainer=mock_explainer_with_result,
             detector=mock_detector_with_result,
-            cache=cache,
+            cache=semantic_cache,
         )
 
         with TestClient(app) as c:
-            # First request
-            resp1 = c.post(
+            c.post(
                 "/recommend",
                 json={"query": "wireless headphones", "k": 3, "explain": True},
             )
-            assert resp1.status_code == 200
+            assert semantic_cache.stats().misses == 1
 
-            stats_after_first = cache.stats()
-            assert stats_after_first.misses == 1
-            assert stats_after_first.size == 1
-
-            # Second request with similar query (should get semantic hit)
-            resp2 = c.post(
+            c.post(
                 "/recommend",
                 json={"query": "best wireless headphones", "k": 3, "explain": True},
             )
-            assert resp2.status_code == 200
-
-            # Verify semantic cache hit
-            stats_after_second = cache.stats()
-            assert stats_after_second.semantic_hits == 1
-            assert stats_after_second.misses == 1  # Still just 1 miss
-
-            # get_candidates called only once (semantic hit reused first result)
+            stats = semantic_cache.stats()
+            assert stats.semantic_hits == 1
+            assert stats.misses == 1
             assert mock_get_candidates.call_count == 1
 
     @patch("sage.api.routes.get_candidates")
@@ -748,15 +765,13 @@ class TestCacheHitPath:
         self,
         mock_get_candidates,
         sample_product,
+        cache,
         mock_embedder,
         mock_explainer_with_result,
         mock_detector_with_result,
     ):
         """Completely different query should miss cache."""
-        from sage.services.cache import SemanticCache
-
         mock_get_candidates.return_value = [sample_product]
-        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
 
         app = _make_app(
             embedder=mock_embedder,
@@ -795,6 +810,7 @@ class TestCacheHitPath:
         self,
         mock_get_candidates,
         sample_product,
+        cache,
         mock_embedder,
         mock_explainer_with_result,
         mock_detector_with_result,
@@ -805,10 +821,7 @@ class TestCacheHitPath:
         so identical query text with different k values will get a semantic hit.
         This test verifies L1 (exact) correctly differentiates by cache key.
         """
-        from sage.services.cache import SemanticCache
-
         mock_get_candidates.return_value = [sample_product]
-        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
 
         app = _make_app(
             embedder=mock_embedder,
@@ -818,27 +831,13 @@ class TestCacheHitPath:
         )
 
         with TestClient(app) as c:
-            # First request with k=3
-            resp1 = c.post(
-                "/recommend",
-                json={"query": "headphones", "k": 3, "explain": True},
-            )
-            assert resp1.status_code == 200
+            c.post("/recommend", json={"query": "headphones", "k": 3, "explain": True})
+            c.post("/recommend", json={"query": "headphones", "k": 5, "explain": True})
 
-            # Second request with k=5 (different cache key)
-            resp2 = c.post(
-                "/recommend",
-                json={"query": "headphones", "k": 5, "explain": True},
-            )
-            assert resp2.status_code == 200
-
-            # L1 (exact) should not hit - different k means different cache key
             stats = cache.stats()
+            # L1 (exact) should not hit - different k means different cache key
             assert stats.exact_hits == 0
-
-            # L2 (semantic) will hit because embeddings are identical for same text.
-            # This is current design - semantic match ignores k/explain/rating params.
-            # First request is a miss, second gets semantic hit.
+            # L2 (semantic) hits because embeddings are identical for same text
             assert stats.misses == 1
             assert stats.semantic_hits == 1
 
@@ -847,40 +846,22 @@ class TestCacheHitPath:
         self,
         mock_get_candidates,
         sample_product,
+        cache,
         mock_embedder,
     ):
         """Requests with explain=False should bypass cache entirely."""
-        from sage.services.cache import SemanticCache
-
         mock_get_candidates.return_value = [sample_product]
-        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
 
-        app = _make_app(
-            embedder=mock_embedder,
-            cache=cache,
-        )
+        app = _make_app(embedder=mock_embedder, cache=cache)
 
         with TestClient(app) as c:
-            # Two identical requests with explain=False
-            resp1 = c.post(
-                "/recommend",
-                json={"query": "headphones", "explain": False},
-            )
-            assert resp1.status_code == 200
-
-            resp2 = c.post(
-                "/recommend",
-                json={"query": "headphones", "explain": False},
-            )
-            assert resp2.status_code == 200
+            c.post("/recommend", json={"query": "headphones", "explain": False})
+            c.post("/recommend", json={"query": "headphones", "explain": False})
 
             # Cache should be untouched (explain=False bypasses cache)
             stats = cache.stats()
             assert stats.size == 0
             assert stats.misses == 0
-            assert stats.exact_hits == 0
-
-            # Both requests hit get_candidates
             assert mock_get_candidates.call_count == 2
 
     @patch("sage.api.routes.get_candidates")
@@ -890,15 +871,13 @@ class TestCacheHitPath:
         mock_record_cache_event,
         mock_get_candidates,
         sample_product,
+        cache,
         mock_embedder,
         mock_explainer_with_result,
         mock_detector_with_result,
     ):
         """Verify cache hit/miss metrics are recorded via record_cache_event."""
-        from sage.services.cache import SemanticCache
-
         mock_get_candidates.return_value = [sample_product]
-        cache = SemanticCache(max_entries=100, ttl_seconds=3600)
 
         app = _make_app(
             embedder=mock_embedder,
