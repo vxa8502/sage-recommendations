@@ -100,7 +100,7 @@ def _select_config_queries(exclude: set[str], target: int = 15) -> list[str]:
     return selected
 
 
-def generate_samples(force: bool = False, seed: int = 42):
+def generate_samples(force: bool = False, seed: int = 42) -> list[dict]:
     """Generate recommendation+explanation samples for human evaluation."""
     import random
 
@@ -111,13 +111,13 @@ def generate_samples(force: bool = False, seed: int = 42):
     if SAMPLES_FILE.exists() and not force:
         with open(SAMPLES_FILE, encoding="utf-8") as f:
             existing = json.load(f)
-        rated = sum(1 for s in existing if s.get("rating") is not None)
-        if rated > 0:
+        rated_count = sum(1 for s in existing if s.get("rating") is not None)
+        if rated_count > 0:
             logger.error(
                 "%s contains %d rated samples. "
                 "Use --force to overwrite, or run --annotate to continue.",
                 SAMPLES_FILE,
-                rated,
+                rated_count,
             )
             sys.exit(1)
 
@@ -249,11 +249,11 @@ def annotate_samples():
     """Interactive CLI loop for rating samples."""
     samples = _load_samples()
     total = len(samples)
-    rated = sum(1 for s in samples if s["rating"] is not None)
     unrated = [s for s in samples if s["rating"] is None]
+    rated_count = total - len(unrated)
 
     log_banner(logger, "HUMAN EVALUATION ANNOTATION")
-    print(f"\nProgress: {rated}/{total} rated, {len(unrated)} remaining\n")
+    print(f"\nProgress: {rated_count}/{total} rated, {len(unrated)} remaining\n")
 
     if not unrated:
         print("All samples have been rated. Run --analyze to compute results.")
@@ -265,8 +265,7 @@ def annotate_samples():
 
     try:
         for sample in unrated:
-            rated = sum(1 for s in samples if s["rating"] is not None)
-            print(f"\n--- Sample {sample['id']} ({rated + 1}/{total}) ---\n")
+            print(f"\n--- Sample {sample['id']} ({rated_count + 1}/{total}) ---\n")
 
             # Display product and query
             print(f"PRODUCT: {sample['product_id']}  ({sample['avg_rating']} stars)")
@@ -290,6 +289,7 @@ def annotate_samples():
                 rating[dim_key] = _get_likert_input(dim_prompt)
 
             sample["rating"] = rating
+            rated_count += 1
             _save_samples(samples)
             scores_str = ", ".join(f"{k}={v}" for k, v in rating.items())
             print(f"  -> Saved ({scores_str})")
@@ -297,8 +297,7 @@ def annotate_samples():
 
     except KeyboardInterrupt:
         _save_samples(samples)
-        rated_now = sum(1 for s in samples if s["rating"] is not None)
-        print(f"\n\nProgress saved: {rated_now}/{total} rated.")
+        print(f"\n\nProgress saved: {rated_count}/{total} rated.")
         print("Run --annotate again to continue.")
 
 
@@ -307,7 +306,7 @@ def annotate_samples():
 # ============================================================================
 
 
-def analyze_results():
+def analyze_results() -> dict | None:
     """Compute aggregate metrics from rated samples."""
     samples = _load_samples()
     rated = [s for s in samples if s["rating"] is not None]
@@ -344,11 +343,10 @@ def analyze_results():
         )
 
     # Overall helpfulness: mean of per-sample averages
-    per_sample_means = []
-    for s in rated:
-        r = s["rating"]
-        sample_mean = sum(r[k] for k in EVAL_DIMENSIONS) / len(EVAL_DIMENSIONS)
-        per_sample_means.append(sample_mean)
+    per_sample_means = [
+        sum(s["rating"][k] for k in EVAL_DIMENSIONS) / len(EVAL_DIMENSIONS)
+        for s in rated
+    ]
     overall = sum(per_sample_means) / len(per_sample_means)
     passed = overall >= HELPFULNESS_TARGET
 
@@ -377,12 +375,7 @@ def analyze_results():
         "methodology": {
             "evaluator": "Single rater (developer/researcher)",
             "instructions": "Rate each dimension 1-5 Likert: 1=strongly disagree, 5=strongly agree",
-            "dimensions": {
-                "comprehension": "I understood why this item was recommended",
-                "trust": "I trust this explanation is accurate",
-                "usefulness": "This explanation helped me make a decision",
-                "satisfaction": "I am satisfied with this explanation",
-            },
+            "dimensions": EVAL_DIMENSIONS,
             "sample_selection": "35 natural queries (balanced by category) + 15 config queries",
             "inter_annotator_agreement": "N/A (single rater)",
         },
@@ -479,13 +472,13 @@ def show_status():
 
     samples = _load_samples()
     total = len(samples)
-    rated = sum(1 for s in samples if s["rating"] is not None)
-    print(f"Human Evaluation Status: {rated}/{total} samples rated")
+    rated_count = sum(1 for s in samples if s["rating"] is not None)
+    print(f"Human Evaluation Status: {rated_count}/{total} samples rated")
 
-    if rated == total:
+    if rated_count == total:
         print("All samples rated. Run --analyze to compute results.")
-    elif rated > 0:
-        print(f"  {total - rated} remaining. Run --annotate to continue.")
+    elif rated_count > 0:
+        print(f"  {total - rated_count} remaining. Run --annotate to continue.")
     else:
         print("  No ratings yet. Run --annotate to start.")
 
