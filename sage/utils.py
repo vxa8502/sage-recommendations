@@ -242,6 +242,35 @@ def normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+def sanitize_query(query: str) -> str:
+    """Sanitize user query for safe LLM prompt insertion.
+
+    Mitigates prompt injection by:
+    1. Stripping newlines (prevents prompt structure manipulation)
+    2. Removing control characters
+    3. Collapsing whitespace
+
+    This is defense-in-depth. Primary mitigations are the strong system
+    prompt, evidence-only quoting rules, and HHEM verification.
+
+    Args:
+        query: Raw user query from API request.
+
+    Returns:
+        Sanitized query safe for prompt template insertion.
+    """
+    # Strip newlines - prevents "ignore above\n\nNEW INSTRUCTIONS:"
+    sanitized = query.replace("\n", " ").replace("\r", " ")
+
+    # Remove non-printable control characters (keep normal spaces)
+    sanitized = "".join(c for c in sanitized if c.isprintable())
+
+    # Collapse whitespace
+    sanitized = " ".join(sanitized.split())
+
+    return sanitized.strip()
+
+
 def normalize_vectors(vectors: np.ndarray, eps: float = 1e-10) -> np.ndarray:
     """L2-normalize vectors to unit norm with numerical stability.
 

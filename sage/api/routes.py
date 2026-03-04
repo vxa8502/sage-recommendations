@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from sage.adapters.vector_store import collection_exists
 from sage.api.metrics import metrics_response, record_cache_event, record_error
 from sage.config import MAX_EVIDENCE, get_logger
-from sage.utils import normalize_text
+from sage.utils import normalize_text, sanitize_query
 from sage.core import (
     AggregationMethod,
     ExplanationResult,
@@ -484,7 +484,11 @@ def _sync_recommend(
     Returns the response dict or raises an exception.
     """
     cache = app.state.cache
-    q = body.query
+    raw_query = body.query
+    q = sanitize_query(raw_query)
+    if q != raw_query:
+        logger.info("Query sanitized: %r -> %r", raw_query, q)
+        body.query = q  # Update body for _fetch_products
     explain = body.explain
     min_rating = _get_min_rating(body)
     cache_key = _build_cache_key(q, body.k, explain, min_rating)
@@ -660,6 +664,11 @@ async def _stream_recommendations(
 
     Uses asyncio.to_thread for blocking calls to avoid blocking the event loop.
     """
+    raw_query = body.query
+    body.query = sanitize_query(raw_query)
+    if body.query != raw_query:
+        logger.info("Query sanitized: %r -> %r", raw_query, body.query)
+
     yield _sse_event(
         "metadata",
         json.dumps(
