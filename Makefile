@@ -1,4 +1,4 @@
-.PHONY: all setup data data-validate eval eval-full eval-quick eval-summary demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-workflow human-eval-generate human-eval human-eval-analyze human-eval-status fmt test lint typecheck ci info metrics-snapshot health load-test load-test-quick kaggle-test help
+.PHONY: all setup data data-validate eval eval-full eval-quick eval-summary demo demo-interview reset reset-eval reset-hard check-env qdrant-up qdrant-down qdrant-status eda serve serve-dev docker-build docker-run deploy-info deploy-health human-eval-workflow human-eval-generate human-eval human-eval-analyze human-eval-status fmt test lint typecheck ci ci-full info metrics-snapshot health load-test load-test-quick kaggle-test help
 
 # ---------------------------------------------------------------------------
 # Configurable Variables (override: make demo QUERY="gaming mouse")
@@ -313,7 +313,12 @@ typecheck:
 test:
 	$(PYTHON) -m pytest tests/ -v
 
-ci:
+# Quick CI: uses existing venv (fast iteration)
+ci: lint typecheck test
+	@echo "CI checks passed"
+
+# Full CI: fresh venv install + all checks (pre-commit validation)
+ci-full:
 	rm -rf .venv
 	python -m venv .venv
 	. .venv/bin/activate && pip install -e ".[dev,api,anthropic,openai,pipeline]" && \
@@ -321,7 +326,7 @@ ci:
 		$(RUFF) format --check sage/ scripts/ tests/ && \
 		$(MYPY) sage/ --ignore-missing-imports && \
 		$(PYTHON) -m pytest tests/ -v
-	@echo "All CI checks passed"
+	@echo "Full CI passed (fresh venv)"
 
 # ---------------------------------------------------------------------------
 # Info & Metrics
@@ -529,7 +534,8 @@ help:
 	@echo "  make lint            Run ruff linter and formatter check"
 	@echo "  make typecheck       Run mypy type checking"
 	@echo "  make test            Run unit tests"
-	@echo "  make ci              Run all CI checks (lint + typecheck + test)"
+	@echo "  make ci              Quick CI: lint + typecheck + test (uses existing venv)"
+	@echo "  make ci-full         Full CI: fresh venv + all checks (pre-commit)"
 	@echo ""
 	@echo "QDRANT:"
 	@echo "  make qdrant-up       Start Qdrant vector database (Docker)"
