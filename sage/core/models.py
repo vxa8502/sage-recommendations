@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Iterator
+from typing import Any, Iterator
 
 
 # ============================================================================
@@ -556,6 +556,27 @@ class EvalResult:
 
 
 @dataclass
+class ConfidenceInterval:
+    """Bootstrap confidence interval for a metric."""
+
+    mean: float
+    lower: float
+    upper: float
+    confidence: float = 0.95
+
+    def __str__(self) -> str:
+        return f"{self.mean:.3f} [{self.lower:.3f}, {self.upper:.3f}]"
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "mean": round(self.mean, 4),
+            "ci_lower": round(self.lower, 4),
+            "ci_upper": round(self.upper, 4),
+            "confidence": self.confidence,
+        }
+
+
+@dataclass
 class MetricsReport:
     """
     Aggregated metrics over all evaluation cases.
@@ -575,9 +596,14 @@ class MetricsReport:
     novelty: float = 0.0
     k: int = 10
 
-    def to_dict(self) -> dict:
+    # Bootstrap confidence intervals (optional)
+    ndcg_ci: ConfidenceInterval | None = None
+    hit_ci: ConfidenceInterval | None = None
+    mrr_ci: ConfidenceInterval | None = None
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for easy serialization."""
-        return {
+        result: dict[str, Any] = {
             "n_cases": self.n_cases,
             f"ndcg@{self.k}": round(self.ndcg_at_k, 4),
             f"hit@{self.k}": round(self.hit_at_k, 4),
@@ -588,19 +614,35 @@ class MetricsReport:
             "coverage": round(self.coverage, 4),
             "novelty": round(self.novelty, 4),
         }
+        for name, ci in [
+            ("ndcg_ci", self.ndcg_ci),
+            ("hit_ci", self.hit_ci),
+            ("mrr_ci", self.mrr_ci),
+        ]:
+            if ci:
+                result[name] = ci.to_dict()
+        return result
+
+    def _fmt_metric(
+        self, name: str, value: float, ci: ConfidenceInterval | None
+    ) -> str:
+        """Format a metric with optional CI."""
+        if ci:
+            return f"{name:<14s} {value:.4f}  [{ci.lower:.3f}, {ci.upper:.3f}]"
+        return f"{name:<14s} {value:.4f}"
 
     def __str__(self) -> str:
         lines = [
             f"Evaluation Results (n={self.n_cases}, k={self.k})",
-            "-" * 40,
-            f"NDCG@{self.k}:      {self.ndcg_at_k:.4f}",
-            f"Hit@{self.k}:       {self.hit_at_k:.4f}",
-            f"MRR:           {self.mrr:.4f}",
-            f"Precision@{self.k}: {self.precision_at_k:.4f}",
-            f"Recall@{self.k}:    {self.recall_at_k:.4f}",
-            "-" * 40,
-            f"Diversity:     {self.diversity:.4f}",
-            f"Coverage:      {self.coverage:.4f}",
-            f"Novelty:       {self.novelty:.4f}",
+            "-" * 50,
+            self._fmt_metric(f"NDCG@{self.k}:", self.ndcg_at_k, self.ndcg_ci),
+            self._fmt_metric(f"Hit@{self.k}:", self.hit_at_k, self.hit_ci),
+            self._fmt_metric("MRR:", self.mrr, self.mrr_ci),
+            self._fmt_metric(f"Precision@{self.k}:", self.precision_at_k, None),
+            self._fmt_metric(f"Recall@{self.k}:", self.recall_at_k, None),
+            "-" * 50,
+            self._fmt_metric("Diversity:", self.diversity, None),
+            self._fmt_metric("Coverage:", self.coverage, None),
+            self._fmt_metric("Novelty:", self.novelty, None),
         ]
         return "\n".join(lines)

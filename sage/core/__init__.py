@@ -37,6 +37,7 @@ from sage.core.models import (
     FaithfulnessReport,
     FaithfulnessResult,
     # Evaluation
+    ConfidenceInterval,
     EvalCase,
     EvalResult,
     MetricsReport,
@@ -110,6 +111,7 @@ __all__ = [
     "MultiMetricFaithfulnessReport",
     "FaithfulnessReport",
     "FaithfulnessResult",
+    "ConfidenceInterval",
     "EvalCase",
     "EvalResult",
     "MetricsReport",

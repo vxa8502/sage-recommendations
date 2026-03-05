@@ -20,7 +20,7 @@ from typing import Callable
 
 import numpy as np
 
-from sage.core import EvalCase, EvalResult, MetricsReport
+from sage.core import ConfidenceInterval, EvalCase, EvalResult, MetricsReport
 from sage.utils import normalize_vectors
 
 
@@ -160,6 +160,19 @@ def compute_item_popularity(
     return {item: count / total for item, count in counts.items()}
 
 
+def _safe_mean(scores: list[float]) -> float:
+    """Compute mean of scores, returning 0.0 for empty list."""
+    return float(np.mean(scores)) if scores else 0.0
+
+
+def _compute_ci(scores: list[float]) -> ConfidenceInterval | None:
+    """Compute bootstrap CI for scores, returning None for empty list."""
+    if not scores:
+        return None
+    mean, lower, upper = bootstrap_confidence_interval(scores)
+    return ConfidenceInterval(mean=mean, lower=lower, upper=upper)
+
+
 class EvaluationService:
     """
     Service for evaluating recommendation quality.
@@ -260,15 +273,16 @@ class EvaluationService:
         report = MetricsReport(
             n_cases=len(eval_cases),
             k=self.k,
-            ndcg_at_k=float(np.mean(ndcg_scores)) if ndcg_scores else 0.0,
-            hit_at_k=float(np.mean(hit_scores)) if hit_scores else 0.0,
-            mrr=float(np.mean(mrr_scores)) if mrr_scores else 0.0,
-            precision_at_k=float(np.mean(precision_scores))
-            if precision_scores
-            else 0.0,
-            recall_at_k=float(np.mean(recall_scores)) if recall_scores else 0.0,
-            diversity=float(np.mean(diversity_scores)) if diversity_scores else 0.0,
-            novelty=float(np.mean(novelty_scores)) if novelty_scores else 0.0,
+            ndcg_at_k=_safe_mean(ndcg_scores),
+            hit_at_k=_safe_mean(hit_scores),
+            mrr=_safe_mean(mrr_scores),
+            precision_at_k=_safe_mean(precision_scores),
+            recall_at_k=_safe_mean(recall_scores),
+            diversity=_safe_mean(diversity_scores),
+            novelty=_safe_mean(novelty_scores),
+            ndcg_ci=_compute_ci(ndcg_scores),
+            hit_ci=_compute_ci(hit_scores),
+            mrr_ci=_compute_ci(mrr_scores),
         )
 
         if self.total_items:

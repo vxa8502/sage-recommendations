@@ -1,0 +1,34 @@
+{
+  "timestamp": "2026-03-05T16:18:49.380747",
+  "dataset": "eval_natural_queries.json",
+  "catalog_size": 21827,
+  "experiments": {},
+  "primary_metrics": {
+    "ndcg_at_10": 0.4871922222425982,
+    "hit_at_10": 0.7380952380952381,
+    "mrr": 0.42086167800453517,
+    "precision_at_10": 0.12857142857142856,
+    "recall_at_10": 0.4722222222222222,
+    "diversity": 0.01957190520646696,
+    "coverage": 0.015531222797452697,
+    "novelty": 9.808908578271737,
+    "ndcg_ci": {
+      "mean": 0.4872,
+      "ci_lower": 0.3779,
+      "ci_upper": 0.6078,
+      "confidence": 0.95
+    },
+    "hit_ci": {
+      "mean": 0.7381,
+      "ci_lower": 0.5952,
+      "ci_upper": 0.8571,
+      "confidence": 0.95
+    },
+    "mrr_ci": {
+      "mean": 0.4209,
+      "ci_lower": 0.301,
+      "ci_upper": 0.5545,
+      "confidence": 0.95
+    }
+  }
+}

@@ -230,8 +230,6 @@ def load_product_embeddings_from_qdrant() -> dict[str, np.ndarray]:
         product_id = point.payload.get("product_id")
         product_vectors[product_id].append(np.array(point.vector))
 
-    client.close()
-
     # Mean aggregation + normalize
     return {
         product_id: normalize_vectors(np.mean(vectors, axis=0))
@@ -264,8 +262,6 @@ def compute_item_popularity_from_qdrant(
         for point in _scroll_collection(client, with_vectors=False)
         if point.payload.get("product_id")
     )
-
-    client.close()
 
     if not normalize:
         return dict(counts)

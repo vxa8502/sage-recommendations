@@ -42,6 +42,17 @@ def fmt(value: float | None, decimals: int = 4) -> str:
     return f"{value:.{decimals}f}"
 
 
+def fmt_with_ci(value: float | None, ci: dict | None, decimals: int = 3) -> str:
+    """Format a value with optional confidence interval."""
+    if value is None:
+        return "   ---"
+    if ci and "ci_lower" in ci and "ci_upper" in ci:
+        lower = ci["ci_lower"]
+        upper = ci["ci_upper"]
+        return f"{value:.{decimals}f}  [{lower:.{decimals}f}, {upper:.{decimals}f}]"
+    return f"{value:.{decimals}f}"
+
+
 def print_section(title: str):
     print(f"\n{title}")
 
@@ -56,9 +67,12 @@ def main():
     print_section("Recommendation Quality (Natural Queries):")
     if nat and "primary_metrics" in nat:
         m = nat["primary_metrics"]
-        print(f"  NDCG@10:    {fmt(m.get('ndcg_at_10'))}")
-        print(f"  Hit@10:     {fmt(m.get('hit_at_10'))}")
-        print(f"  MRR:        {fmt(m.get('mrr'))}")
+        for label, key, ci_key in [
+            ("NDCG@10", "ndcg_at_10", "ndcg_ci"),
+            ("Hit@10", "hit_at_10", "hit_ci"),
+            ("MRR", "mrr", "mrr_ci"),
+        ]:
+            print(f"  {label + ':':<10s} {fmt_with_ci(m.get(key), m.get(ci_key))}")
     else:
         print("  (not available)")
 
