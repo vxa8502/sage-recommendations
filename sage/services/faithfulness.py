@@ -12,10 +12,24 @@ Target: >0.85 faithfulness score
 """
 
 import asyncio
+import logging
 
 import numpy as np
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
-from sage.utils import ensure_ragas_installed
+from sage.config import (
+    ANTHROPIC_MODEL,
+    FAITHFULNESS_TARGET,
+    HALLUCINATION_THRESHOLD,
+    LLM_PROVIDER,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+)
 from sage.core import (
     AdjustedFaithfulnessReport,
     AgreementReport,
@@ -28,13 +42,28 @@ from sage.core import (
     extract_quotes,
     verify_explanation,
 )
-from sage.config import (
-    ANTHROPIC_MODEL,
-    FAITHFULNESS_TARGET,
-    HALLUCINATION_THRESHOLD,
-    LLM_PROVIDER,
-    OPENAI_API_KEY,
-    OPENAI_MODEL,
+from sage.utils import ensure_ragas_installed
+
+logger = logging.getLogger(__name__)
+
+# Transient exceptions that should trigger retries
+TRANSIENT_EXCEPTIONS = (TimeoutError, ConnectionError, OSError)
+
+
+def _log_retry(retry_state) -> None:  # type: ignore[no-untyped-def]
+    """Log retry attempts for transient LLM failures."""
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    logger.warning(
+        f"LLM call failed, retrying (attempt {retry_state.attempt_number}/3): {exc}"
+    )
+
+
+# Shared retry decorator for LLM calls
+_llm_retry = retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=1, min=2, max=10),
+    retry=retry_if_exception_type(TRANSIENT_EXCEPTIONS),
+    before_sleep=_log_retry,
 )
 
 
@@ -215,6 +244,20 @@ class FaithfulnessEvaluator:
         self.scorer = Faithfulness(llm=self.llm)
         self.target = target
 
+    @_llm_retry
+    async def _score_with_retry(
+        self,
+        query: str,
+        explanation: str,
+        evidence_texts: list[str],
+    ) -> float:
+        """Score with retry logic for transient failures."""
+        return await self.scorer.ascore(
+            user_input=query,
+            response=explanation,
+            retrieved_contexts=evidence_texts,
+        )
+
     async def evaluate_single_async(
         self,
         query: str,
@@ -222,11 +265,7 @@ class FaithfulnessEvaluator:
         evidence_texts: list[str],
     ) -> FaithfulnessResult:
         """Evaluate faithfulness for a single explanation (async)."""
-        score = await self.scorer.ascore(
-            user_input=query,
-            response=explanation,
-            retrieved_contexts=evidence_texts,
-        )
+        score = await self._score_with_retry(query, explanation, evidence_texts)
 
         return FaithfulnessResult(
             score=float(score),
@@ -252,23 +291,38 @@ class FaithfulnessEvaluator:
         coro = self.evaluate_single_async(query, explanation, evidence_texts)
         return asyncio.run(coro)
 
+    def _evaluate_batch_with_retry(
+        self,
+        dataset,
+        metrics: list,
+    ):
+        """Run RAGAS evaluate with retry logic for transient failures."""
+        ensure_ragas_installed()
+        from ragas import evaluate
+
+        @_llm_retry
+        def _run():
+            return evaluate(
+                dataset=dataset,
+                metrics=metrics,
+                llm=self.llm,
+                show_progress=True,
+            )
+
+        return _run()
+
     def evaluate_batch(
         self,
         explanation_results: list[ExplanationResult],
     ) -> FaithfulnessReport:
         """Evaluate faithfulness for multiple explanations."""
         ensure_ragas_installed()
-        from ragas import EvaluationDataset, evaluate
+        from ragas import EvaluationDataset
         from ragas.metrics import Faithfulness
 
         samples = _explanation_results_to_samples(explanation_results)
         dataset = EvaluationDataset(samples=samples)
-        result = evaluate(
-            dataset=dataset,
-            metrics=[Faithfulness()],
-            llm=self.llm,
-            show_progress=True,
-        )
+        result = self._evaluate_batch_with_retry(dataset, [Faithfulness()])
 
         df = result.to_pandas()  # type: ignore[union-attr]
         scores = df["faithfulness"].tolist()
