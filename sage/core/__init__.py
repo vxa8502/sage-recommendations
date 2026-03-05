@@ -82,9 +82,12 @@ from sage.core.evidence import (
 # Prompts
 from sage.core.prompts import (
     EXPLANATION_SYSTEM_PROMPT,
+    EXPLANATION_SYSTEM_PROMPT_MIXED,
     EXPLANATION_USER_TEMPLATE,
+    MIXED_EVIDENCE_THRESHOLD,
     STRICT_SYSTEM_PROMPT,
     build_explanation_prompt,
+    detect_rating_spread,
     format_evidence,
 )
 
@@ -143,8 +146,11 @@ __all__ = [
     "generate_refusal_message",
     # Prompts
     "EXPLANATION_SYSTEM_PROMPT",
+    "EXPLANATION_SYSTEM_PROMPT_MIXED",
     "EXPLANATION_USER_TEMPLATE",
+    "MIXED_EVIDENCE_THRESHOLD",
     "STRICT_SYSTEM_PROMPT",
     "build_explanation_prompt",
+    "detect_rating_spread",
     "format_evidence",
 ]

@@ -81,7 +81,7 @@ def make_test_product(
     score: float = 0.85,
 ) -> ProductScore:
     """Create a ProductScore for testing with sensible defaults."""
-    ratings = [c.rating for c in chunks if c.rating]
+    ratings = [c.rating for c in chunks if c.rating is not None]
     return ProductScore(
         product_id=product_id,
         score=score,
