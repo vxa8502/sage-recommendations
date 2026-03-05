@@ -365,7 +365,11 @@ def extract_evidence(
 
 
 def save_results(data: dict, prefix: str, directory: Path | None = None) -> Path:
-    """Save results as both timestamped and latest JSON files.
+    """Save results as timestamped JSON with atomic latest symlink.
+
+    Uses atomic symlink replacement to prevent race conditions when
+    multiple processes write results simultaneously. Readers of
+    *_latest.json will see either old or new data, never partial.
 
     Args:
         data: Serializable dict to save.
@@ -382,12 +386,27 @@ def save_results(data: dict, prefix: str, directory: Path | None = None) -> Path
 
     directory.mkdir(parents=True, exist_ok=True)
 
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    # Microseconds prevent same-second collisions between concurrent runs
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
     ts_file = directory / f"{prefix}_{ts}.json"
-    latest_file = directory / f"{prefix}_latest.json"
+    latest_link = directory / f"{prefix}_latest.json"
 
-    for path in (ts_file, latest_file):
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+    with open(ts_file, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2)
+
+    # Atomic symlink update: create temp link, then rename
+    # os.rename is atomic on POSIX when src and dst are on same filesystem
+    tmp_link = directory / f".{prefix}_latest.tmp.{ts}"
+    try:
+        # Clean up any orphaned temp files from previous runs
+        for stale in directory.glob(f".{prefix}_latest.tmp.*"):
+            stale.unlink(missing_ok=True)
+        tmp_link.symlink_to(ts_file.name)
+        tmp_link.rename(latest_link)
+    except OSError:
+        # Symlinks unsupported (e.g., some Windows configs) - fall back to copy
+        import shutil
+
+        shutil.copy2(ts_file, latest_link)
 
     return ts_file
