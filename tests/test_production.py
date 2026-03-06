@@ -585,18 +585,17 @@ class TestShutdownMiddlewareIntegration:
             assert resp.status_code == 200
 
     @patch("sage.api.routes.collection_exists", return_value=True)
-    def test_ready_check_allowed_during_shutdown(self, _, app_with_shutdown):
-        """Ready endpoint is allowed during shutdown for graceful LB drain."""
+    def test_ready_returns_503_during_shutdown(self, _, app_with_shutdown):
+        """Ready endpoint returns 503 during shutdown to drain LB traffic."""
         app, coordinator = app_with_shutdown
         _run_async(coordinator.initiate_shutdown())
 
         with TestClient(app) as client:
             resp = client.get("/ready")
-            # May return 200 or 503 depending on component state, but should not
-            # be rejected by shutdown middleware
-            assert resp.status_code in (200, 503)
-            if resp.status_code == 503:
-                assert "shutting down" not in resp.json().get("error", "").lower()
+            assert resp.status_code == 503
+            data = resp.json()
+            assert data["ready"] is False
+            assert data["status"] == "shutting_down"
 
     @patch("sage.api.routes.collection_exists", return_value=True)
     def test_requests_allowed_before_shutdown(self, _, app_with_shutdown):

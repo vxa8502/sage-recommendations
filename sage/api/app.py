@@ -152,6 +152,14 @@ async def _lifespan(app: FastAPI):
             "Forced shutdown with %d requests still active",
             coordinator.active_requests,
         )
+
+    # Resource cleanup
+    try:
+        app.state.qdrant.close()
+        logger.info("Qdrant client closed")
+    except Exception:
+        logger.exception("Failed to close Qdrant client")
+
     logger.info("Sage API shutdown complete")
 
 

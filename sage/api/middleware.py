@@ -182,15 +182,32 @@ class LatencyMiddleware:
         path = _normalize_path(scope["path"])
         method = scope["method"]
 
-        # During shutdown, reject new requests (except health checks)
-        if coordinator.is_shutting_down and path not in {"/health", "/ready"}:
-            response = JSONResponse(
-                status_code=503,
-                content={"error": "Server is shutting down", "retry_after": 5},
-                headers={"Retry-After": "5"},
-            )
-            await response(scope, receive, send)
-            return
+        # During shutdown, reject new requests (except liveness probe)
+        if coordinator.is_shutting_down:
+            if path == "/ready":
+                # return 503 to stop traffic
+                response = JSONResponse(
+                    status_code=503,
+                    content={
+                        "ready": False,
+                        "status": "shutting_down",
+                        "message": "Sage is shutting down and cannot accept new requests",
+                    },
+                )
+                await response(scope, receive, send)
+                return
+            if path != "/health":
+                # All other requests: reject with retry hint
+                response = JSONResponse(
+                    status_code=503,
+                    content={
+                        "error": "Server is shutting down",
+                        "retry_after": 5,
+                    },
+                    headers={"Retry-After": "5"},
+                )
+                await response(scope, receive, send)
+                return
 
         start = time.perf_counter()
         request_id = uuid.uuid4().hex[:12]
