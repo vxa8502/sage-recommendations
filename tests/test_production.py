@@ -5,6 +5,7 @@ and other production-critical behaviors.
 """
 
 import threading
+from collections.abc import Callable
 from contextlib import ExitStack, contextmanager
 
 import numpy as np
@@ -628,9 +629,9 @@ class TestShutdownMiddlewareIntegration:
 def _patch_lifespan_dependencies(
     *,
     llm_provider: str = "test",
-    embedder=None,
-    detector=None,
-    explainer=None,
+    embedder: MagicMock | Exception | None = None,
+    detector: MagicMock | Exception | None = None,
+    explainer: MagicMock | Exception | None = None,
     qdrant_exists: bool | Exception = True,
     routes_qdrant_exists: bool = True,
     api_key: str | None = None,
@@ -649,19 +650,17 @@ def _patch_lifespan_dependencies(
         api_key_name: Which API key to patch ("ANTHROPIC_API_KEY" or "OPENAI_API_KEY").
     """
 
-    def _build_patch(target: str, value, default_factory):
+    def _build_patch(
+        target: str,
+        value: MagicMock | Exception | None,
+        default_factory: Callable[[], MagicMock],
+    ):
         """Build a patch for a dependency that may be None, a mock, or an Exception."""
         if isinstance(value, Exception):
             return patch(target, side_effect=value)
         if value is None:
             return patch(target, return_value=default_factory())
         return patch(target, return_value=value)
-
-    def _default_embedder():
-        return MagicMock()
-
-    def _default_detector():
-        return MagicMock()
 
     def _default_explainer():
         mock_exp = MagicMock()
@@ -681,15 +680,11 @@ def _patch_lifespan_dependencies(
 
     patches = [
         patch("sage.config.LLM_PROVIDER", llm_provider),
-        _build_patch(
-            "sage.adapters.embeddings.get_embedder", embedder, _default_embedder
-        ),
+        _build_patch("sage.adapters.embeddings.get_embedder", embedder, MagicMock),
         patch("sage.adapters.vector_store.get_client", return_value=MagicMock()),
         qdrant_patch,
         patch("sage.api.routes.collection_exists", return_value=routes_qdrant_exists),
-        _build_patch(
-            "sage.adapters.hhem.HallucinationDetector", detector, _default_detector
-        ),
+        _build_patch("sage.adapters.hhem.HallucinationDetector", detector, MagicMock),
         _build_patch(
             "sage.services.explanation.Explainer", explainer, _default_explainer
         ),
