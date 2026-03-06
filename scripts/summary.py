@@ -32,7 +32,7 @@ def load_json(path: Path) -> dict | None:
     try:
         with open(path, encoding="utf-8") as f:
             return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
         return None
 
 
@@ -50,7 +50,7 @@ def fmt_with_ci(value: float | None, ci: dict | None, decimals: int = 3) -> str:
         lower = ci["ci_lower"]
         upper = ci["ci_upper"]
         return f"{value:.{decimals}f}  [{lower:.{decimals}f}, {upper:.{decimals}f}]"
-    return f"{value:.{decimals}f}"
+    return fmt(value, decimals)
 
 
 def print_section(title: str):
@@ -137,7 +137,7 @@ def main():
             d = dims.get(dim_key, {})
             m = d.get("mean")
             label = dim_key.title()
-            print(f"  {label + ':':<15s} {fmt(m, 2) if m is not None else '   ---'}")
+            print(f"  {label + ':':<15s} {fmt(m, 2)}")
         if overall is not None:
             status = "PASS" if human.get("pass", False) else "FAIL"
             print(
@@ -160,7 +160,10 @@ def main():
         n = delta.get("n_samples", 0)
         print(f"  With evidence:  {fmt(with_ev, 3)}")
         print(f"  Without:        {fmt(without_ev, 3)}")
-        print(f"  Delta:          {fmt(d, 3)}  (+{d * 100:.0f}pp, n={n})")
+        if d is not None:
+            print(f"  Delta:          {fmt(d, 3)}  (+{d * 100:.0f}pp, n={n})")
+        else:
+            print(f"  Delta:          (not available, n={n})")
     else:
         print("  (not available)")
 
@@ -187,10 +190,15 @@ def main():
         n = load.get("total_requests", 0)
         hits = load.get("cache_hits", 0)
         hit_rate = hits / n if n > 0 else 0
-        print(f"  P50:            {p50:.0f}ms")
-        print(f"  P95:            {p95:.0f}ms")
-        print(f"  P99:            {p99:.0f}ms  (n={n})")
+        if p50 is not None and p95 is not None and p99 is not None:
+            print(f"  P50:            {p50:.0f}ms")
+            print(f"  P95:            {p95:.0f}ms")
+            print(f"  P99:            {p99:.0f}ms  (n={n})")
+        else:
+            print(f"  Latency:        (not available, n={n})")
         print(f"  Cache hits:     {hits}/{n}  ({hit_rate * 100:.0f}%)")
+        status = "PASS" if load.get("pass") else "FAIL"
+        print(f"  Status:         {status}")
     else:
         print("  (not available)")
 
