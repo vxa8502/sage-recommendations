@@ -34,6 +34,11 @@ import httpx
 
 from sage.config import RESULTS_DIR, save_results
 
+# Latency target (see sage/api/metrics.py docstring for budget breakdown)
+DEFAULT_TARGET_P99_MS = 500.0
+
+# Response times below this threshold are counted as cache hits
+CACHE_HIT_THRESHOLD_S = 0.1
 
 # Test queries covering different scenarios
 QUERIES = [
@@ -87,7 +92,6 @@ def _build_results(
         "min_ms": round(min(latencies), 1),
         "max_ms": round(max(latencies), 1),
         "mean_ms": round(statistics.mean(latencies), 1),
-        "median_ms": round(statistics.median(latencies), 1),
         "p50_ms": round(percentile(latencies, 50), 1),
         "p95_ms": round(percentile(latencies, 95), 1),
         "p99_ms": round(percentile(latencies, 99), 1),
@@ -106,45 +110,42 @@ def run_load_test(
     errors = 0
     cache_hits = 0
 
-    client = httpx.Client(timeout=timeout)
     endpoint = f"{base_url}/recommend"
 
     print(f"\nRunning {num_requests} requests to {endpoint}")
     print(f"  explain={explain}, timeout={timeout}s")
     print("-" * 50)
 
-    for i in range(num_requests):
-        query = QUERIES[i % len(QUERIES)]
-        payload = {
-            "query": query,
-            "k": 3,
-            "explain": explain,
-        }
+    with httpx.Client(timeout=timeout) as client:
+        for i in range(num_requests):
+            query = QUERIES[i % len(QUERIES)]
+            payload = {
+                "query": query,
+                "k": 3,
+                "explain": explain,
+            }
 
-        try:
-            start = time.perf_counter()
-            resp = client.post(endpoint, json=payload)
-            elapsed = time.perf_counter() - start
+            try:
+                start = time.perf_counter()
+                resp = client.post(endpoint, json=payload)
+                elapsed = time.perf_counter() - start
 
-            if resp.status_code == 200:
-                latencies.append(elapsed * 1000)  # Convert to ms
+                if resp.status_code == 200:
+                    latencies.append(elapsed * 1000)  # Convert to ms
 
-                # Check for cache hit (response time < 100ms typically indicates cache)
-                if elapsed < 0.1:
-                    cache_hits += 1
-            else:
+                    if elapsed < CACHE_HIT_THRESHOLD_S:
+                        cache_hits += 1
+                else:
+                    errors += 1
+                    print(f"  [{i + 1}] Error: {resp.status_code} - {resp.text[:100]}")
+
+            except Exception as e:
                 errors += 1
-                print(f"  [{i + 1}] Error: {resp.status_code} - {resp.text[:100]}")
+                print(f"  [{i + 1}] Exception: {e}")
 
-        except Exception as e:
-            errors += 1
-            print(f"  [{i + 1}] Exception: {e}")
-
-        # Progress indicator
-        if (i + 1) % 10 == 0:
-            print(f"  Completed {i + 1}/{num_requests} requests...")
-
-    client.close()
+            # Progress indicator
+            if (i + 1) % 10 == 0:
+                print(f"  Completed {i + 1}/{num_requests} requests...")
 
     return _build_results(
         latencies=latencies,
@@ -198,7 +199,7 @@ async def run_concurrent_load_test(
             async with lock:
                 if resp.status_code == 200:
                     latencies.append(elapsed * 1000)
-                    if elapsed < 0.1:
+                    if elapsed < CACHE_HIT_THRESHOLD_S:
                         cache_hits += 1
                 else:
                     errors += 1
@@ -238,7 +239,7 @@ async def run_concurrent_load_test(
     )
 
 
-def print_results(results: dict, target_p99_ms: float = 500.0) -> None:
+def print_results(results: dict, target_p99_ms: float = DEFAULT_TARGET_P99_MS) -> None:
     """Print formatted results."""
     print("\n" + "=" * 50)
     print("LOAD TEST RESULTS")
@@ -250,16 +251,22 @@ def print_results(results: dict, target_p99_ms: float = 500.0) -> None:
     else:
         print("\nMode: Sequential")
 
-    print(f"Requests: {results['successful']}/{results['total_requests']} successful")
-    print(f"Errors: {results['errors']}")
-    print(f"Cache hits: {results.get('cache_hits', 0)}")
+    total = results["total_requests"]
+    errors = results["errors"]
+    cache_hits = results.get("cache_hits", 0)
+
+    print(f"Requests: {results['successful']}/{total} successful")
+    if total > 0:
+        print(f"Errors: {100 * errors / total:.1f}% ({errors}/{total})")
+    else:
+        print(f"Errors: {errors}")
+    print(f"Cache hits (estimated): {cache_hits}")
 
     if results["successful"] > 0:
         print("\nLatency (ms):")
         print(f"  Min:    {results['min_ms']:.1f}")
         print(f"  Max:    {results['max_ms']:.1f}")
         print(f"  Mean:   {results['mean_ms']:.1f}")
-        print(f"  Median: {results['median_ms']:.1f}")
         print(f"  StdDev: {results['stdev_ms']:.1f}")
 
         print("\nPercentiles (ms):")
@@ -270,12 +277,18 @@ def print_results(results: dict, target_p99_ms: float = 500.0) -> None:
         # Target check
         p99 = results["p99_ms"]
         if p99 <= target_p99_ms:
-            print(f"\n  Target p99 < {target_p99_ms}ms: PASS ({p99:.1f}ms)")
+            print(f"\n  Target p99 <= {target_p99_ms:.0f}ms: PASS ({p99:.1f}ms)")
         else:
-            print(f"\n  Target p99 < {target_p99_ms}ms: FAIL ({p99:.1f}ms)")
-            print(
-                "  Bottleneck: Likely LLM generation (check sage_llm_duration_seconds)"
-            )
+            print(f"\n  Target p99 <= {target_p99_ms:.0f}ms: FAIL ({p99:.1f}ms)")
+            explain_mode = results.get("config", {}).get("explain", True)
+            if explain_mode:
+                print(
+                    "  Bottleneck: Likely LLM generation (check sage_llm_duration_seconds)"
+                )
+            else:
+                print(
+                    "  Bottleneck: Likely retrieval or cache (check sage_retrieval_duration_seconds and cache hit rate)"
+                )
 
     print("\n" + "=" * 50)
 
@@ -314,8 +327,8 @@ def main():
     parser.add_argument(
         "--target-p99",
         type=float,
-        default=500.0,
-        help="Target p99 latency in ms (default: 500)",
+        default=DEFAULT_TARGET_P99_MS,
+        help=f"Target p99 latency in ms (default: {DEFAULT_TARGET_P99_MS:.0f})",
     )
     parser.add_argument(
         "--save",
