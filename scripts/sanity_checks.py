@@ -33,6 +33,7 @@ from sage.config import (
     log_banner,
     log_section,
 )
+from sage.services.faithfulness import is_refusal
 from sage.services.retrieval import get_candidates
 
 if TYPE_CHECKING:
@@ -152,21 +153,30 @@ CONFLICT_PHRASES = frozenset(
     ]
 )
 
-# Phrases indicating graceful refusal
-REFUSAL_PHRASES = frozenset(
-    [
-        "cannot",
-        "can't",
-        "unable",
-        "no evidence",
-        "insufficient",
-        "limited",
-    ]
-)
-
 # Thresholds
 COMBINED_HHEM_THRESHOLD = 0.5
 KEY_TERM_THRESHOLD = 0.3
+
+# Spot-check limits
+SPOT_CHECK_QUERY_LIMIT = 5
+SPOT_CHECK_CANDIDATES_K = 2
+SPOT_CHECK_MIN_RATING = 4.0
+SPOT_CHECK_PRODUCTS_LIMIT = 2
+SPOT_CHECK_MAX_EVIDENCE = 3
+EVIDENCE_PREVIEW_COUNT = 2
+EVIDENCE_PREVIEW_LENGTH = 100
+
+# Calibration limits
+CALIBRATION_QUERY_LIMIT = 15
+CALIBRATION_CANDIDATES_K = 5
+CALIBRATION_MIN_RATING = 3.0
+CALIBRATION_PRODUCTS_LIMIT = 2
+CALIBRATION_MAX_EVIDENCE = 3
+MIN_CALIBRATION_SAMPLES = 5
+
+# Empty context test settings (low values to trigger quality gate)
+EMPTY_CONTEXT_SCORE = 0.3
+EMPTY_CONTEXT_RATING = 3.0
 
 
 # ============================================================================
@@ -178,12 +188,17 @@ def _generate_spot_samples(
     explainer: Explainer, detector: HallucinationDetector, max_samples: int = 10
 ) -> Iterator[tuple]:
     """Generate spot-check samples, yielding (query, hhem_result, explanation_result)."""
-    for query in EVALUATION_QUERIES[:5]:
+    for query in EVALUATION_QUERIES[:SPOT_CHECK_QUERY_LIMIT]:
         products = get_candidates(
-            query=query, k=2, min_rating=4.0, aggregation=AggregationMethod.MAX
+            query=query,
+            k=SPOT_CHECK_CANDIDATES_K,
+            min_rating=SPOT_CHECK_MIN_RATING,
+            aggregation=AggregationMethod.MAX,
         )
-        for product in products[:2]:
-            result = explainer.generate_explanation(query, product, max_evidence=3)
+        for product in products[:SPOT_CHECK_PRODUCTS_LIMIT]:
+            result = explainer.generate_explanation(
+                query, product, max_evidence=SPOT_CHECK_MAX_EVIDENCE
+            )
             hhem = detector.check_explanation(result.evidence_texts, result.explanation)
             yield query, hhem, result
             max_samples -= 1
@@ -199,22 +214,31 @@ def run_spot_check(explainer: Explainer, detector: HallucinationDetector) -> Non
     for i, (query, hhem, result) in enumerate(
         _generate_spot_samples(explainer, detector), 1
     ):
-        log_section(logger, f"SAMPLE {i}")
-        logger.info('Query: "%s"', query)
-        logger.info(
-            "HHEM: %.3f (%s)",
-            hhem.score,
-            "PASS" if not hhem.is_hallucinated else "FAIL",
-        )
-        logger.info("EVIDENCE:")
-        for ev in result.evidence_texts[:2]:
-            logger.info('  "%s..."', ev[:100])
-        logger.info("EXPLANATION:")
-        logger.info("  %s", result.explanation)
-        results.append({"query": query, "hhem_score": hhem.score})
+        try:
+            log_section(logger, f"SAMPLE {i}")
+            logger.info('Query: "%s"', query)
+            logger.info(
+                "HHEM: %.3f (%s)",
+                hhem.score,
+                "PASS" if not hhem.is_hallucinated else "FAIL",
+            )
+            logger.info("EVIDENCE:")
+            for ev in result.evidence_texts[:EVIDENCE_PREVIEW_COUNT]:
+                logger.info('  "%s..."', ev[:EVIDENCE_PREVIEW_LENGTH])
+            logger.info("EXPLANATION:")
+            logger.info("  %s", result.explanation)
+            results.append({"query": query, "hhem_score": hhem.score})
+        except Exception:
+            logger.warning("Skipping sample %d due to error", i, exc_info=True)
+            continue
 
-    scores = [r["hhem_score"] for r in results]
-    logger.info("SUMMARY: %d samples, mean HHEM: %.3f", len(results), np.mean(scores))
+    if results:
+        scores = [r["hhem_score"] for r in results]
+        logger.info(
+            "SUMMARY: %d samples, mean HHEM: %.3f", len(results), np.mean(scores)
+        )
+    else:
+        logger.warning("SUMMARY: No samples collected")
 
 
 # ============================================================================
@@ -267,61 +291,70 @@ def run_adversarial_tests(
     results = []
     for case in ADVERSARIAL_CASES:
         log_section(logger, case["name"])
+        try:
+            chunks = [
+                make_test_chunk(
+                    case["positive"], score=0.9, rating=5.0, review_id="pos"
+                ),
+                make_test_chunk(
+                    case["negative"], score=0.85, rating=1.0, review_id="neg"
+                ),
+            ]
+            product = make_test_product(chunks)
+            result = explainer.generate_explanation(
+                case["query"], product, max_evidence=2
+            )
 
-        chunks = [
-            make_test_chunk(case["positive"], score=0.9, rating=5.0, review_id="pos"),
-            make_test_chunk(case["negative"], score=0.85, rating=1.0, review_id="neg"),
-        ]
-        product = make_test_product(chunks)
-        result = explainer.generate_explanation(case["query"], product, max_evidence=2)
+            # Faithfulness check: explanation is grounded in combined evidence
+            hhem_combined = detector.check_explanation(
+                result.evidence_texts, result.explanation
+            )
+            is_grounded = hhem_combined.score >= COMBINED_HHEM_THRESHOLD
 
-        # Faithfulness check: explanation is grounded in combined evidence
-        hhem_combined = detector.check_explanation(
-            result.evidence_texts, result.explanation
-        )
-        is_grounded = hhem_combined.score >= COMBINED_HHEM_THRESHOLD
+            # Content reference check: does explanation reference BOTH pieces?
+            pos_ratio = compute_term_overlap(result.explanation, case["positive"])
+            neg_ratio = compute_term_overlap(result.explanation, case["negative"])
+            references_positive = pos_ratio >= KEY_TERM_THRESHOLD
+            references_negative = neg_ratio >= KEY_TERM_THRESHOLD
+            references_both = references_positive and references_negative
 
-        # Content reference check: does explanation reference BOTH pieces?
-        pos_ratio = compute_term_overlap(result.explanation, case["positive"])
-        neg_ratio = compute_term_overlap(result.explanation, case["negative"])
-        references_positive = pos_ratio >= KEY_TERM_THRESHOLD
-        references_negative = neg_ratio >= KEY_TERM_THRESHOLD
-        references_both = references_positive and references_negative
+            # Keyword check: uses explicit conflict language
+            keyword_ack = contains_any_phrase(result.explanation, CONFLICT_PHRASES)
 
-        # Keyword check: uses explicit conflict language
-        keyword_ack = contains_any_phrase(result.explanation, CONFLICT_PHRASES)
+            # Overall: grounded + references both + uses conflict language
+            full_ack = is_grounded and references_both and keyword_ack
 
-        # Overall: grounded + references both + uses conflict language
-        full_ack = is_grounded and references_both and keyword_ack
+            logger.info("Explanation: %s", result.explanation)
+            logger.info(
+                "HHEM combined: %.3f (%s)",
+                hhem_combined.score,
+                "grounded" if is_grounded else "HALLUCINATED",
+            )
+            logger.info(
+                "References positive: %.0f%% of terms (%s)",
+                pos_ratio * 100,
+                yn(references_positive),
+            )
+            logger.info(
+                "References negative: %.0f%% of terms (%s)",
+                neg_ratio * 100,
+                yn(references_negative),
+            )
+            logger.info("Uses conflict language: %s", yn(keyword_ack))
+            logger.info("FULL ACKNOWLEDGMENT: %s", "PASS" if full_ack else "FAIL")
 
-        logger.info("Explanation: %s", result.explanation)
-        logger.info(
-            "HHEM combined: %.3f (%s)",
-            hhem_combined.score,
-            "grounded" if is_grounded else "HALLUCINATED",
-        )
-        logger.info(
-            "References positive: %.0f%% of terms (%s)",
-            pos_ratio * 100,
-            yn(references_positive),
-        )
-        logger.info(
-            "References negative: %.0f%% of terms (%s)",
-            neg_ratio * 100,
-            yn(references_negative),
-        )
-        logger.info("Uses conflict language: %s", yn(keyword_ack))
-        logger.info("FULL ACKNOWLEDGMENT: %s", "PASS" if full_ack else "FAIL")
-
-        results.append(
-            {
-                "case": case["name"],
-                "grounded": is_grounded,
-                "references_both": references_both,
-                "keyword_ack": keyword_ack,
-                "full_ack": full_ack,
-            }
-        )
+            results.append(
+                {
+                    "case": case["name"],
+                    "grounded": is_grounded,
+                    "references_both": references_both,
+                    "keyword_ack": keyword_ack,
+                    "full_ack": full_ack,
+                }
+            )
+        except Exception:
+            logger.warning("Skipping case %s due to error", case["name"], exc_info=True)
+            continue
 
     log_summary_counts(
         results,
@@ -347,7 +380,7 @@ EMPTY_CONTEXT_CASES = [
     },
     {"name": "Minimal", "query": "high-quality camera lens", "evidence": "OK."},
     {
-        "name": "Foreign",
+        "name": "Minimal_NonEnglish",
         "query": "wireless mouse",
         "evidence": "Muy bueno el producto.",
     },
@@ -357,24 +390,31 @@ EMPTY_CONTEXT_CASES = [
 def run_empty_context_tests(
     explainer: Explainer, detector: HallucinationDetector
 ) -> None:
-    """Test graceful refusal with irrelevant evidence."""
+    """Test quality gate refusal on insufficient evidence."""
     log_banner(logger, "EMPTY CONTEXT: Graceful Refusal", width=70)
     del detector  # Passed for interface consistency but unused (refusals bypass HHEM)
 
     results = []
     for case in EMPTY_CONTEXT_CASES:
         log_section(logger, case["name"])
+        try:
+            chunk = make_test_chunk(
+                case["evidence"], score=EMPTY_CONTEXT_SCORE, rating=EMPTY_CONTEXT_RATING
+            )
+            product = make_test_product([chunk], score=EMPTY_CONTEXT_SCORE)
+            result = explainer.generate_explanation(
+                case["query"], product, max_evidence=1
+            )
 
-        chunk = make_test_chunk(case["evidence"], score=0.3, rating=3.0)
-        product = make_test_product([chunk], score=0.3)
-        result = explainer.generate_explanation(case["query"], product, max_evidence=1)
+            graceful = is_refusal(result.explanation)
 
-        graceful = contains_any_phrase(result.explanation, REFUSAL_PHRASES)
+            logger.info("Explanation: %s", result.explanation)
+            logger.info("Graceful refusal: %s", yn(graceful))
 
-        logger.info("Explanation: %s", result.explanation)
-        logger.info("Graceful refusal: %s", yn(graceful))
-
-        results.append({"case": case["name"], "graceful": graceful})
+            results.append({"case": case["name"], "graceful": graceful})
+        except Exception:
+            logger.warning("Skipping case %s due to error", case["name"], exc_info=True)
+            continue
 
     logger.info(
         "SUMMARY: %d/%d refused gracefully",
@@ -419,13 +459,18 @@ def run_calibration_check(
     samples: list[CalibrationSample] = []
     logger.info("Generating samples...")
 
-    for query in EVALUATION_QUERIES[:15]:
+    for query in EVALUATION_QUERIES[:CALIBRATION_QUERY_LIMIT]:
         products = get_candidates(
-            query=query, k=5, min_rating=3.0, aggregation=AggregationMethod.MAX
+            query=query,
+            k=CALIBRATION_CANDIDATES_K,
+            min_rating=CALIBRATION_MIN_RATING,
+            aggregation=AggregationMethod.MAX,
         )
-        for product in products[:2]:
+        for product in products[:CALIBRATION_PRODUCTS_LIMIT]:
             try:
-                result = explainer.generate_explanation(query, product, max_evidence=3)
+                result = explainer.generate_explanation(
+                    query, product, max_evidence=CALIBRATION_MAX_EVIDENCE
+                )
                 hhem = detector.check_explanation(
                     result.evidence_texts, result.explanation
                 )
@@ -443,8 +488,8 @@ def run_calibration_check(
                 logger.debug("Error generating sample", exc_info=True)
 
     logger.info("Samples: %d", len(samples))
-    if len(samples) < 5:
-        logger.warning("Not enough samples")
+    if len(samples) < MIN_CALIBRATION_SAMPLES:
+        logger.warning("Not enough samples (need %d)", MIN_CALIBRATION_SAMPLES)
         return
 
     # Extract arrays for correlation analysis
