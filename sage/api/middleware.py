@@ -248,15 +248,15 @@ class LatencyMiddleware:
                 logger.exception("%s %s [%s] failed", method, path, request_id)
                 raise
             finally:
-                elapsed_ms = (time.perf_counter() - start) * 1000
+                elapsed_s = time.perf_counter() - start
                 record_request(path, method, status)
-                observe_duration(path, elapsed_ms)
+                observe_duration(path, elapsed_s)
                 if path not in _QUIET_PATHS:
                     logger.info(
                         "%s %s %d %.1fms [%s]",
                         method,
                         path,
                         status,
-                        elapsed_ms,
+                        elapsed_s * 1000,
                         request_id,
                     )

@@ -11,6 +11,7 @@ Metrics exposed at GET /metrics:
     - sage_llm_duration_seconds: Time spent waiting on LLM API
     - sage_retrieval_duration_seconds: Time spent on Qdrant vector search
     - sage_embedding_duration_seconds: Time spent computing query embeddings
+    - sage_hhem_duration_seconds: Time for HHEM hallucination verification
     - sage_errors_total: Errors by type (timeout, llm_error, retrieval_error, etc.)
 
 Latency budget breakdown (target p99 < 500ms):
@@ -138,10 +139,10 @@ def record_request(endpoint: str, method: str, status: int) -> None:
         REQUEST_COUNT.labels(endpoint=endpoint, method=method, status=str(status)).inc()
 
 
-def observe_duration(endpoint: str, duration_ms: float) -> None:
-    """Record end-to-end request latency (converts ms to seconds for Prometheus)."""
+def observe_duration(endpoint: str, duration_seconds: float) -> None:
+    """Record end-to-end request latency."""
     if _PROMETHEUS_AVAILABLE:
-        REQUEST_LATENCY.labels(endpoint=endpoint).observe(duration_ms / 1000.0)
+        REQUEST_LATENCY.labels(endpoint=endpoint).observe(duration_seconds)
 
 
 def record_error(error_type: str) -> None:
