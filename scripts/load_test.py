@@ -31,6 +31,7 @@ import time
 from datetime import datetime
 
 import httpx
+import numpy as np
 
 from sage.config import RESULTS_DIR, save_results
 
@@ -59,13 +60,9 @@ def percentile(data: list[float], p: float) -> float:
     """Calculate the p-th percentile of data."""
     if not data:
         return 0.0
-    sorted_data = sorted(data)
-    k = (len(sorted_data) - 1) * (p / 100)
-    f = int(k)
-    c = f + 1
-    if c >= len(sorted_data):
-        return sorted_data[-1]
-    return sorted_data[f] + (sorted_data[c] - sorted_data[f]) * (k - f)
+    if p < 0 or p > 100:
+        raise ValueError("Percentile must be between 0 and 100")
+    return float(np.percentile(data, p))
 
 
 def _build_results(
