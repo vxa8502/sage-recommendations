@@ -148,7 +148,7 @@ def generate_refusal_message(
         return (
             f'I found reviews for this product, but none of them discuss "{safe_query}" '
             f"specifically. The reviews I found focus on other features or use cases, "
-            f"so I can't give you a grounded answer about what you're asking.\n\n"
+            f"so I cannot provide a grounded recommendation for what you're asking.\n\n"
             f"You could try:\n"
             f'- Broadening your search (e.g., "wireless earbuds" instead of '
             f'"wireless earbuds for running")\n'

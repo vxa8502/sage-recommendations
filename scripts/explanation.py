@@ -162,11 +162,36 @@ def run_quality_gate_tests():
     log_banner(logger, "EVIDENCE QUALITY GATE TESTS")
 
     log_section(logger, "1. QUALITY CHECK FUNCTION")
+    # Test cases derived from config thresholds
+    # Note: create_mock_product takes tokens_per_chunk, total = n_chunks * tokens_per_chunk
+    passing_chunks = MIN_EVIDENCE_CHUNKS + 1
+    passing_tokens_per_chunk = (MIN_EVIDENCE_TOKENS // passing_chunks) + 30
+    passing_score = MIN_RETRIEVAL_SCORE + 0.1
+    # For failing tokens: ensure total tokens < MIN_EVIDENCE_TOKENS
+    failing_tokens_per_chunk = (MIN_EVIDENCE_TOKENS // passing_chunks) - 10
+    failing_score = MIN_RETRIEVAL_SCORE - 0.2
+
     test_cases = [
-        (3, 100, 0.85, True, None),
-        (1, 100, 0.85, False, RefusalType.INSUFFICIENT_CHUNKS),
-        (2, 10, 0.85, False, RefusalType.INSUFFICIENT_TOKENS),
-        (3, 100, 0.5, False, RefusalType.LOW_RELEVANCE),
+        # All thresholds met
+        (passing_chunks, passing_tokens_per_chunk, passing_score, True, None),
+        # Exactly at chunk threshold (should pass)
+        (MIN_EVIDENCE_CHUNKS, passing_tokens_per_chunk, passing_score, True, None),
+        # Below token threshold (total = n_chunks * tokens_per_chunk < MIN_EVIDENCE_TOKENS)
+        (
+            passing_chunks,
+            failing_tokens_per_chunk,
+            passing_score,
+            False,
+            RefusalType.INSUFFICIENT_TOKENS,
+        ),
+        # Below score threshold
+        (
+            passing_chunks,
+            passing_tokens_per_chunk,
+            failing_score,
+            False,
+            RefusalType.LOW_RELEVANCE,
+        ),
     ]
 
     for n_chunks, tok, score, expected, expected_type in test_cases:
@@ -187,7 +212,12 @@ def run_quality_gate_tests():
     log_section(logger, "2. REFUSAL GENERATION")
     query = "wireless headphones"
 
-    for n_chunks, tok, score in [(1, 100, 0.85), (2, 10, 0.85), (3, 100, 0.5)]:
+    # Test refusal generation for cases that fail quality gate (derived from config)
+    refusal_cases = [
+        (passing_chunks, failing_tokens_per_chunk, passing_score),  # Fails on tokens
+        (passing_chunks, passing_tokens_per_chunk, failing_score),  # Fails on score
+    ]
+    for n_chunks, tok, score in refusal_cases:
         product = create_mock_product(n_chunks, tok, score)
         quality = check_evidence_quality(product)
         refusal = generate_refusal_message(query, quality)

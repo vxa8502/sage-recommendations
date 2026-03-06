@@ -147,8 +147,8 @@ CITATION_PREFIX = "review_"  # Prefix for citation IDs (e.g., "review_123")
 # ---------------------------------------------------------------------------
 
 MAX_EVIDENCE = 5  # Maximum evidence chunks per explanation
-MIN_EVIDENCE_CHUNKS = 2  # Minimum chunks required to generate explanation
-MIN_EVIDENCE_TOKENS = 50  # Minimum total tokens across all evidence
+MIN_EVIDENCE_CHUNKS = 1  # Minimum chunks required to generate explanation
+MIN_EVIDENCE_TOKENS = 30  # Minimum total tokens across all evidence
 MIN_RETRIEVAL_SCORE = 0.7  # Minimum relevance score for top chunk
 
 

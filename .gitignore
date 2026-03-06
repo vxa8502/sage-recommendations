@@ -18,8 +18,10 @@ __pycache__/
 # Timestamped EDA stats (keep only *_latest.json)
 /data/eda_stats_20*.json
 
-# But TRACK eval results (small JSONs, source of truth for metrics)
+# Eval results - ignore generated artifacts, track only curated files
 !/data/eval_results/
+/data/eval_results/*_20*.json
+/data/eval_results/*_latest.json
 
 # Assets (PNGs break HF deployment - hosted on assets-only branch)
 assets/
