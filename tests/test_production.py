@@ -56,10 +56,9 @@ class TestSecurityHeaders:
         resp = client.get("/health")
         assert resp.status_code == 200
 
-        # Check security headers
+        # Check security headers (x-xss-protection omitted - deprecated in modern browsers)
         assert resp.headers.get("x-content-type-options") == "nosniff"
         assert resp.headers.get("x-frame-options") == "DENY"
-        assert resp.headers.get("x-xss-protection") == "1; mode=block"
         assert resp.headers.get("referrer-policy") == "strict-origin-when-cross-origin"
         assert "no-store" in resp.headers.get("cache-control", "")
 

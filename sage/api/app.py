@@ -170,6 +170,7 @@ def create_app() -> FastAPI:
         description="RAG-powered product recommendation API",
         version="0.1.0",
         lifespan=_lifespan,
+        max_request_body_size=10_000,
     )
     app.add_middleware(LatencyMiddleware)
 

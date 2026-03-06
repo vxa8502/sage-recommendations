@@ -144,9 +144,20 @@ def reset_shutdown_coordinator() -> None:
 # Paths excluded from per-request logging (still measured by Prometheus)
 _QUIET_PATHS = {"/metrics", "/health", "/ready"}
 
+# Static security headers (dynamic headers like x-request-id added per-request)
+_SECURITY_HEADERS = (
+    (b"x-content-type-options", b"nosniff"),
+    (b"x-frame-options", b"DENY"),
+    (b"referrer-policy", b"strict-origin-when-cross-origin"),
+    (b"cache-control", b"no-store, no-cache, must-revalidate"),
+)
+
 # Known route patterns -- map raw paths to normalized labels to prevent
 # unbounded Prometheus cardinality from bot scanners hitting random paths.
 _KNOWN_ROUTES = {
+    "/": "/docs",
+    "/docs": "/docs",
+    "/openapi.json": "/docs",
     "/health": "/health",
     "/ready": "/ready",
     "/recommend": "/recommend",
@@ -225,14 +236,7 @@ class LatencyMiddleware:
                 # Timing and correlation headers
                 headers.append((b"x-response-time-ms", f"{elapsed_ms:.1f}".encode()))
                 headers.append((b"x-request-id", request_id.encode()))
-                # Security headers
-                headers.append((b"x-content-type-options", b"nosniff"))
-                headers.append((b"x-frame-options", b"DENY"))
-                headers.append((b"x-xss-protection", b"1; mode=block"))
-                headers.append((b"referrer-policy", b"strict-origin-when-cross-origin"))
-                headers.append(
-                    (b"cache-control", b"no-store, no-cache, must-revalidate")
-                )
+                headers.extend(_SECURITY_HEADERS)
                 message = {**message, "headers": headers}
             await send(message)
 
