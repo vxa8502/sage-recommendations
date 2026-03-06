@@ -202,17 +202,28 @@ class TestCacheThreadSafety:
         """Concurrent puts should not lose entries."""
         cache = SemanticCache(max_entries=100, ttl_seconds=3600)
         entries_per_thread = 20
+        recent_writes: list[tuple[str, np.ndarray, int, int]] = []
+        lock = threading.Lock()
 
         def writer(thread_id: int):
             for i in range(entries_per_thread):
                 key = f"thread_{thread_id}_query_{i}"
                 embedding = np.random.rand(EMBEDDING_DIM).astype(np.float32)
                 cache.put(key, embedding, {"thread": thread_id, "index": i})
+                with lock:
+                    recent_writes.append((key, embedding, thread_id, i))
 
         errors = _run_threads(writer, num_threads=10)
 
         assert not errors, f"Errors during concurrent writes: {errors}"
         assert cache.stats().size <= 100
+
+        # Integrity verification: surviving entries have correct data
+        for key, emb, tid, idx in recent_writes:
+            cached, _ = cache.get(key, emb)
+            if cached is not None:
+                assert cached["thread"] == tid
+                assert cached["index"] == idx
 
     def test_concurrent_reads_writes_no_crashes(self):
         """Mixed concurrent reads and writes should not crash."""
