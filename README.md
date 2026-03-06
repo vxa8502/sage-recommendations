@@ -33,13 +33,18 @@ A recommendation system that refuses to hallucinate. Every claim is a verified q
 
 ## Results
 
-| Metric | Target | Achieved | Status |
-|--------|--------|----------|--------|
-| NDCG@10 (recommendation quality) | > 0.30 | 0.487 | Pass |
-| Claim-level faithfulness (HHEM) | > 0.85 | 0.968 | Pass |
-| Human evaluation (n=50) | > 3.5/5 | 3.6/5 | Pass |
-| P99 latency (production) | < 500ms | 283ms | Pass |
-| Grounding impact | - | +70pp | WITH evidence: 73% vs WITHOUT: 2.6% |
+| Metric | Target | Achieved | Notes |
+|--------|--------|----------|-------|
+| NDCG@10 | > 0.30 | **0.487** [0.37, 0.60] | 95% CI via bootstrap (n=42 queries) |
+| Faithfulness (claim-level HHEM) | > 0.85 | **0.968** | 96.8% of individual quoted claims verified |
+| Faithfulness (full-explanation HHEM) | - | 0.20 | 20% of full explanations pass; stricter but penalizes refusals |
+| Faithfulness (RAGAS) | - | 0.50 | Penalizes citation-heavy style and graceful refusals |
+| Human evaluation | > 3.5/5 | **3.6**/5 | Single-rater; no inter-rater reliability |
+| P99 latency | < 500ms | **283ms** | Production load test |
+
+**Faithfulness metrics:** Three measurements capture different aspects. Claim-level HHEM (96.8%) validates each quoted claim individually - the primary metric since Sage uses explicit citations. Full-explanation HHEM (20%) and RAGAS (0.50) score entire responses holistically, penalizing graceful refusals as "failures." All three reported for transparency.
+
+**Human evaluation limitation:** Single-rater (developer). Usefulness (3.06) and satisfaction (3.04) have high variance (std ~1.7), suggesting inconsistent quality across query types.
 
 ---
 
