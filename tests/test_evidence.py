@@ -48,6 +48,22 @@ class TestCheckEvidenceQuality:
         quality = check_evidence_quality(product)
         assert quality.top_score == pytest.approx(0.92, abs=0.01)
 
+    def test_multiple_threshold_failures_returns_first(self, make_product):
+        """When multiple thresholds fail, refusal_type holds the first failure.
+
+        The check order is: chunks -> tokens -> score.
+        Logging captures all failures via _log_refusal(), but the dataclass
+        only stores the first for simplicity.
+        """
+        # n_chunks=1 fails min_chunks=2, text_len=5 fails min_tokens=50, score=0.3 fails min_score=0.7
+        product = make_product(score=0.3, n_chunks=1, text_len=5)
+        quality = check_evidence_quality(
+            product, min_chunks=2, min_tokens=50, min_score=0.7
+        )
+        assert quality.is_sufficient is False
+        # First failure in threshold order (chunks < min_chunks) is returned
+        assert quality.refusal_type == RefusalType.INSUFFICIENT_CHUNKS
+
 
 class TestGenerateRefusalMessage:
     def test_generates_message_for_insufficient_chunks(self, make_product):
