@@ -113,43 +113,6 @@ class Recommendation:
 
 
 # ============================================================================
-# COLD START MODELS
-# ============================================================================
-
-
-@dataclass
-class UserPreferences:
-    """
-    Structured user preferences for cold-start onboarding.
-
-    In production, these would be collected via an onboarding flow:
-    "What categories interest you?" "What's your budget?" etc.
-    """
-
-    categories: list[str] | None = None
-    budget: str | None = None  # "low", "medium", "high", or specific like "$50-100"
-    priorities: list[str] | None = None  # ["quality", "value", "durability"]
-    use_cases: list[str] | None = None  # ["work", "travel", "home"]
-
-
-@dataclass
-class NewItem:
-    """
-    A new item with no reviews (item cold-start scenario).
-
-    In production, this would come from the product catalog.
-    """
-
-    product_id: str
-    title: str
-    description: str | None = None
-    category: str | None = None
-    price: float | None = None
-    features: list[str] | None = None
-    brand: str | None = None
-
-
-# ============================================================================
 # EXPLANATION MODELS
 # ============================================================================
 
@@ -291,15 +254,15 @@ class CitationVerificationResult:
     """Result of citation verification for an explanation."""
 
     all_valid: bool
-    citations_found: int
-    citations_invalid: int
+    n_valid: int
+    n_invalid: int
     valid_citations: list[CitationResult] = field(default_factory=list)
     invalid_citations: list[CitationResult] = field(default_factory=list)
 
     @property
     def n_citations(self) -> int:
         """Total number of citations in explanation."""
-        return self.citations_found + self.citations_invalid
+        return self.n_valid + self.n_invalid
 
 
 # ============================================================================
@@ -504,7 +467,7 @@ class FaithfulnessResult:
 
 @dataclass
 class FaithfulnessReport:
-    """Aggregate report for batch faithfulness evaluation (legacy format)."""
+    """Aggregate report for batch RAGAS faithfulness evaluation."""
 
     mean_score: float
     min_score: float

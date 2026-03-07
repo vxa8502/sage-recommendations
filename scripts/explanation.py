@@ -302,11 +302,8 @@ def run_cold_start_tests():
     from sage.services.cold_start import (
         recommend_cold_start_user,
         get_warmup_level,
-        get_content_weight,
         hybrid_recommend,
     )
-    from sage.core import UserPreferences
-    from sage.services.cold_start import preferences_to_query
 
     log_banner(logger, "COLD-START HANDLING TESTS")
 
@@ -328,38 +325,10 @@ def run_cold_start_tests():
     test_counts = [0, 1, 3, 5, 10]
     for count in test_counts:
         level = get_warmup_level(count)
-        weight = get_content_weight(count)
-        logger.info(
-            "  %d interactions: level=%s, content_weight=%.1f", count, level, weight
-        )
-
-    # Test preferences to query
-    log_section(logger, "2. PREFERENCES TO QUERY")
-
-    prefs = UserPreferences(
-        categories=["headphones", "audio"],
-        budget="medium",
-        priorities=["quality", "durability"],
-        use_cases="travel",
-    )
-    query = preferences_to_query(prefs)
-    logger.info("Preferences: %s", prefs)
-    logger.info('Query: "%s"', query)
+        logger.info("  %d interactions: level=%s", count, level)
 
     # Test cold-start recommendations
-    log_section(logger, "3. COLD-START RECOMMENDATIONS")
-
-    logger.info("Preference-based (cold user):")
-    recs = recommend_cold_start_user(
-        preferences=prefs,
-        top_k=5,
-        min_rating=4.0,
-    )
-    logger.info("Got %d recommendations", len(recs))
-    for r in recs[:3]:
-        logger.info(
-            "  %s: score=%.3f, rating=%.1f", r.product_id, r.score, r.avg_rating
-        )
+    log_section(logger, "2. COLD-START RECOMMENDATIONS")
 
     logger.info("Query-based (cold user):")
     recs = recommend_cold_start_user(
@@ -371,14 +340,13 @@ def run_cold_start_tests():
         logger.info("  %s: score=%.3f", r.product_id, r.score)
 
     # Test hybrid recommend
-    log_section(logger, "4. HYBRID RECOMMENDATIONS")
+    log_section(logger, "3. HYBRID RECOMMENDATIONS")
 
     # Cold user (no history)
     logger.info("Cold user (0 interactions):")
     recs = hybrid_recommend(
         query="noise cancelling headphones",
         user_history=None,
-        preferences=prefs,
         top_k=3,
     )
     for r in recs:

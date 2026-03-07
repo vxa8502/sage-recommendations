@@ -24,9 +24,8 @@ from sage.services.explanation import (
     explain_recommendations,
 )
 
-# Cold-start service
+# Cold-start functions
 from sage.services.cold_start import (
-    ColdStartService,
     hybrid_recommend,
     recommend_cold_start_user,
 )
@@ -92,7 +91,6 @@ __all__ = [
     "explain_recommendations",
     "get_explanation_services",
     # Cold-start
-    "ColdStartService",
     "recommend_cold_start_user",
     "hybrid_recommend",
     # Evaluation (lazy)

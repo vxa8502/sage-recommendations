@@ -14,9 +14,6 @@ from sage.core.models import (
     Recommendation,
     RefusalType,
     RetrievedChunk,
-    # Cold Start
-    NewItem,
-    UserPreferences,
     # Explanation
     EvidenceQuality,
     ExplanationResult,
@@ -99,8 +96,6 @@ __all__ = [
     "Recommendation",
     "RefusalType",
     "RetrievedChunk",
-    "NewItem",
-    "UserPreferences",
     "EvidenceQuality",
     "ExplanationResult",
     "StreamingExplanation",

@@ -3,34 +3,11 @@
 from sage.core.models import (
     ExplanationResult,
     EvidenceQuality,
-    NewItem,
     ProductScore,
     RefusalType,
     RetrievedChunk,
     StreamingExplanation,
 )
-
-
-class TestNewItem:
-    def test_minimal_construction(self):
-        item = NewItem(product_id="P1", title="Test Product")
-        assert item.product_id == "P1"
-        assert item.title == "Test Product"
-        assert item.brand is None
-        assert item.category is None
-
-    def test_full_construction(self):
-        item = NewItem(
-            product_id="P1",
-            title="Test Product",
-            description="A test",
-            category="Electronics",
-            price=29.99,
-            features=["feature1"],
-            brand="TestBrand",
-        )
-        assert item.brand == "TestBrand"
-        assert item.price == 29.99
 
 
 class TestProductScore:
