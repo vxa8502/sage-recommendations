@@ -319,8 +319,8 @@ def verify_citations(
     if not citations:
         return CitationVerificationResult(
             all_valid=True,
-            citations_found=0,
-            citations_invalid=0,
+            n_valid=0,
+            n_invalid=0,
         )
 
     valid = []
@@ -335,8 +335,8 @@ def verify_citations(
 
     return CitationVerificationResult(
         all_valid=len(invalid) == 0,
-        citations_found=len(valid),
-        citations_invalid=len(invalid),
+        n_valid=len(valid),
+        n_invalid=len(invalid),
         valid_citations=valid,
         invalid_citations=invalid,
     )

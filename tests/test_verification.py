@@ -107,13 +107,16 @@ class TestVerifyExplanation:
             "Very comfortable fit for long sessions.",
         ]
         result = verify_explanation(explanation, evidence)
-        assert result.quotes_found >= 1
+        assert result.all_verified is True
+        assert result.quotes_found == 2
+        assert result.quotes_missing == 0
 
     def test_missing_quotes_detected(self):
         explanation = 'Reviewers said "invented claim not in evidence".'
         evidence = ["Completely different content about batteries."]
         result = verify_explanation(explanation, evidence)
-        assert result.quotes_missing >= 1
+        assert result.all_verified is False
+        assert result.quotes_missing == 1
 
     def test_no_quotes_in_explanation(self):
         explanation = "This product has good reviews overall."
@@ -135,7 +138,7 @@ class TestCheckForbiddenPhrases:
         text = "This product is highly recommended for everyone."
         result = check_forbidden_phrases(text)
         assert result.has_violations is True
-        assert len(result.violations) > 0
+        assert "highly recommended" in result.violations
 
     def test_empty_input(self):
         result = check_forbidden_phrases("")
@@ -146,9 +149,8 @@ class TestExtractCitations:
     def test_extracts_bracketed_citations(self):
         text = '"good sound" [review_123]'
         citations = extract_citations(text)
-        assert len(citations) >= 1
-        ids = [c[0] for c in citations]
-        assert any("review_123" in cid for cid in ids)
+        assert len(citations) == 1
+        assert citations[0][0] == "review_123"
 
     def test_no_citations(self):
         text = "No citations here."
@@ -192,8 +194,9 @@ class TestVerifyCitations:
             "Offers good value for the price.",
         ]
         result = verify_citations(explanation, evidence_ids, evidence_texts)
-        assert isinstance(result.all_valid, bool)
-        assert result.citations_found >= 0
+        assert result.all_valid is True
+        assert result.n_valid == 2
+        assert result.n_invalid == 0
 
     def test_no_citations_passes(self):
         explanation = "Simple explanation without citations."
