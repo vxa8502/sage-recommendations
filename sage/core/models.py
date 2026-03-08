@@ -567,15 +567,14 @@ class MetricsReport:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for easy serialization."""
         result: dict[str, Any] = {
-            "n_cases": self.n_cases,
-            f"ndcg@{self.k}": round(self.ndcg_at_k, 4),
-            f"hit@{self.k}": round(self.hit_at_k, 4),
-            "mrr": round(self.mrr, 4),
-            f"precision@{self.k}": round(self.precision_at_k, 4),
-            f"recall@{self.k}": round(self.recall_at_k, 4),
-            "diversity": round(self.diversity, 4),
-            "coverage": round(self.coverage, 4),
-            "novelty": round(self.novelty, 4),
+            "ndcg_at_10": self.ndcg_at_k,
+            "hit_at_10": self.hit_at_k,
+            "mrr": self.mrr,
+            "precision_at_10": self.precision_at_k,
+            "recall_at_10": self.recall_at_k,
+            "diversity": self.diversity,
+            "coverage": self.coverage,
+            "novelty": self.novelty,
         }
         for name, ci in [
             ("ndcg_ci", self.ndcg_ci),

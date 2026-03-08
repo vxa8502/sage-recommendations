@@ -1,8 +1,10 @@
 """Tests for sage.core.models — dataclass construction and methods."""
 
 from sage.core.models import (
+    ConfidenceInterval,
     ExplanationResult,
     EvidenceQuality,
+    MetricsReport,
     ProductScore,
     RefusalType,
     RetrievedChunk,
@@ -125,3 +127,88 @@ class TestEvidenceQuality:
         )
         assert eq.is_sufficient is False
         assert eq.refusal_type == RefusalType.INSUFFICIENT_CHUNKS
+
+
+class TestConfidenceInterval:
+    def test_str_format(self):
+        ci = ConfidenceInterval(mean=0.487, lower=0.372, upper=0.599)
+        assert str(ci) == "0.487 [0.372, 0.599]"
+
+    def test_to_dict(self):
+        ci = ConfidenceInterval(mean=0.4872, lower=0.3725, upper=0.5986)
+        result = ci.to_dict()
+        assert result == {
+            "mean": 0.4872,
+            "ci_lower": 0.3725,
+            "ci_upper": 0.5986,
+            "confidence": 0.95,
+        }
+
+
+class TestMetricsReport:
+    def test_to_dict_keys_match_json_format(self):
+        report = MetricsReport(
+            n_cases=42,
+            ndcg_at_k=0.487,
+            hit_at_k=0.738,
+            mrr=0.421,
+            precision_at_k=0.129,
+            recall_at_k=0.472,
+            diversity=0.020,
+            coverage=0.016,
+            novelty=9.809,
+        )
+        result = report.to_dict()
+        expected_keys = {
+            "ndcg_at_10",
+            "hit_at_10",
+            "mrr",
+            "precision_at_10",
+            "recall_at_10",
+            "diversity",
+            "coverage",
+            "novelty",
+        }
+        assert set(result.keys()) == expected_keys
+        assert result["ndcg_at_10"] == 0.487
+        assert result["hit_at_10"] == 0.738
+        assert result["mrr"] == 0.421
+        assert result["precision_at_10"] == 0.129
+        assert result["recall_at_10"] == 0.472
+        assert result["diversity"] == 0.020
+        assert result["coverage"] == 0.016
+        assert result["novelty"] == 9.809
+
+    def test_to_dict_excludes_n_cases_and_k(self):
+        report = MetricsReport(n_cases=42, k=10, ndcg_at_k=0.5)
+        result = report.to_dict()
+        assert "n_cases" not in result
+        assert "k" not in result
+
+    def test_to_dict_with_confidence_intervals(self):
+        report = MetricsReport(
+            ndcg_at_k=0.487,
+            hit_at_k=0.738,
+            mrr=0.421,
+            ndcg_ci=ConfidenceInterval(mean=0.48723456, lower=0.372, upper=0.599),
+            hit_ci=ConfidenceInterval(mean=0.738, lower=0.595, upper=0.881),
+        )
+        result = report.to_dict()
+        assert "ndcg_ci" in result
+        assert result["ndcg_ci"]["mean"] == 0.4872  # Rounded from 0.48723456
+        assert "hit_ci" in result
+        assert "mrr_ci" not in result
+
+    def test_str_output(self):
+        report = MetricsReport(
+            n_cases=42,
+            ndcg_at_k=0.4872,
+            hit_at_k=0.7381,
+            mrr=0.4209,
+            k=10,
+        )
+        output = str(report)
+        assert "n=42" in output
+        assert "k=10" in output
+        assert "NDCG@10" in output
+        assert "0.4872" in output

@@ -87,27 +87,7 @@ def run_primary_evaluation(cases, item_embeddings, item_popularity, total_items)
     )
     logger.info(str(report))
 
-    result = {
-        "ndcg_at_10": report.ndcg_at_k,
-        "hit_at_10": report.hit_at_k,
-        "mrr": report.mrr,
-        "precision_at_10": report.precision_at_k,
-        "recall_at_10": report.recall_at_k,
-        "diversity": report.diversity,
-        "coverage": report.coverage,
-        "novelty": report.novelty,
-    }
-
-    # Add confidence intervals if available
-    for name, ci in [
-        ("ndcg_ci", report.ndcg_ci),
-        ("hit_ci", report.hit_ci),
-        ("mrr_ci", report.mrr_ci),
-    ]:
-        if ci:
-            result[name] = ci.to_dict()
-
-    return result
+    return report.to_dict()
 
 
 # ============================================================================
