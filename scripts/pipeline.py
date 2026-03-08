@@ -32,13 +32,14 @@ from sage.config import (
     log_section,
     log_kv,
 )
+from sage.utils import timed_operation
 from sage.data import (
     prepare_data,
     get_review_stats,
     create_temporal_splits,
     verify_temporal_boundaries,
 )
-from sage.core.chunking import chunk_reviews_batch
+from sage.core.chunking import chunk_reviews_batch, NO_CHUNK_THRESHOLD
 from sage.adapters.embeddings import get_embedder
 from sage.adapters.vector_store import (
     get_client,
@@ -97,12 +98,7 @@ def run_tokenizer_validation():
 def run_chunking_test():
     """Test chunking quality on long reviews."""
     import pandas as pd
-    from sage.core.chunking import (
-        chunk_text,
-        split_sentences,
-        estimate_tokens,
-        NO_CHUNK_THRESHOLD,
-    )
+    from sage.core.chunking import chunk_text, split_sentences, estimate_tokens
 
     log_banner(logger, "CHUNKING QUALITY TEST", width=70)
 
@@ -117,7 +113,7 @@ def run_chunking_test():
     sample = long_reviews.sample(min(50, len(long_reviews)), random_state=42)
     results = []
 
-    for idx, row in enumerate(sample.itertuples(index=False)):
+    for idx, row in enumerate(sample.itertuples(index=False), start=1):
         text, tokens, rating = row.text, row.tokens, int(row.rating)
         chunks = chunk_text(text, embedder=embedder)
         sentences = split_sentences(text)
@@ -131,10 +127,10 @@ def run_chunking_test():
             }
         )
 
-        if idx < 5:
+        if idx <= 5:
             logger.info(
                 "Review %d [%d*] (%d tok) -> %d chunks",
-                idx + 1,
+                idx,
                 rating,
                 tokens,
                 len(chunks),
@@ -176,8 +172,6 @@ def run_pipeline(subset_size: int, force: bool):
             continue
         if key == "sparsity":
             logger.info("%s: %.4f (%.2f%% sparse)", key, value, value * 100)
-        elif isinstance(value, float):
-            log_kv(logger, key, value)
         else:
             log_kv(logger, key, value)
 
@@ -189,9 +183,10 @@ def run_pipeline(subset_size: int, force: bool):
     df["text_length"] = df["text"].str.len()
     df["estimated_tokens"] = df["text_length"] // CHARS_PER_TOKEN
 
-    needs_chunking = (df["estimated_tokens"] > 200).sum()
+    needs_chunking = (df["estimated_tokens"] > NO_CHUNK_THRESHOLD).sum()
     logger.info(
-        "Reviews needing chunking (>200 tokens): %d (%.1f%%)",
+        "Reviews needing chunking (>%d tokens): %d (%.1f%%)",
+        NO_CHUNK_THRESHOLD,
         needs_chunking,
         needs_chunking / len(df) * 100,
     )
@@ -202,13 +197,12 @@ def run_pipeline(subset_size: int, force: bool):
         review["review_id"] = f"review_{i}"
         review["product_id"] = review.get("parent_asin", review.get("asin", ""))
 
-    # Load embedder and Qdrant client
-    client = get_client()
+    # Load embedder (used for chunking and embedding, independent of Qdrant)
     embedder = get_embedder()
 
     # Chunk reviews with semantic chunking
-    logger.info("Chunking %d reviews...", len(reviews_for_chunking))
-    chunks = chunk_reviews_batch(reviews_for_chunking, embedder=embedder)
+    with timed_operation("Chunking", logger):
+        chunks = chunk_reviews_batch(reviews_for_chunking, embedder=embedder)
     logger.info(
         "Created %d chunks from %d reviews (expansion: %.2fx)",
         len(chunks),
@@ -220,26 +214,33 @@ def run_pipeline(subset_size: int, force: bool):
     chunk_texts = [c.text for c in chunks]
     cache_path = DATA_DIR / f"embeddings_{len(chunks)}.npy"
 
-    logger.info("Embedding %d chunks...", len(chunk_texts))
-    embeddings = embedder.embed_passages(
-        chunk_texts, cache_path=cache_path, force=force
-    )
+    with timed_operation("Embedding", logger):
+        embeddings = embedder.embed_passages(
+            chunk_texts, cache_path=cache_path, force=force
+        )
     logger.info("Embeddings shape: %s", embeddings.shape)
 
     # Embedding technical validation
     log_section(logger, "Embedding Technical Validation")
     logger.info("Shape: %s (expected: (n, 384))", embeddings.shape)
-    assert embeddings.shape[1] == 384, f"Wrong dimensions: {embeddings.shape[1]}"
+    if embeddings.shape[1] != 384:
+        raise ValueError(
+            f"Wrong embedding dimensions: {embeddings.shape[1]}, expected 384"
+        )
 
     nan_count = np.isnan(embeddings).sum()
     inf_count = np.isinf(embeddings).sum()
     logger.info("NaN values: %d", nan_count)
     logger.info("Inf values: %d", inf_count)
-    assert nan_count == 0 and inf_count == 0, "Found NaN or Inf values"
+    if nan_count != 0 or inf_count != 0:
+        raise ValueError(f"Invalid embeddings: {nan_count} NaN, {inf_count} Inf values")
 
     norms = np.linalg.norm(embeddings, axis=1)
     logger.info("L2 norms: mean=%.4f, std=%.6f", norms.mean(), norms.std())
-    assert np.allclose(norms, 1.0, atol=0.01), "Embeddings not normalized"
+    if not np.allclose(norms, 1.0, atol=0.01):
+        raise ValueError(
+            f"Embeddings not normalized: norm range [{norms.min():.4f}, {norms.max():.4f}]"
+        )
 
     logger.info("Value range: [%.3f, %.3f]", embeddings.min(), embeddings.max())
     logger.info("Technical validation: PASSED")
@@ -295,45 +296,50 @@ def run_pipeline(subset_size: int, force: bool):
     # content; the metadata filter enforces quality/sentiment alignment.
     # -------------------------------------------------------------------------
 
-    # Create collection and upload
-    create_collection(client)
-    create_payload_indexes(client)
-    upload_chunks(client, chunks, embeddings)
+    # Qdrant operations with proper cleanup
+    client = get_client()
+    try:
+        # Create collection and upload
+        create_collection(client)
+        create_payload_indexes(client)
+        with timed_operation("Upload to Qdrant", logger):
+            upload_chunks(client, chunks, embeddings)
 
-    # Verify upload
-    info = get_collection_info(client)
-    log_section(logger, "Collection Info")
-    for key, value in info.items():
-        log_kv(logger, key, value)
+        # Verify upload
+        info = get_collection_info(client)
+        log_section(logger, "Collection Info")
+        for key, value in info.items():
+            log_kv(logger, key, value)
 
-    # Test search
-    log_section(logger, "Testing Search")
+        # Test search
+        log_section(logger, "Testing Search")
 
-    test_queries = [
-        "great battery life, lasts all day",
-        "poor quality, broke after a week",
-        "easy to set up and use",
-    ]
+        test_queries = [
+            "great battery life, lasts all day",
+            "poor quality, broke after a week",
+            "easy to set up and use",
+        ]
 
-    for query in test_queries:
+        for query in test_queries:
+            query_embedding = embedder.embed_single_query(query)
+            results = search(client, query_embedding.tolist(), limit=3)
+
+            logger.info("Query: '%s'", query)
+            for i, r in enumerate(results, start=1):
+                logger.info("  %d. [%.0f*] %s...", i, r["rating"], r["text"][:80])
+
+        # Test filtered search (demonstrates negation mitigation)
+        log_section(logger, "Filtered Search (4+ stars)")
+        query = "good sound quality"
         query_embedding = embedder.embed_single_query(query)
-        results = search(client, query_embedding.tolist(), limit=3)
+        results = search(client, query_embedding.tolist(), limit=5, min_rating=4.0)
 
-        logger.info("Query: '%s'", query)
-        for i, r in enumerate(results):
-            logger.info("  %d. [%.0f*] %s...", i + 1, r["rating"], r["text"][:80])
+        logger.info("Query: '%s' (min 4 stars)", query)
+        for i, r in enumerate(results, start=1):
+            logger.info("  %d. [%.0f*] %s...", i, r["rating"], r["text"][:80])
+    finally:
+        client.close()
 
-    # Test filtered search (demonstrates negation mitigation)
-    log_section(logger, "Filtered Search (4+ stars)")
-    query = "good sound quality"
-    query_embedding = embedder.embed_single_query(query)
-    results = search(client, query_embedding.tolist(), limit=5, min_rating=4.0)
-
-    logger.info("Query: '%s' (min 4 stars)", query)
-    for i, r in enumerate(results):
-        logger.info("  %d. [%.0f*] %s...", i + 1, r["rating"], r["text"][:80])
-
-    client.close()
     log_banner(logger, "PIPELINE COMPLETE")
 
 

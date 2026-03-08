@@ -2,13 +2,21 @@
 Qdrant vector store adapter.
 
 Wraps Qdrant client operations for storing and searching review embeddings.
+
+Includes retry logic for transient connection failures:
+- Initial delay: 1 second
+- Max delay: 30 seconds
+- Max retries: 3
 """
 
 from __future__ import annotations
 
 import hashlib
-from typing import TYPE_CHECKING
+import random
+import time
+from functools import wraps
 from time import perf_counter
+from typing import TYPE_CHECKING, Callable, TypeVar
 
 if TYPE_CHECKING:
     import numpy as np
@@ -25,6 +33,76 @@ from sage.config import (
 from sage.utils import require_import, thread_safe_singleton
 
 logger = get_logger(__name__)
+
+T = TypeVar("T")
+
+# Retry settings for transient Qdrant failures
+QDRANT_INITIAL_DELAY = 1.0
+QDRANT_MAX_DELAY = 30.0
+QDRANT_MAX_RETRIES = 3
+QDRANT_JITTER = 0.25
+
+# Exception messages that indicate transient failures worth retrying
+TRANSIENT_ERROR_PATTERNS = (
+    "connection",
+    "timeout",
+    "unavailable",
+    "temporarily",
+    "reset by peer",
+    "broken pipe",
+    "network",
+)
+
+
+def _is_transient_error(error: Exception) -> bool:
+    """Check if an error is transient and worth retrying."""
+    error_str = str(error).lower()
+    return any(pattern in error_str for pattern in TRANSIENT_ERROR_PATTERNS)
+
+
+def with_qdrant_retry(func: Callable[..., T]) -> Callable[..., T]:
+    """Decorator for retrying Qdrant operations on transient failures.
+
+    Handles connection errors, timeouts, and temporary unavailability
+    with exponential backoff and jitter.
+    """
+
+    @wraps(func)
+    def wrapper(*args, **kwargs) -> T:
+        last_exception: Exception | None = None
+
+        for attempt in range(QDRANT_MAX_RETRIES + 1):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if not _is_transient_error(e):
+                    raise
+
+                last_exception = e
+
+                if attempt < QDRANT_MAX_RETRIES:
+                    base_delay = QDRANT_INITIAL_DELAY * (2**attempt)
+                    delay = min(base_delay, QDRANT_MAX_DELAY)
+                    delay += delay * QDRANT_JITTER * random.random()
+
+                    logger.warning(
+                        "Qdrant operation failed (attempt %d/%d), retrying in %.1fs: %s",
+                        attempt + 1,
+                        QDRANT_MAX_RETRIES + 1,
+                        delay,
+                        e,
+                    )
+                    time.sleep(delay)
+                else:
+                    logger.error(
+                        "Qdrant operation failed after %d attempts: %s",
+                        QDRANT_MAX_RETRIES + 1,
+                        e,
+                    )
+
+        raise last_exception  # type: ignore[misc]
+
+    return wrapper
 
 
 def _generate_point_id(review_id: str, chunk_index: int) -> str:
@@ -56,6 +134,7 @@ def get_client() -> "QdrantClient":
     return QdrantClient(url=QDRANT_URL, timeout=120)
 
 
+@with_qdrant_retry
 def create_collection(client, collection_name: str = COLLECTION_NAME) -> None:
     """
     Create a collection for storing review embeddings.
@@ -84,6 +163,7 @@ def create_collection(client, collection_name: str = COLLECTION_NAME) -> None:
     )
 
 
+@with_qdrant_retry
 def create_payload_indexes(client, collection_name: str = COLLECTION_NAME) -> None:
     """
     Create payload indexes for efficient filtering.
@@ -178,6 +258,7 @@ def upload_chunks(
     )
 
 
+@with_qdrant_retry
 def search(
     client,
     query_embedding: list,
@@ -235,6 +316,7 @@ def search(
     ]
 
 
+@with_qdrant_retry
 def get_collection_info(client, collection_name: str = COLLECTION_NAME) -> dict:
     """
     Get information about a collection.
@@ -254,6 +336,7 @@ def get_collection_info(client, collection_name: str = COLLECTION_NAME) -> dict:
     }
 
 
+@with_qdrant_retry
 def collection_exists(client, collection_name: str = COLLECTION_NAME) -> bool:
     """
     Check if a collection exists and has data.
