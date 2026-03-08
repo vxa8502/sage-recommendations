@@ -369,7 +369,7 @@ class TestFindSplitPoints:
         splits = find_split_points(sims, threshold_percentile=50)
         # With uniform values, the threshold equals the value itself
         # so no similarity is strictly below the threshold
-        assert isinstance(splits, list)
+        assert splits == []
 
     def test_clear_topic_boundary(self):
         # High similarities with one dip
@@ -383,8 +383,9 @@ class TestFindSplitPoints:
         assert splits == []
 
     def test_single_value(self):
+        # Single value cannot be below its own percentile threshold
         splits = find_split_points([0.5])
-        assert isinstance(splits, list)
+        assert splits == []
 
     def test_returns_sorted_indices(self):
         sims = [0.9, 0.1, 0.9, 0.05, 0.9]

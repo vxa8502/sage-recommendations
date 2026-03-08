@@ -161,6 +161,9 @@ def find_split_points(
     if not similarities:
         return []
 
+    # Split where similarity drops into the bottom (100 - threshold_percentile)%.
+    # E.g., threshold_percentile=85 splits at values below the 15th percentile
+    # (i.e., the lowest 15% of similarities indicate topic shifts).
     threshold = np.percentile(similarities, 100 - threshold_percentile)
 
     return [i for i, sim in enumerate(similarities) if sim < threshold]
