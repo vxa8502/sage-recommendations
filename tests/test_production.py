@@ -18,6 +18,7 @@ from fastapi.testclient import TestClient
 from sage.api.middleware import LatencyMiddleware
 from sage.api.routes import router, _build_cache_key
 from sage.config import EMBEDDING_DIM
+from sage.core.models import ProductScore
 from sage.services.cache import SemanticCache
 
 from tests.test_api import _create_default_mocks
@@ -82,6 +83,32 @@ class TestSecurityHeaders:
         response_time = resp.headers.get("x-response-time-ms")
         assert response_time is not None
         assert float(response_time) >= 0
+
+    @patch("sage.api.routes.get_candidates")
+    def test_recommend_preserves_cache_result_header_with_latency_middleware(
+        self,
+        mock_get_candidates,
+    ):
+        mock_get_candidates.return_value = [
+            ProductScore(
+                product_id="P1",
+                score=0.9,
+                chunk_count=1,
+                avg_rating=4.5,
+                evidence=[],
+            )
+        ]
+        app = _make_app_with_middleware()
+
+        with TestClient(app) as client:
+            resp = client.post(
+                "/recommend",
+                json={"query": "wireless headphones", "k": 3, "explain": False},
+            )
+
+        assert resp.status_code == 200
+        assert resp.headers.get("x-response-time-ms") is not None
+        assert resp.headers.get("x-cache-result") == "disabled"
 
 
 class TestCacheKeyGeneration:

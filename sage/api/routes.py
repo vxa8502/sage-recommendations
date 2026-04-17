@@ -378,14 +378,15 @@ def _check_cache(
     cache,
     cache_key: str,
     query_embedding: np.ndarray,
-) -> dict | None:
+) -> tuple[dict | None, str]:
     """Check cache for existing result and record metrics.
 
-    Returns cached result if found, None otherwise.
+    Returns a tuple of ``(cached_result, hit_type)`` where ``hit_type`` is
+    ``exact``, ``semantic``, or ``miss``.
     """
     cached, hit_type = cache.get(cache_key, query_embedding)
     record_cache_event(f"hit_{hit_type}" if hit_type != "miss" else "miss")
-    return cached
+    return cached, hit_type
 
 
 def _generate_explanation_for_product(
@@ -477,12 +478,14 @@ def _build_recommendation_with_explanation(
 def _sync_recommend(
     body: RecommendationRequest,
     app,
+    metadata: dict[str, str] | None = None,
 ) -> dict:
     """Synchronous recommendation logic.
 
     Separated for use with asyncio.to_thread() and timeout handling.
     Returns the response dict or raises an exception.
     """
+    metadata = metadata if metadata is not None else {}
     cache = app.state.cache
     raw_query = body.query
     q = sanitize_query(raw_query)
@@ -497,9 +500,12 @@ def _sync_recommend(
     # Embedding computed here is reused for candidate retrieval.
     if explain:
         query_embedding = app.state.embedder.embed_single_query(q)
-        if (cached := _check_cache(cache, cache_key, query_embedding)) is not None:
+        cached, hit_type = _check_cache(cache, cache_key, query_embedding)
+        metadata["cache_result"] = hit_type
+        if cached is not None:
             return cached
     else:
+        metadata["cache_result"] = "disabled"
         query_embedding = None
 
     products = _fetch_products(body, app, query_embedding=query_embedding)
@@ -551,7 +557,7 @@ def _sync_recommend(
         503: {"model": ErrorResponse},
     },
 )
-async def recommend(request: Request, body: RecommendationRequest):
+async def recommend(request: Request, body: RecommendationRequest, response: Response):
     """Return product recommendations with optional grounded explanations.
 
     Accepts JSON body with query, filters, and k.
@@ -561,11 +567,13 @@ async def recommend(request: Request, body: RecommendationRequest):
     q = body.query
 
     try:
+        metadata: dict[str, str] = {}
         # Run blocking code in thread pool with timeout
         result = await asyncio.wait_for(
-            asyncio.to_thread(_sync_recommend, body, app),
+            asyncio.to_thread(_sync_recommend, body, app, metadata),
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
+        response.headers["X-Cache-Result"] = metadata.get("cache_result", "unknown")
         return result
 
     except asyncio.TimeoutError:
