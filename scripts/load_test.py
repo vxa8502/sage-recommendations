@@ -465,7 +465,9 @@ def _run_phase_sync(
             )
 
             if resp.status_code != 200:
-                print(f"  [{phase} {i + 1}] Error: {resp.status_code} - {resp.text[:100]}")
+                print(
+                    f"  [{phase} {i + 1}] Error: {resp.status_code} - {resp.text[:100]}"
+                )
         except Exception as exc:
             print(f"  [{phase} {i + 1}] Exception: {exc}")
             samples.append(
@@ -656,12 +658,13 @@ def _print_latency_block(label: str, stats: dict[str, Any] | None) -> None:
         f"p50={stats['p50']:.1f}ms  p95={stats['p95']:.1f}ms  p99={stats['p99']:.1f}ms"
     )
     print(
-        "    "
-        f"min={stats['min']:.1f}  max={stats['max']:.1f}  mean={stats['mean']:.1f}"
+        f"    min={stats['min']:.1f}  max={stats['max']:.1f}  mean={stats['mean']:.1f}"
     )
 
 
-def print_results(results: dict[str, Any], target_ms: float = DEFAULT_TARGET_MS) -> None:
+def print_results(
+    results: dict[str, Any], target_ms: float = DEFAULT_TARGET_MS
+) -> None:
     """Print formatted load-test results."""
     print("\n" + "=" * 50)
     print("LOAD TEST RESULTS")
@@ -701,7 +704,9 @@ def print_results(results: dict[str, Any], target_ms: float = DEFAULT_TARGET_MS)
     print("\nLatency drill-down (measured phase):")
     _print_latency_block("Client RTT", measured.get("client_latency_ms"))
     _print_latency_block("Server time", measured.get("server_latency_ms"))
-    _print_latency_block("Network/platform overhead", measured.get("network_overhead_ms"))
+    _print_latency_block(
+        "Network/platform overhead", measured.get("network_overhead_ms")
+    )
 
     if warmup:
         warmup_client = (warmup.get("client_latency_ms") or {}).get("p95")
