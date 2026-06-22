@@ -93,7 +93,7 @@ PROVIDER_OPENAI = "openai"
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", PROVIDER_ANTHROPIC)
 
 # Model selection
-ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 OPENAI_MODEL = "gpt-4o-mini"
 
 # Generation settings
