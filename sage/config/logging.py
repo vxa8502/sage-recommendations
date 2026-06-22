@@ -113,9 +113,16 @@ class ConsoleFormatter(logging.Formatter):
 
         extra_str = f" [{', '.join(extras)}]" if extras else ""
 
-        if rid_str:
-            return f"{timestamp} {level_str} {rid_str} {message}{extra_str}"
-        return f"{timestamp} {level_str} {message}{extra_str}"
+        base = (
+            f"{timestamp} {level_str} {rid_str} {message}{extra_str}"
+            if rid_str
+            else f"{timestamp} {level_str} {message}{extra_str}"
+        )
+
+        if record.exc_info:
+            base = base + "\n" + self.formatException(record.exc_info)
+
+        return base
 
 
 # ---------------------------------------------------------------------------
