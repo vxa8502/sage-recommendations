@@ -1,0 +1,17 @@
+*
+!.gitignore
+!README.md
+!calibration/
+!calibration/.gitkeep
+!eval_results/
+!eval_results/.gitkeep
+!explanations/
+!explanations/.gitkeep
+!figures/
+!figures/.gitkeep
+!query_bank/
+!query_bank/.gitkeep
+!query_bank/README.md
+!query_bank/sources/
+!query_bank/sources/.gitkeep
+!query_bank/sources/README.md
