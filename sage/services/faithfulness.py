@@ -197,16 +197,25 @@ def get_ragas_llm(provider: str | None = None):
 
     if provider == "anthropic":
         try:
-            from anthropic import Anthropic
+            from anthropic import AsyncAnthropic
         except ImportError:
             raise ImportError("anthropic package required for RAGAS with Claude")
 
-        anthropic_client = Anthropic()
-        return llm_factory(
+        # RAGAS 0.4.x calls agenerate() internally, which requires an async
+        # client. The sync Anthropic() client raises TypeError at eval time
+        # and causes ragas.evaluate() to silently retry forever (hangs at 0%).
+        anthropic_client = AsyncAnthropic()
+        llm = llm_factory(
             ANTHROPIC_MODEL,
             provider="anthropic",
             client=anthropic_client,
         )
+        # Anthropic rejects requests that set both temperature and top_p.
+        # RAGAS's InstructorModelArgs defaults top_p=0.1 and only strips it
+        # for OpenAI reasoning models, not Anthropic. Remove it here.
+        if hasattr(llm, "model_args") and isinstance(llm.model_args, dict):
+            llm.model_args.pop("top_p", None)
+        return llm
     elif provider == "openai":
         try:
             from openai import AsyncOpenAI
@@ -238,7 +247,7 @@ class FaithfulnessEvaluator:
             target: Faithfulness target score (default 0.85).
         """
         ensure_ragas_installed()
-        from ragas.metrics import Faithfulness
+        from ragas.metrics.collections import Faithfulness
 
         self.llm = get_ragas_llm(provider)
         self.scorer = Faithfulness(llm=self.llm)
@@ -252,11 +261,14 @@ class FaithfulnessEvaluator:
         evidence_texts: list[str],
     ) -> float:
         """Score with retry logic for transient failures."""
-        return await self.scorer.ascore(
+        result = await self.scorer.ascore(
             user_input=query,
             response=explanation,
             retrieved_contexts=evidence_texts,
         )
+        # ragas 0.4.x returns MetricResult(value=float), not a bare float
+        v = result.value if hasattr(result, "value") else result
+        return float(v)
 
     async def evaluate_single_async(
         self,
@@ -316,28 +328,19 @@ class FaithfulnessEvaluator:
         explanation_results: list[ExplanationResult],
     ) -> FaithfulnessReport:
         """Evaluate faithfulness for multiple explanations."""
-        ensure_ragas_installed()
-        from ragas import EvaluationDataset
-        from ragas.metrics import Faithfulness
+        # ragas.evaluate() batch API is incompatible with ragas 0.4.x
+        # collections metrics; score each sample individually via async loop.
+        async def _run_all() -> list[FaithfulnessResult]:
+            results = []
+            for er in explanation_results:
+                r = await self.evaluate_single_async(
+                    er.query, er.explanation, er.evidence_texts
+                )
+                results.append(r)
+            return results
 
-        samples = _explanation_results_to_samples(explanation_results)
-        dataset = EvaluationDataset(samples=samples)
-        result = self._evaluate_batch_with_retry(dataset, [Faithfulness()])
-
-        df = result.to_pandas()  # type: ignore[union-attr]
-        scores = df["faithfulness"].tolist()
-
-        individual_results = [
-            FaithfulnessResult(
-                score=float(score),
-                query=er.query,
-                explanation=er.explanation,
-                evidence_count=len(er.evidence_texts),
-                meets_target=float(score) >= self.target,
-            )
-            for er, score in zip(explanation_results, scores, strict=True)
-        ]
-
+        individual_results = asyncio.run(_run_all())
+        scores = [r.score for r in individual_results]
         scores_arr = np.array(scores)
         n_passing = sum(1 for s in scores if s >= self.target)
 
@@ -345,7 +348,9 @@ class FaithfulnessEvaluator:
             mean_score=float(np.mean(scores_arr)),
             min_score=float(np.min(scores_arr)),
             max_score=float(np.max(scores_arr)),
-            std_score=float(np.std(scores_arr, ddof=1)) if len(scores_arr) > 1 else 0.0,
+            std_score=(
+                float(np.std(scores_arr, ddof=1)) if len(scores_arr) > 1 else 0.0
+            ),
             n_samples=len(scores),
             n_passing=n_passing,
             pass_rate=n_passing / len(scores) if scores else 0.0,
