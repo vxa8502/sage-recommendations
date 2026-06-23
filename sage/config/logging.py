@@ -16,7 +16,16 @@ Usage:
 import logging
 import os
 import sys
+from collections.abc import Callable
 from typing import Any
+
+# API layer registers its request-ID provider here at startup; avoids importing api from config.
+_request_id_provider: Callable[[], str] = lambda: "-"
+
+
+def register_request_id_provider(fn: Callable[[], str]) -> None:
+    global _request_id_provider
+    _request_id_provider = fn
 
 
 # ---------------------------------------------------------------------------
@@ -79,13 +88,7 @@ class ConsoleFormatter(logging.Formatter):
         # Check if we're in a TTY (supports colors)
         use_colors = hasattr(sys.stdout, "isatty") and sys.stdout.isatty()
 
-        # Get request ID from context
-        try:
-            from sage.api.context import get_request_id
-
-            request_id = get_request_id()
-        except ImportError:
-            request_id = "-"
+        request_id = _request_id_provider()
 
         # Format timestamp
         timestamp = self.formatTime(record, "%H:%M:%S")
@@ -137,13 +140,7 @@ class JSONFormatter(logging.Formatter):
         import json
         from datetime import datetime, timezone
 
-        # Import here to avoid circular imports
-        try:
-            from sage.api.context import get_request_id
-
-            request_id = get_request_id()
-        except ImportError:
-            request_id = "-"
+        request_id = _request_id_provider()
 
         log_entry = {
             "timestamp": datetime.now(timezone.utc).isoformat(),

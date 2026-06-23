@@ -10,11 +10,11 @@ Includes exponential backoff with jitter for rate limit handling:
 - Max retries: configurable (default 3 for rate limits)
 """
 
-import random
 import time
 from abc import ABC, abstractmethod
 from functools import wraps
-from typing import Any, Callable, Iterator, NoReturn, Protocol, TypeVar
+from typing import Any, NoReturn, Protocol, TypeVar
+from collections.abc import Callable, Iterator
 
 from sage.config import (
     ANTHROPIC_API_KEY,
@@ -30,7 +30,7 @@ from sage.config import (
     PROVIDER_OPENAI,
     get_logger,
 )
-from sage.utils import require_import
+from sage.utils import calculate_exponential_backoff_delay, require_import
 
 logger = get_logger(__name__)
 
@@ -41,23 +41,44 @@ RATE_LIMIT_INITIAL_DELAY = 1.0  # seconds
 RATE_LIMIT_MAX_DELAY = 60.0  # seconds
 RATE_LIMIT_MAX_RETRIES = 3  # additional retries for rate limits
 RATE_LIMIT_JITTER = 0.25  # 25% random jitter
+LLM_CLIENT_FACTORIES = {
+    PROVIDER_ANTHROPIC: lambda: AnthropicClient(),
+    PROVIDER_OPENAI: lambda: OpenAIClient(),
+}
 
 
-def _calculate_backoff_delay(attempt: int, jitter: float = RATE_LIMIT_JITTER) -> float:
-    """Calculate exponential backoff delay with jitter.
+class LLMRateLimitError(RuntimeError):
+    """Raised when the provider rejects a request due to rate limiting."""
 
-    Args:
-        attempt: Current retry attempt (0-indexed).
-        jitter: Maximum jitter factor (0.25 = up to 25% variation).
 
-    Returns:
-        Delay in seconds.
-    """
-    base_delay = RATE_LIMIT_INITIAL_DELAY * (2**attempt)
-    delay = min(base_delay, RATE_LIMIT_MAX_DELAY)
-    # Add random jitter to prevent thundering herd
-    jitter_amount = delay * jitter * random.random()
-    return delay + jitter_amount
+def _log_rate_limit_retry(*, attempt: int, error: Exception) -> None:
+    """Log and sleep for a rate-limited retry attempt."""
+    delay = calculate_exponential_backoff_delay(
+        initial_delay=RATE_LIMIT_INITIAL_DELAY,
+        attempt=attempt,
+        max_delay=RATE_LIMIT_MAX_DELAY,
+        jitter=RATE_LIMIT_JITTER,
+    )
+    logger.warning(
+        "Rate limited (attempt %d/%d), backing off %.1fs: %s",
+        attempt + 1,
+        RATE_LIMIT_MAX_RETRIES + 1,
+        delay,
+        error,
+    )
+    time.sleep(delay)
+
+
+def _extract_text_blocks(blocks: object) -> str:
+    """Join all provider text blocks, ignoring non-text content blocks."""
+    if not isinstance(blocks, list):
+        return ""
+    parts: list[str] = []
+    for block in blocks:
+        text = getattr(block, "text", None)
+        if isinstance(text, str) and text:
+            parts.append(text)
+    return "".join(parts)
 
 
 def with_rate_limit_retry(func: Callable[..., T]) -> Callable[..., T]:
@@ -69,28 +90,16 @@ def with_rate_limit_retry(func: Callable[..., T]) -> Callable[..., T]:
 
     @wraps(func)
     def wrapper(self, *args, **kwargs) -> T:
-        last_exception = None
+        last_exception: LLMRateLimitError | None = None
 
         for attempt in range(RATE_LIMIT_MAX_RETRIES + 1):
             try:
                 return func(self, *args, **kwargs)
-            except RuntimeError as e:
-                # Check if this is a rate limit error (translated from SDK)
-                if "rate limit" not in str(e).lower():
-                    raise
-
+            except LLMRateLimitError as e:
                 last_exception = e
 
                 if attempt < RATE_LIMIT_MAX_RETRIES:
-                    delay = _calculate_backoff_delay(attempt)
-                    logger.warning(
-                        "Rate limited (attempt %d/%d), backing off %.1fs: %s",
-                        attempt + 1,
-                        RATE_LIMIT_MAX_RETRIES + 1,
-                        delay,
-                        e,
-                    )
-                    time.sleep(delay)
+                    _log_rate_limit_retry(attempt=attempt, error=e)
                 else:
                     logger.error(
                         "Rate limit persists after %d retries: %s",
@@ -116,6 +125,9 @@ class LLMClient(Protocol):
     Implementations must provide at least the generate() method.
     Streaming support via generate_stream() is optional.
     """
+
+    provider: str
+    model: str
 
     def generate(self, system: str, user: str) -> tuple[str, int]:
         """
@@ -153,6 +165,7 @@ class LLMClientBase(ABC):
     """Base class with shared initialization and error handling."""
 
     client: Any
+    provider: str
     model: str
     temperature: float
     max_tokens: int
@@ -163,6 +176,7 @@ class LLMClientBase(ABC):
     def _init_common(
         self,
         model: str,
+        provider: str,
         temperature: float,
         max_tokens: int,
         sdk: Any,
@@ -171,6 +185,7 @@ class LLMClientBase(ABC):
     ) -> None:
         """Initialize common attributes."""
         self.model = model
+        self.provider = provider
         self.temperature = temperature
         self.max_tokens = max_tokens
         self._sdk = sdk
@@ -182,12 +197,44 @@ class LLMClientBase(ABC):
         if isinstance(exc, self._sdk.APITimeoutError):
             raise TimeoutError(f"{self._name} API request timed out: {exc}") from exc
         if isinstance(exc, self._sdk.RateLimitError):
-            raise RuntimeError(f"{self._name} API rate limited: {exc}") from exc
+            raise LLMRateLimitError(f"{self._name} API rate limited: {exc}") from exc
         if isinstance(exc, self._sdk.APIConnectionError):
             raise ConnectionError(
                 f"Failed to connect to {self._name} API: {exc}"
             ) from exc
         raise exc
+
+    def _stream_with_rate_limit_retry(
+        self,
+        token_factory: Callable[[], Iterator[str]],
+    ) -> Iterator[str]:
+        """Retry rate-limited stream setup before any tokens have been emitted."""
+        last_exception: LLMRateLimitError | None = None
+
+        for attempt in range(RATE_LIMIT_MAX_RETRIES + 1):
+            emitted_any = False
+            try:
+                for token in token_factory():
+                    emitted_any = True
+                    yield token
+                return
+            except self._sdk.RateLimitError as exc:
+                translated = LLMRateLimitError(f"{self._name} API rate limited: {exc}")
+                if emitted_any or attempt >= RATE_LIMIT_MAX_RETRIES:
+                    logger.error(
+                        "Rate limit persists after %d retries: %s",
+                        RATE_LIMIT_MAX_RETRIES + 1,
+                        translated,
+                    )
+                    raise translated from exc
+                last_exception = translated
+                _log_rate_limit_retry(attempt=attempt, error=translated)
+            except self._api_errors as exc:
+                self._translate_error(exc)
+
+        if last_exception is not None:
+            raise last_exception
+        raise RuntimeError(f"{self._name} stream retry loop exited unexpectedly.")
 
     @abstractmethod
     def generate(self, system: str, user: str) -> tuple[str, int]:
@@ -245,6 +292,7 @@ class AnthropicClient(LLMClientBase):
         )
         self._init_common(
             model=model,
+            provider=PROVIDER_ANTHROPIC,
             temperature=temperature,
             max_tokens=max_tokens,
             sdk=anthropic,
@@ -281,12 +329,7 @@ class AnthropicClient(LLMClientBase):
                 system=system,
                 messages=[{"role": "user", "content": user}],
             )
-            # Extract text from first TextBlock
-            text = ""
-            for block in response.content:
-                if hasattr(block, "text"):
-                    text = block.text
-                    break
+            text = _extract_text_blocks(response.content)
             tokens = response.usage.input_tokens + response.usage.output_tokens
             return text, tokens
         except self._api_errors as exc:
@@ -308,7 +351,7 @@ class AnthropicClient(LLMClientBase):
             RuntimeError: If rate limited.
             ConnectionError: If connection fails.
         """
-        try:
+        def token_factory() -> Iterator[str]:
             with self.client.messages.stream(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -316,10 +359,9 @@ class AnthropicClient(LLMClientBase):
                 system=system,
                 messages=[{"role": "user", "content": user}],
             ) as stream:
-                for text in stream.text_stream:
-                    yield text
-        except self._api_errors as exc:
-            self._translate_error(exc)
+                yield from stream.text_stream
+
+        yield from self._stream_with_rate_limit_retry(token_factory)
 
 
 # ---------------------------------------------------------------------------
@@ -368,6 +410,7 @@ class OpenAIClient(LLMClientBase):
         )
         self._init_common(
             model=model,
+            provider=PROVIDER_OPENAI,
             temperature=temperature,
             max_tokens=max_tokens,
             sdk=openai,
@@ -428,7 +471,7 @@ class OpenAIClient(LLMClientBase):
             RuntimeError: If rate limited.
             ConnectionError: If connection fails.
         """
-        try:
+        def token_factory() -> Iterator[str]:
             stream = self.client.chat.completions.create(
                 model=self.model,
                 max_tokens=self.max_tokens,
@@ -442,8 +485,8 @@ class OpenAIClient(LLMClientBase):
             for chunk in stream:
                 if chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
-        except self._api_errors as exc:
-            self._translate_error(exc)
+
+        yield from self._stream_with_rate_limit_retry(token_factory)
 
 
 # ---------------------------------------------------------------------------
@@ -465,17 +508,14 @@ def get_llm_client(provider: str | None = None) -> LLMClient:
     Raises:
         ValueError: If provider is not recognized.
     """
-    provider = provider.lower().strip() if provider else LLM_PROVIDER
-
-    if provider == PROVIDER_ANTHROPIC:
-        return AnthropicClient()
-    elif provider == PROVIDER_OPENAI:
-        return OpenAIClient()
-    else:
+    normalized_provider = (provider or LLM_PROVIDER).strip().lower()
+    factory = LLM_CLIENT_FACTORIES.get(normalized_provider)
+    if factory is None:
         raise ValueError(
-            f"Unknown LLM provider: {provider}. "
+            f"Unknown LLM provider: {normalized_provider}. "
             f"Use '{PROVIDER_ANTHROPIC}' or '{PROVIDER_OPENAI}'."
         )
+    return factory()
 
 
 __all__ = [
@@ -485,5 +525,6 @@ __all__ = [
     "OpenAIClient",
     "get_llm_client",
     "with_rate_limit_retry",
+    "LLMRateLimitError",
     "RATE_LIMIT_MAX_RETRIES",
 ]

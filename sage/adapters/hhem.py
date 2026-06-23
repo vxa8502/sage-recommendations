@@ -22,8 +22,8 @@ Limitations:
 
 import time
 import warnings
+from collections.abc import Callable
 
-from sage.api.metrics import observe_hhem_duration
 from sage.core import (
     ClaimResult,
     HallucinationResult,
@@ -44,6 +44,10 @@ HHEM_MAX_TOKENS = 512
 HHEM_TEMPLATE_OVERHEAD = 20  # Tokens used by prompt template
 
 
+class HHEMPredictionError(RuntimeError):
+    """Raised when an HHEM scoring pass fails internally."""
+
+
 class HallucinationDetector:
     """
     Detect hallucinations in generated explanations using HHEM.
@@ -57,6 +61,7 @@ class HallucinationDetector:
         model_name: str = HHEM_MODEL,
         device: str = HHEM_DEVICE,
         threshold: float = HALLUCINATION_THRESHOLD,
+        duration_observer: Callable[[float], None] | None = None,
     ):
         """
         Initialize the hallucination detector.
@@ -84,6 +89,7 @@ class HallucinationDetector:
         self.threshold = threshold
         self.device = device
         self._torch = torch
+        self._duration_observer = duration_observer
 
         # Load HHEM config to get prompt template and foundation model
         config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
@@ -118,6 +124,12 @@ class HallucinationDetector:
             self.device = "cpu"
 
         self.model.eval()
+
+    def _observe_duration(self, duration_seconds: float) -> None:
+        """Record HHEM duration when an observer is configured."""
+        observer = getattr(self, "_duration_observer", None)
+        if observer is not None:
+            observer(duration_seconds)
 
     def _format_premise(
         self,
@@ -173,7 +185,13 @@ class HallucinationDetector:
         return " ".join(kept)
 
     def _make_result(
-        self, score: float, explanation: str, premise_length: int
+        self,
+        score: float,
+        explanation: str,
+        premise_length: int,
+        *,
+        degraded: bool = False,
+        error_message: str | None = None,
     ) -> HallucinationResult:
         """Build a HallucinationResult from a score (DRY helper)."""
         return HallucinationResult(
@@ -182,7 +200,27 @@ class HallucinationDetector:
             threshold=self.threshold,
             explanation=explanation,
             premise_length=premise_length,
+            degraded=degraded,
+            error_message=error_message,
         )
+
+    def _make_degraded_claim_results(
+        self,
+        claims: list[str],
+        *,
+        error_message: str,
+    ) -> list[ClaimResult]:
+        """Build degraded claim results when the underlying predictor fails."""
+        return [
+            ClaimResult(
+                claim=claim,
+                score=0.0,
+                is_hallucinated=True,
+                degraded=True,
+                error_message=error_message,
+            )
+            for claim in claims
+        ]
 
     def _predict(self, text_pairs: list[tuple[str, str]]) -> list[float]:
         """
@@ -192,8 +230,10 @@ class HallucinationDetector:
             text_pairs: List of (premise, hypothesis) tuples.
 
         Returns:
-            List of consistency scores [0, 1]. Returns 0.0 for all pairs
-            on failure (graceful degradation).
+            List of consistency scores [0, 1].
+
+        Raises:
+            HHEMPredictionError: If tokenization or model inference fails.
         """
         try:
             pair_dicts = [{"text1": pair[0], "text2": pair[1]} for pair in text_pairs]
@@ -213,9 +253,9 @@ class HallucinationDetector:
             scores = probs[:, 1]  # Probability of class 1 (consistent)
 
             return [float(s.item()) for s in scores]
-        except Exception:
-            logger.exception("HHEM prediction failed, returning low-confidence scores")
-            return [0.0] * len(text_pairs)
+        except Exception as exc:
+            logger.exception("HHEM prediction failed")
+            raise HHEMPredictionError("HHEM prediction failed") from exc
 
     def check_explanation(
         self,
@@ -237,9 +277,21 @@ class HallucinationDetector:
         """
         t0 = time.perf_counter()
         premise = self._format_premise(evidence_texts, hypothesis=explanation)
-        scores = self._predict([(premise, explanation)])
+        try:
+            scores = self._predict([(premise, explanation)])
+        except HHEMPredictionError as exc:
+            hhem_duration = time.perf_counter() - t0
+            self._observe_duration(hhem_duration)
+            logger.warning("Falling back to degraded HHEM explanation result: %s", exc)
+            return self._make_result(
+                0.0,
+                explanation,
+                len(premise),
+                degraded=True,
+                error_message=str(exc),
+            )
         hhem_duration = time.perf_counter() - t0
-        observe_hhem_duration(hhem_duration)
+        self._observe_duration(hhem_duration)
         return self._make_result(scores[0], explanation, len(premise))
 
     def check_claims(
@@ -269,11 +321,20 @@ class HallucinationDetector:
             )
             for claim in claims
         ]
-        scores = self._predict(pairs)
+        try:
+            scores = self._predict(pairs)
+        except HHEMPredictionError as exc:
+            logger.warning("Falling back to degraded HHEM claim results: %s", exc)
+            return self._make_degraded_claim_results(
+                claims,
+                error_message=str(exc),
+            )
 
         return [
             ClaimResult(
-                claim=claim, score=score, is_hallucinated=score < self.threshold
+                claim=claim,
+                score=score,
+                is_hallucinated=score < self.threshold,
             )
             for claim, score in zip(claims, scores, strict=True)
         ]
@@ -295,7 +356,20 @@ class HallucinationDetector:
             (self._format_premise(evidence_texts, hypothesis=explanation), explanation)
             for evidence_texts, explanation in items
         ]
-        scores = self._predict(pairs)
+        try:
+            scores = self._predict(pairs)
+        except HHEMPredictionError as exc:
+            logger.warning("Falling back to degraded HHEM batch results: %s", exc)
+            return [
+                self._make_result(
+                    0.0,
+                    explanation,
+                    len(premise),
+                    degraded=True,
+                    error_message=str(exc),
+                )
+                for premise, explanation in pairs
+            ]
 
         return [
             self._make_result(score, explanation, len(premise))

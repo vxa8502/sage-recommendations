@@ -31,8 +31,8 @@ RESULTS_DIR.mkdir(exist_ok=True)
 
 DATASET_NAME = "McAuley-Lab/Amazon-Reviews-2023"
 DATASET_CATEGORY = "raw_review_Electronics"
-DEV_SUBSET_SIZE = 100_000  # Fast iteration (~3-5K after 5-core, ~2 min total)
 FULL_SUBSET_SIZE = 1_000_000  # Production scale (Kaggle GPU)
+DEV_SUBSET_SIZE = FULL_SUBSET_SIZE  # Legacy alias; the active indexed corpus is 1M
 MIN_INTERACTIONS = 5
 
 
@@ -68,9 +68,13 @@ CHARS_PER_TOKEN = 4
 # Qdrant Vector Store
 # ---------------------------------------------------------------------------
 
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 COLLECTION_NAME = "sage_reviews"
+QDRANT_SYSTEM_COLLECTION_NAME = os.getenv(
+    "QDRANT_SYSTEM_COLLECTION_NAME",
+    "sage_system",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +84,7 @@ COLLECTION_NAME = "sage_reviews"
 HF_TOKEN = os.getenv("HF_TOKEN")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+CACHE_ADMIN_TOKEN = os.getenv("CACHE_ADMIN_TOKEN")
 
 
 # ---------------------------------------------------------------------------
@@ -116,8 +121,8 @@ HHEM_DEVICE = "cpu"  # "cpu" or "cuda"
 # ---------------------------------------------------------------------------
 
 FAITHFULNESS_TARGET = 0.85  # RAGAS faithfulness target
-HELPFULNESS_TARGET = 3.5  # Human eval overall helpfulness (1-5 Likert)
 HALLUCINATION_THRESHOLD = 0.5  # HHEM: below = hallucinated
+EVAL_REPORTABLE_MIN_NDCG_AT_10 = 0.15  # Minimum NDCG@10 for a reportable evaluation run
 
 # Calibration confidence thresholds
 CONFIDENCE_HIGH_THRESHOLD = 0.85
@@ -143,31 +148,21 @@ CITATION_PREFIX = "review_"  # Prefix for citation IDs (e.g., "review_123")
 
 
 # ---------------------------------------------------------------------------
+# Runtime Retrieval Policy
+# ---------------------------------------------------------------------------
+
+RUNTIME_RETRIEVAL_AGGREGATION = "max"
+RUNTIME_RETRIEVAL_MIN_RATING = None
+
+
+# ---------------------------------------------------------------------------
 # Evidence Quality Gate
 # ---------------------------------------------------------------------------
 
 MAX_EVIDENCE = 5  # Maximum evidence chunks per explanation
 MIN_EVIDENCE_CHUNKS = 1  # Minimum chunks required to generate explanation
-MIN_EVIDENCE_TOKENS = 30  # Minimum total tokens across all evidence
+MIN_EVIDENCE_TOKENS = 20  # Calibrated minimum total tokens across all evidence
 MIN_RETRIEVAL_SCORE = 0.7  # Minimum relevance score for top chunk
-
-
-# ---------------------------------------------------------------------------
-# Standard Evaluation Queries
-# ---------------------------------------------------------------------------
-
-EVAL_DIMENSIONS = {
-    "comprehension": "I understood why this item was recommended",
-    "trust": "I trust this explanation is accurate",
-    "usefulness": "This explanation helped me make a decision",
-    "satisfaction": "I am satisfied with this explanation",
-}
-
-
-from sage.config.queries import (  # noqa: E402
-    ANALYSIS_QUERIES,
-    EVALUATION_QUERIES,
-)
 
 
 # ---------------------------------------------------------------------------
@@ -221,10 +216,12 @@ __all__ = [
     "QDRANT_URL",
     "QDRANT_API_KEY",
     "COLLECTION_NAME",
+    "QDRANT_SYSTEM_COLLECTION_NAME",
     # API keys
     "HF_TOKEN",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
+    "CACHE_ADMIN_TOKEN",
     # LLM
     "PROVIDER_ANTHROPIC",
     "PROVIDER_OPENAI",
@@ -240,8 +237,8 @@ __all__ = [
     "HHEM_DEVICE",
     # Thresholds
     "FAITHFULNESS_TARGET",
-    "HELPFULNESS_TARGET",
     "HALLUCINATION_THRESHOLD",
+    "EVAL_REPORTABLE_MIN_NDCG_AT_10",
     "CONFIDENCE_HIGH_THRESHOLD",
     "CONFIDENCE_MED_THRESHOLD",
     "FAITHFULNESS_HIGH_THRESHOLD",
@@ -252,15 +249,14 @@ __all__ = [
     "CACHE_TTL_SECONDS",
     # Citation
     "CITATION_PREFIX",
+    # Runtime retrieval policy
+    "RUNTIME_RETRIEVAL_AGGREGATION",
+    "RUNTIME_RETRIEVAL_MIN_RATING",
     # Evidence gate
     "MAX_EVIDENCE",
     "MIN_EVIDENCE_CHUNKS",
     "MIN_EVIDENCE_TOKENS",
     "MIN_RETRIEVAL_SCORE",
-    # Evaluation
-    "EVAL_DIMENSIONS",
-    "EVALUATION_QUERIES",
-    "ANALYSIS_QUERIES",
     # Utilities
     "save_results",
     # Logging
