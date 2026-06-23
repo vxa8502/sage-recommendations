@@ -339,6 +339,20 @@ def run_evaluation(
         results["ragas"] = {
             "faithfulness_mean": ragas_report.mean_score,
             "faithfulness_std": ragas_report.std_score,
+            "per_case": [
+                {
+                    "case_id": case.case_id,
+                    "query": case.query,
+                    "product_id": case.product_id,
+                    "score": r.score,
+                    "meets_target": r.meets_target,
+                }
+                for case, r in zip(
+                    ragas_cases,
+                    ragas_report.results,
+                    strict=True,
+                )
+            ],
         }
     results["ragas_scope"] = ragas_scope
 

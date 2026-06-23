@@ -92,11 +92,17 @@ def _clean_explanation_for_ragas(explanation: str) -> str:
     framing_patterns = [
         r"According to reviews?,?\s*",
         r"Customers report\s+",
+        r"Reviewers?\s+call\s+it\s+",
+        r"Reviewers?\s+describe\s+(?:it|this)\s+as\s+",
+        r"Reviewers?\s+find\s+it\s+",
+        r"Reviewers?\s+report\s+",
         r"Reviewers say\s+",
         r"One user said\s+",
         r"One user found\s+",
         r"One reviewer found\s+",
         r"One reviewer confirms?\s+(it\s+)?",
+        r"One reviewer\s+calls?\s+it\s+",
+        r"One reviewer\s+describes?\s+it\s+as\s+",
         r"One reviewer\s+",
         r"Users mention\s+",
         r"Users also note\s+",
@@ -110,8 +116,13 @@ def _clean_explanation_for_ragas(explanation: str) -> str:
     for pattern in framing_patterns:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
 
-    # Clean up "and" between quotes to make separate sentences
-    text = re.sub(r'\s+and\s+"', '. "', text)
+    # Convert 'and "quote"' between two quoted phrases into a new sentence.
+    # Produces 'The product is "quote"' rather than an orphaned '. "quote"'
+    # fragment that RAGAS's claim extractor may skip.
+    text = re.sub(r'\s+and\s+"', '. The product is "', text)
+
+    # Fix any remaining '. "quote"' fragments left by other cleaning passes.
+    text = re.sub(r'\.\s+"', '. The product is "', text)
 
     # Clean up residual empty/hanging parts
     text = re.sub(r"\s+\.", ".", text)
@@ -267,7 +278,12 @@ class FaithfulnessEvaluator:
         evidence_texts: list[str],
     ) -> FaithfulnessResult:
         """Evaluate faithfulness for a single explanation (async)."""
-        score = await self._score_with_retry(query, explanation, evidence_texts)
+        # Strip citation markers and framing phrases before RAGAS scoring.
+        # RAGAS's LLM claim extractor penalizes [review_X] tokens and treats
+        # "Reviewers call it X" as a compound claim requiring evidence that
+        # *multiple reviewers* said X — cleaning avoids both false penalties.
+        cleaned = _clean_explanation_for_ragas(explanation)
+        score = await self._score_with_retry(query, cleaned, evidence_texts)
 
         return FaithfulnessResult(
             score=float(score),
