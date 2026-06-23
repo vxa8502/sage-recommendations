@@ -17,9 +17,9 @@ import sys
 from pathlib import Path
 
 from sage.config import (
-    FAITHFULNESS_TARGET,
     RESULTS_DIR,
 )
+from sage.cli.eval_status import build_eval_status
 
 WIDTH = 60
 SEP = "=" * WIDTH
@@ -38,6 +38,12 @@ def fmt(value: float | None, decimals: int = 4) -> str:
     if value is None:
         return "   ---"
     return f"{value:.{decimals}f}"
+
+
+def fmt_or_unavailable(value: float | None, decimals: int = 4) -> str:
+    if value is None:
+        return "unavailable"
+    return fmt(value, decimals)
 
 
 def fmt_with_ci(value: float | None, ci: dict | None, decimals: int = 3) -> str:
@@ -121,8 +127,34 @@ def main():
     print("SAGE PIPELINE RESULTS")
     print(SEP)
 
-    # -- Recommendation Quality (Natural Queries) -----------------------------
     nat = load_json(RESULTS_DIR / "eval_natural_queries_latest.json")
+    faith = load_json(RESULTS_DIR / "faithfulness_latest.json")
+    adj = load_json(RESULTS_DIR / "adjusted_faithfulness_latest.json")
+    boundary = load_json(RESULTS_DIR / "boundary_behavior_latest.json")
+    load = load_json(RESULTS_DIR / "load_test_latest.json")
+
+    eval_status = build_eval_status(results_dir=RESULTS_DIR)
+    print_section("Evaluation Status:")
+    print(f"  Latest Artifacts: {eval_status['latest_artifacts']}")
+    print(f"  Execution:       {eval_status['execution_status']}")
+    print(f"  Safety Green:    {eval_status['safety_status']}")
+    print(f"  Reportable:      {eval_status['reportable_status']}")
+    execution_reasons = eval_status.get("execution_reasons") or []
+    if eval_status["execution_status"] != "COMPLETE" and isinstance(
+        execution_reasons, list
+    ):
+        for reason in execution_reasons[:3]:
+            if isinstance(reason, str) and reason:
+                print(f"  Exec Note:       {reason}")
+    reportable_reasons = eval_status.get("reportable_reasons") or []
+    if eval_status["reportable_status"] != "PASS  [reportable-green]" and isinstance(
+        reportable_reasons, list
+    ):
+        for reason in reportable_reasons[:3]:
+            if isinstance(reason, str) and reason:
+                print(f"  Report Note:     {reason}")
+
+    # -- Recommendation Quality (Natural Queries) -----------------------------
     print_section("Recommendation Quality (Natural Queries):")
     if nat and "primary_metrics" in nat:
         m = nat["primary_metrics"]
@@ -136,10 +168,31 @@ def main():
         print("  (not available)")
 
     # -- Explanation Faithfulness ---------------------------------------------
-    faith = load_json(RESULTS_DIR / "faithfulness_latest.json")
     print_section("Explanation Faithfulness:")
     if faith and "hhem" in faith:
         n_samples = faith.get("n_samples", 0)
+        retrieval_policy = faith.get("retrieval_policy") or {}
+        retrieval_profile = retrieval_policy.get("retrieval_profile")
+        evaluation_scope = faith.get("evaluation_scope") or {}
+        ragas_scope = faith.get("ragas_scope") or {}
+        if retrieval_profile:
+            print(f"  Profile:        {retrieval_profile}")
+        if evaluation_scope:
+            selected_case_count = evaluation_scope.get("selected_case_count", n_samples)
+            available_case_count = evaluation_scope.get(
+                "available_materialized_case_count",
+                evaluation_scope.get("available_case_count", selected_case_count),
+            )
+            selection_mode = evaluation_scope.get("selection_mode")
+            if selection_mode:
+                print(
+                    "  Eval Scope:     "
+                    f"{selection_mode}  ({selected_case_count}/{available_case_count} selected)"
+                )
+            if evaluation_scope.get("sample_limited"):
+                print(
+                    "  Warning:        sampled faithfulness run; headline scores are not full-benchmark"
+                )
 
         # Multi-metric (primary): claim-level HHEM + quote verification
         mm = faith.get("multi_metric", {})
@@ -170,6 +223,13 @@ def main():
         ragas_faith = ragas.get("faithfulness_mean")
         if ragas_faith is not None:
             print(f"  RAGAS Faith:    {fmt(ragas_faith, 3)}")
+            if ragas_scope:
+                print(
+                    "  RAGAS Scope:    "
+                    f"{ragas_scope.get('selection_mode')}  "
+                    f"({ragas_scope.get('selected_case_count', 0)}/"
+                    f"{ragas_scope.get('available_case_count', 0)} cases)"
+                )
 
         # Pass/fail: use claim-level as primary, fall back to RAGAS, then full HHEM
         effective = (
@@ -178,30 +238,154 @@ def main():
             else (ragas_faith if ragas_faith is not None else full_avg)
         )
         if effective is not None:
-            status = "PASS" if effective >= FAITHFULNESS_TARGET else "FAIL"
-            print(f"  Target:         {FAITHFULNESS_TARGET:.3f}  [{status}]")
+            target = eval_status["metrics"]["faithfulness_target"]
+            status = "PASS" if effective >= target else "FAIL"
+            print(f"  Target:         {target:.3f}  [{status}]")
+
+        coverage = faith.get("coverage") or {}
+        if coverage:
+            source_query_count = coverage.get("source_query_count", 0)
+            materialized_case_count = coverage.get("materialized_case_count", 0)
+            materialization_rate = coverage.get("materialization_rate")
+            candidate_retrieval_rate = coverage.get("candidate_retrieval_rate")
+            gate_pass_rate = coverage.get("gate_pass_rate")
+            print(
+                "  Coverage:       "
+                f"{fmt(materialization_rate, 3)}  "
+                f"({materialized_case_count}/{source_query_count} materialized)"
+            )
+            print(
+                "  Candidate Hit:  "
+                f"{fmt(candidate_retrieval_rate, 3)}  "
+                f"(after retrieval, before gate)"
+            )
+            print(
+                "  Gate Pass:      "
+                f"{fmt(gate_pass_rate, 3)}  "
+                "(conditional on retrieved candidates)"
+            )
+        evidence_guardrails = faith.get("evidence_guardrails") or {}
+        if evidence_guardrails:
+            print(
+                "  Evidence Age:   "
+                f"{fmt(evidence_guardrails.get('median_evidence_age_days_mean'), 1)} days median"
+            )
+            print(
+                "  Very Old Share: "
+                f"{fmt(evidence_guardrails.get('very_old_review_share_mean'), 3)}"
+            )
+            print(
+                "  Verified Avail: "
+                f"{fmt(evidence_guardrails.get('verified_purchase_available_rate_mean'), 3)}"
+            )
+            print(
+                "  Negative Evd:   "
+                f"{fmt(evidence_guardrails.get('negative_review_rate_mean'), 3)}"
+            )
+        slice_metrics = faith.get("query_slice_metrics") or {}
+        for label, key in [
+            ("Recency Slice", "recency_sensitive_query"),
+            ("Negative Slice", "negative_problem_query"),
+        ]:
+            metrics = slice_metrics.get(key)
+            if not metrics:
+                continue
+            print(
+                f"  {label + ':':<15s} "
+                f"{fmt(metrics.get('claim_level_avg_score'), 3)}  "
+                f"({metrics.get('evaluated_case_count', 0)} cases, refusal={fmt(metrics.get('refusal_rate'), 3)})"
+            )
     else:
         print("  (not available)")
 
-    # -- Grounding Delta -------------------------------------------------------
-    delta = load_json(RESULTS_DIR / "grounding_delta_latest.json")
-    print_section("Grounding Delta (RAG Impact):")
-    if delta:
-        with_ev = delta.get("with_evidence_mean")
-        without_ev = delta.get("without_evidence_mean")
-        d = delta.get("delta")
-        n = delta.get("n_samples", 0)
-        print(f"  With evidence:  {fmt(with_ev, 3)}")
-        print(f"  Without:        {fmt(without_ev, 3)}")
-        if d is not None:
-            print(f"  Delta:          {fmt(d, 3)}  (+{d * 100:.0f}pp, n={n})")
-        else:
-            print(f"  Delta:          (not available, n={n})")
+    print_section("Boundary Behavior:")
+    if boundary and "summary" in boundary:
+        summary = boundary["summary"]
+        methodology = boundary.get("methodology") or {}
+        retrieval_profile = methodology.get("retrieval_profile")
+        if retrieval_profile:
+            print(f"  Profile:        {retrieval_profile}")
+        print(
+            "  Acceptable:     "
+            f"{fmt(summary.get('acceptable_match_rate'), 3)}  "
+            f"({summary.get('acceptable_matches', 0)}/{summary.get('total_queries', 0)})"
+        )
+        print(
+            "  False Accepts:  "
+            f"{summary.get('refusal_required_false_accept_count', 0)}"
+        )
+        print(
+            "  Clarify Rate:   "
+            f"{fmt(summary.get('ambiguous_clarify_rate'), 3)}"
+        )
+        print(
+            "  Boundary Safe:  "
+            f"{fmt(summary.get('boundary_safe_behavior_rate'), 3)}"
+        )
+        boundary_guardrail = boundary.get("boundary_guardrail") or {}
+        boundary_guardrail_status = summary.get("boundary_guardrail_status")
+        if boundary_guardrail or boundary_guardrail_status:
+            status = str(
+                boundary_guardrail.get("status", boundary_guardrail_status)
+            ).upper()
+            print(f"  Boundary Guard: {status}")
+        freshness_guardrail = summary.get("freshness_guardrail") or {}
+        if freshness_guardrail:
+            freshness_status = str(
+                freshness_guardrail.get("promotion_status", "unknown")
+            ).upper()
+            freshness_min_cases = freshness_guardrail.get(
+                "coverage_min_recency_sensitive_cases",
+                freshness_guardrail.get("coverage_min_cases", 0),
+            )
+            print(f"  Fresh Guard:    {freshness_status}")
+            print(
+                "  Fresh Cases:    "
+                f"{freshness_guardrail.get('recency_sensitive_case_count', 0)}/"
+                f"{freshness_min_cases}"
+            )
+        print(
+            "  Fresh Refusal:  "
+            f"{fmt_or_unavailable(summary.get('freshness_sensitive_refusal_rate'), 3)}"
+        )
+        if freshness_guardrail:
+            print(
+                "  Fresh Safe:     "
+                f"{fmt_or_unavailable(freshness_guardrail.get('safe_rate'), 3)}"
+            )
+        violations = boundary_guardrail.get("violations") or []
+        if isinstance(violations, list):
+            for violation in violations[:3]:
+                if isinstance(violation, dict):
+                    message = violation.get("message")
+                    if message:
+                        print(f"  Guardrail Hit:  {message}")
+        evidence_guardrails = summary.get("evidence_guardrails") or {}
+        if evidence_guardrails:
+            print(
+                "  Evidence Age:   "
+                f"{fmt(evidence_guardrails.get('median_evidence_age_days_mean'), 1)} days median"
+            )
+            print(
+                "  Very Old Share: "
+                f"{fmt(evidence_guardrails.get('very_old_review_share_mean'), 3)}"
+            )
+            print(
+                "  Verified Avail: "
+                f"{fmt(evidence_guardrails.get('verified_purchase_available_rate_mean'), 3)}"
+            )
+            print(
+                "  Negative Evd:   "
+                f"{fmt(evidence_guardrails.get('negative_review_rate_mean'), 3)}"
+            )
     else:
         print("  (not available)")
 
     # -- Refusal Rate ----------------------------------------------------------
-    adj = load_json(RESULTS_DIR / "adjusted_faithfulness_latest.json")
+    if adj is None and faith:
+        adjusted_from_faith = faith.get("adjusted")
+        if isinstance(adjusted_from_faith, dict):
+            adj = adjusted_from_faith
     print_section("Quality Gate (Refusals):")
     if adj:
         n_total = adj.get("n_total", 0)
@@ -214,7 +398,6 @@ def main():
         print("  (not available)")
 
     # -- API Quality -----------------------------------------------------------
-    load = load_json(RESULTS_DIR / "load_test_latest.json")
     print_section("API Quality:")
     if load:
         quality = ((load.get("measured") or {}).get("api_quality")) or {}
@@ -237,7 +420,6 @@ def main():
         print("  (not available)")
 
     # -- Load Test -------------------------------------------------------------
-    load = load_json(RESULTS_DIR / "load_test_latest.json")
     print_section("Production Latency:")
     if load:
         headline = load.get("headline_metric") or {}

@@ -67,7 +67,7 @@ SECONDARY_COLOR = "#FF9900"
 FIGURE_SIZE_WIDE = (12, 5)
 
 
-def scroll_all_payloads(client, batch_size: int = 1000, limit: int | None = None):
+def scroll_all_payloads(client, batch_size: int = 200, limit: int | None = None):
     """
     Scroll through all points in the collection and yield payloads.
 
@@ -331,6 +331,20 @@ def save_eda_stats(stats: dict, collection_info: dict) -> Path:
     return save_results(output, "eda_stats", directory=DATA_DIR)
 
 
+def _cached_stats_match(points_count: int) -> bool:
+    """Return True if existing EDA cache is current for this collection size."""
+    import json
+
+    cache = DATA_DIR / "eda_stats_latest.json"
+    if not cache.exists():
+        return False
+    try:
+        data = json.loads(cache.read_text())
+        return data.get("summary", {}).get("total_chunks") == points_count
+    except Exception:
+        return False
+
+
 def main():
     print("=" * 60)
     print("PRODUCTION EDA: Querying Qdrant Cloud")
@@ -348,6 +362,19 @@ def main():
             print(f"ERROR: Cannot access collection: {e}")
             print("Ensure QDRANT_URL and QDRANT_API_KEY are correct.")
             sys.exit(1)
+
+        # Reuse cached stats when the collection hasn't changed.
+        # Scrolling 423K points from the free-tier cluster is unreliable;
+        # skip the scan if cached stats and figures are already current.
+        if _cached_stats_match(info["points_count"]):
+            print("\n--- Statistics ---")
+            print(f"  Using cached EDA stats (collection unchanged at {info['points_count']:,} points)")
+            print("\n" + "=" * 60)
+            print("EDA COMPLETE (cached)")
+            print("=" * 60)
+            print(f"Stats:     {DATA_DIR / 'eda_stats_latest.json'}")
+            print(f"Figures:   {FIGURES_DIR}/")
+            return
 
         # Compute stats
         print("\n--- Computing Statistics ---")

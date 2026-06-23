@@ -26,15 +26,17 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from sage.core import AggregationMethod, ProductScore, RetrievedChunk
+from sage.core import ProductScore, RetrievedChunk
 from sage.config import (
-    EVALUATION_QUERIES,
     get_logger,
     log_banner,
     log_section,
 )
+from sage.data.faithfulness import (
+    FaithfulnessCasesEmptyError,
+    load_faithfulness_cases,
+)
 from sage.services.faithfulness import is_refusal
-from sage.services.retrieval import get_candidates
 
 if TYPE_CHECKING:
     from sage.adapters.hhem import HallucinationDetector
@@ -157,20 +159,14 @@ CONFLICT_PHRASES = frozenset(
 COMBINED_HHEM_THRESHOLD = 0.5
 KEY_TERM_THRESHOLD = 0.3
 
-# Spot-check limits
-SPOT_CHECK_QUERY_LIMIT = 5
-SPOT_CHECK_CANDIDATES_K = 2
-SPOT_CHECK_MIN_RATING = 4.0
-SPOT_CHECK_PRODUCTS_LIMIT = 2
+# Frozen faithfulness-case limits
+SPOT_CHECK_CASE_LIMIT = 5
 SPOT_CHECK_MAX_EVIDENCE = 3
 EVIDENCE_PREVIEW_COUNT = 2
 EVIDENCE_PREVIEW_LENGTH = 100
 
 # Calibration limits
-CALIBRATION_QUERY_LIMIT = 15
-CALIBRATION_CANDIDATES_K = 5
-CALIBRATION_MIN_RATING = 3.0
-CALIBRATION_PRODUCTS_LIMIT = 2
+CALIBRATION_CASE_LIMIT = 15
 CALIBRATION_MAX_EVIDENCE = 3
 MIN_CALIBRATION_SAMPLES = 5
 
@@ -188,22 +184,17 @@ def _generate_spot_samples(
     explainer: Explainer, detector: HallucinationDetector, max_samples: int = 10
 ) -> Iterator[tuple]:
     """Generate spot-check samples, yielding (query, hhem_result, explanation_result)."""
-    for query in EVALUATION_QUERIES[:SPOT_CHECK_QUERY_LIMIT]:
-        products = get_candidates(
-            query=query,
-            k=SPOT_CHECK_CANDIDATES_K,
-            min_rating=SPOT_CHECK_MIN_RATING,
-            aggregation=AggregationMethod.MAX,
+    cases = load_faithfulness_cases(limit=SPOT_CHECK_CASE_LIMIT, require_nonempty=True)
+    for case in cases:
+        product = case.to_product_score()
+        result = explainer.generate_explanation(
+            case.query, product, max_evidence=SPOT_CHECK_MAX_EVIDENCE
         )
-        for product in products[:SPOT_CHECK_PRODUCTS_LIMIT]:
-            result = explainer.generate_explanation(
-                query, product, max_evidence=SPOT_CHECK_MAX_EVIDENCE
-            )
-            hhem = detector.check_explanation(result.evidence_texts, result.explanation)
-            yield query, hhem, result
-            max_samples -= 1
-            if max_samples <= 0:
-                return
+        hhem = detector.check_explanation(result.evidence_texts, result.explanation)
+        yield case.query, hhem, result
+        max_samples -= 1
+        if max_samples <= 0:
+            return
 
 
 def run_spot_check(explainer: Explainer, detector: HallucinationDetector) -> None:
@@ -459,33 +450,28 @@ def run_calibration_check(
     samples: list[CalibrationSample] = []
     logger.info("Generating samples...")
 
-    for query in EVALUATION_QUERIES[:CALIBRATION_QUERY_LIMIT]:
-        products = get_candidates(
-            query=query,
-            k=CALIBRATION_CANDIDATES_K,
-            min_rating=CALIBRATION_MIN_RATING,
-            aggregation=AggregationMethod.MAX,
-        )
-        for product in products[:CALIBRATION_PRODUCTS_LIMIT]:
-            try:
-                result = explainer.generate_explanation(
-                    query, product, max_evidence=CALIBRATION_MAX_EVIDENCE
+    for case in load_faithfulness_cases(
+        limit=CALIBRATION_CASE_LIMIT,
+        require_nonempty=True,
+    ):
+        product = case.to_product_score()
+        try:
+            result = explainer.generate_explanation(
+                case.query, product, max_evidence=CALIBRATION_MAX_EVIDENCE
+            )
+            hhem = detector.check_explanation(result.evidence_texts, result.explanation)
+            samples.append(
+                CalibrationSample(
+                    query=case.query,
+                    product_id=product.product_id,
+                    retrieval_score=product.score,
+                    evidence_count=product.chunk_count,
+                    avg_rating=product.avg_rating,
+                    hhem_score=hhem.score,
                 )
-                hhem = detector.check_explanation(
-                    result.evidence_texts, result.explanation
-                )
-                samples.append(
-                    CalibrationSample(
-                        query=query,
-                        product_id=product.product_id,
-                        retrieval_score=product.score,
-                        evidence_count=product.chunk_count,
-                        avg_rating=product.avg_rating,
-                        hhem_score=hhem.score,
-                    )
-                )
-            except Exception:
-                logger.debug("Error generating sample", exc_info=True)
+            )
+        except Exception:
+            logger.debug("Error generating sample", exc_info=True)
 
     logger.info("Samples: %d", len(samples))
     if len(samples) < MIN_CALIBRATION_SAMPLES:
@@ -555,4 +541,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except FaithfulnessCasesEmptyError as exc:
+        raise SystemExit(f"ERROR: {exc}") from exc

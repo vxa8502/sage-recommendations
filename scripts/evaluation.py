@@ -18,11 +18,13 @@ Run from project root.
 """
 
 import argparse
+from collections import Counter
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
-from sage.core import AggregationMethod
+from sage.core import AggregationMethod, MetricsReport
 from sage.utils import save_results
 from sage.services.baselines import (
     ItemKNNBaseline,
@@ -31,18 +33,33 @@ from sage.services.baselines import (
     compute_item_popularity_from_qdrant,
     load_product_embeddings_from_qdrant,
 )
-from sage.config import get_logger, log_banner, log_section, log_kv
-from sage.data import load_eval_cases, load_splits
-from sage.services.evaluation import compute_item_popularity, evaluate_recommendations
+from sage.config import (
+    RUNTIME_RETRIEVAL_AGGREGATION,
+    RUNTIME_RETRIEVAL_MIN_RATING,
+    get_logger,
+    log_banner,
+    log_section,
+    log_kv,
+)
+from sage.data.eval import load_eval_cases
+from sage.data.loader import load_splits
+from sage.core.query_classification import QUERY_SLICE_DESCRIPTIONS
+from sage.services.evaluation import (
+    catalog_coverage,
+    compute_item_popularity,
+    evaluate_recommendations,
+    evaluate_recommendations_with_details,
+)
 from sage.services.retrieval import recommend
 
 logger = get_logger(__name__)
+DEFAULT_RETRIEVAL_AGGREGATION = AggregationMethod(RUNTIME_RETRIEVAL_AGGREGATION)
 
 
 def create_recommend_fn(
     top_k: int = 10,
-    aggregation: AggregationMethod = AggregationMethod.MAX,
-    min_rating: float | None = None,
+    aggregation: AggregationMethod = DEFAULT_RETRIEVAL_AGGREGATION,
+    min_rating: float | None = RUNTIME_RETRIEVAL_MIN_RATING,
     similarity_weight: float = 1.0,
     rating_weight: float = 0.0,
 ) -> Callable[[str], list[str]]:
@@ -63,6 +80,244 @@ def create_recommend_fn(
     return _recommend
 
 
+def _safe_bucket_key(value: str | None) -> str:
+    """Normalize optional metadata values for grouped reporting."""
+    return value if isinstance(value, str) and value else "unknown"
+
+
+def _mean_case_metric(case_results: list[dict[str, Any]], metric_name: str) -> float:
+    """Compute the mean of a per-case metric, ignoring unavailable values."""
+    values = [
+        float(metrics[metric_name])
+        for row in case_results
+        if isinstance((metrics := row.get("metrics")), dict)
+        and metrics.get(metric_name) is not None
+    ]
+    if not values:
+        return 0.0
+    return sum(values) / len(values)
+
+
+def _aggregate_case_results(
+    case_results: list[dict[str, Any]],
+    *,
+    total_items: int,
+    k: int,
+) -> dict[str, Any]:
+    """Aggregate saved per-case rows back into grouped retrieval metrics."""
+    report = MetricsReport(
+        n_cases=len(case_results),
+        k=k,
+        ndcg_at_k=_mean_case_metric(case_results, "ndcg"),
+        hit_at_k=_mean_case_metric(case_results, "hit"),
+        mrr=_mean_case_metric(case_results, "mrr"),
+        precision_at_k=_mean_case_metric(case_results, "precision"),
+        recall_at_k=_mean_case_metric(case_results, "recall"),
+        diversity=_mean_case_metric(case_results, "diversity"),
+        novelty=_mean_case_metric(case_results, "novelty"),
+    )
+    if total_items > 0:
+        report.coverage = catalog_coverage(
+            [
+                list(row.get("recommended_product_ids") or [])
+                for row in case_results
+            ],
+            total_items,
+        )
+    summary = report.to_dict()
+    summary["n_cases"] = len(case_results)
+    return summary
+
+
+def _build_case_metadata_summary(cases: list[Any]) -> dict[str, Any]:
+    """Summarize the evaluated case mix so slice metrics have context."""
+    by_source_type = Counter(_safe_bucket_key(case.source_type) for case in cases)
+    by_category = Counter(_safe_bucket_key(case.category) for case in cases)
+    by_intent = Counter(_safe_bucket_key(case.intent) for case in cases)
+    by_subset_tag = Counter(tag for case in cases for tag in case.subset_tags)
+    by_query_slice_tag = Counter(tag for case in cases for tag in case.query_slice_tags)
+    by_origin_family = Counter(
+        _safe_bucket_key(case.provenance.origin_family if case.provenance else None)
+        for case in cases
+    )
+    by_curation_mode = Counter(
+        _safe_bucket_key(case.provenance.curation_mode if case.provenance else None)
+        for case in cases
+    )
+
+    return {
+        "total_cases": len(cases),
+        "rows_with_query_id": sum(case.query_id is not None for case in cases),
+        "rows_with_source_type": sum(case.source_type is not None for case in cases),
+        "rows_with_provenance": sum(case.provenance is not None for case in cases),
+        "rows_without_query_slice_tags": sum(
+            not case.query_slice_tags for case in cases
+        ),
+        "by_source_type": dict(by_source_type),
+        "by_category": dict(by_category),
+        "by_intent": dict(by_intent),
+        "by_subset_tag": dict(by_subset_tag),
+        "by_query_slice_tag": dict(by_query_slice_tag),
+        "by_origin_family": dict(by_origin_family),
+        "by_curation_mode": dict(by_curation_mode),
+    }
+
+
+def _group_single_value_case_results(
+    case_results: list[dict[str, Any]],
+    *,
+    total_items: int,
+    k: int,
+    key_fn: Callable[[dict[str, Any]], str | None],
+) -> dict[str, Any]:
+    """Build grouped metrics for one-to-one metadata fields."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in case_results:
+        key = _safe_bucket_key(key_fn(row))
+        groups.setdefault(key, []).append(row)
+    return {
+        key: _aggregate_case_results(rows, total_items=total_items, k=k)
+        for key, rows in sorted(groups.items())
+    }
+
+
+def _group_multi_value_case_results(
+    case_results: list[dict[str, Any]],
+    *,
+    total_items: int,
+    k: int,
+    values_fn: Callable[[dict[str, Any]], list[str]],
+) -> dict[str, Any]:
+    """Build grouped metrics for multi-membership metadata fields."""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for row in case_results:
+        values = values_fn(row)
+        for value in values:
+            groups.setdefault(value, []).append(row)
+    return {
+        key: _aggregate_case_results(rows, total_items=total_items, k=k)
+        for key, rows in sorted(groups.items())
+    }
+
+
+def _build_metric_breakdowns(
+    case_results: list[dict[str, Any]],
+    *,
+    total_items: int,
+    k: int,
+) -> dict[str, Any]:
+    """Compute source-, provenance-, and slice-aware metric breakdowns."""
+    return {
+        "by_source_type": _group_single_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            key_fn=lambda row: row.get("source_type"),
+        ),
+        "by_category": _group_single_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            key_fn=lambda row: row.get("category"),
+        ),
+        "by_intent": _group_single_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            key_fn=lambda row: row.get("intent"),
+        ),
+        "by_origin_family": _group_single_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            key_fn=lambda row: (
+                row.get("provenance", {}).get("origin_family")
+                if isinstance(row.get("provenance"), dict)
+                else None
+            ),
+        ),
+        "by_curation_mode": _group_single_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            key_fn=lambda row: (
+                row.get("provenance", {}).get("curation_mode")
+                if isinstance(row.get("provenance"), dict)
+                else None
+            ),
+        ),
+        "by_subset_tag": _group_multi_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            values_fn=lambda row: list(row.get("subset_tags") or []),
+        ),
+        "by_query_slice_tag": _group_multi_value_case_results(
+            case_results,
+            total_items=total_items,
+            k=k,
+            values_fn=lambda row: list(row.get("query_slice_tags") or []),
+        ),
+    }
+
+
+def build_primary_evaluation_artifact(
+    cases,
+    item_embeddings,
+    item_popularity,
+    total_items: int,
+):
+    """Run primary retrieval evaluation and return the saved artifact sections."""
+    recommend_fn = create_recommend_fn(top_k=10)
+    report, case_results = evaluate_recommendations_with_details(
+        recommend_fn=recommend_fn,
+        eval_cases=cases,
+        k=10,
+        item_embeddings=item_embeddings,
+        item_popularity=item_popularity,
+        total_items=total_items,
+        verbose=True,
+    )
+    return {
+        "metrics": report.to_dict(),
+        "case_results": case_results,
+        "case_metadata_summary": _build_case_metadata_summary(cases),
+        "metric_breakdowns": _build_metric_breakdowns(
+            case_results,
+            total_items=total_items,
+            k=10,
+        ),
+        "breakdown_methodology": {
+            "note": (
+                "Breakdowns are recomputed from the saved primary per-case rows. "
+                "Single-valued fields partition the evaluated set. Multi-valued "
+                "fields like subset tags and query-slice tags may overlap, so "
+                "bucket counts can sum above the total case count."
+            ),
+            "single_membership_fields": [
+                "source_type",
+                "category",
+                "intent",
+                "provenance.origin_family",
+                "provenance.curation_mode",
+            ],
+            "multi_membership_fields": [
+                "subset_tags",
+                "query_slice_tags",
+            ],
+        },
+        "query_slice_methodology": {
+            "report_only": True,
+            "slice_descriptions": QUERY_SLICE_DESCRIPTIONS,
+            "note": (
+                "These slices are simple heuristics on query text. They do not "
+                "change runtime behavior; they surface whether wins are hiding "
+                "regressions on recency-sensitive or complaint-oriented asks."
+            ),
+        },
+    }
+
+
 # ============================================================================
 # SECTION: Primary Evaluation
 # ============================================================================
@@ -73,21 +328,28 @@ def run_primary_evaluation(cases, item_embeddings, item_popularity, total_items)
     log_banner(logger, "EVALUATION: Leave-One-Out (History Queries)")
     logger.info("Note: Using history-based queries to avoid target leakage.")
 
-    recommend_fn = create_recommend_fn(top_k=10, aggregation=AggregationMethod.MAX)
-
     logger.info("Evaluating %d cases...", len(cases))
-    report = evaluate_recommendations(
-        recommend_fn=recommend_fn,
-        eval_cases=cases,
+    artifact = build_primary_evaluation_artifact(
+        cases,
+        item_embeddings,
+        item_popularity,
+        total_items,
+    )
+    report = MetricsReport(
+        n_cases=len(cases),
         k=10,
-        item_embeddings=item_embeddings,
-        item_popularity=item_popularity,
-        total_items=total_items,
-        verbose=True,
+        ndcg_at_k=artifact["metrics"]["ndcg_at_10"],
+        hit_at_k=artifact["metrics"]["hit_at_10"],
+        mrr=artifact["metrics"]["mrr"],
+        precision_at_k=artifact["metrics"]["precision_at_10"],
+        recall_at_k=artifact["metrics"]["recall_at_10"],
+        diversity=artifact["metrics"]["diversity"],
+        coverage=artifact["metrics"]["coverage"],
+        novelty=artifact["metrics"]["novelty"],
     )
     logger.info(str(report))
 
-    return report.to_dict()
+    return artifact
 
 
 # ============================================================================
@@ -378,9 +640,21 @@ def main():
 
     # Run sections
     if args.section in ("all", "primary"):
-        all_results["primary_metrics"] = run_primary_evaluation(
+        primary_artifact = run_primary_evaluation(
             cases, item_embeddings, item_popularity, total_items
         )
+        all_results["primary_metrics"] = primary_artifact["metrics"]
+        all_results["case_results"] = primary_artifact["case_results"]
+        all_results["case_metadata_summary"] = primary_artifact[
+            "case_metadata_summary"
+        ]
+        all_results["metric_breakdowns"] = primary_artifact["metric_breakdowns"]
+        all_results["breakdown_methodology"] = primary_artifact[
+            "breakdown_methodology"
+        ]
+        all_results["query_slice_methodology"] = primary_artifact[
+            "query_slice_methodology"
+        ]
 
     if args.section in ("all", "aggregation"):
         all_results["experiments"]["aggregation_methods"] = run_aggregation_comparison(

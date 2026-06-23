@@ -311,7 +311,7 @@ def run_cold_start_tests():
     train_df = None
     user_counts = {}
     try:
-        from sage.data import load_splits
+        from sage.data.loader import load_splits
 
         train_df, _, _ = load_splits()
         user_counts = train_df.groupby("user_id").size().to_dict()

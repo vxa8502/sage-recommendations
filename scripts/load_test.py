@@ -144,6 +144,15 @@ def _evaluate_response_quality(
             "refusal_aware_success": None,
         }
 
+    policy_decision = payload.get("policy_decision")
+    if isinstance(policy_decision, dict):
+        observed_behavior = policy_decision.get("observed_behavior")
+        if observed_behavior in {"refuse", "clarify", "hedge"}:
+            return {
+                "grounded_success": False,
+                "refusal_aware_success": True,
+            }
+
     recommendations = payload.get("recommendations")
     if not isinstance(recommendations, list) or not recommendations:
         return {

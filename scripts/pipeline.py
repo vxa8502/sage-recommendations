@@ -33,10 +33,10 @@ from sage.config import (
     log_kv,
 )
 from sage.utils import timed_operation
-from sage.data import (
-    prepare_data,
-    get_review_stats,
+from sage.data.loader import (
     create_temporal_splits,
+    get_review_stats,
+    prepare_data,
     verify_temporal_boundaries,
 )
 from sage.core.chunking import chunk_reviews_batch, NO_CHUNK_THRESHOLD

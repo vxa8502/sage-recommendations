@@ -1,533 +1,363 @@
+#! /usr/bin/env python
+# ruff: noqa: E402
 """
-Token threshold calibration analysis.
+Calibrate the evidence gate over tokens, chunks, and retrieval score.
 
-Collects evidence quality metrics paired with HHEM scores to find
-the optimal MIN_EVIDENCE_TOKENS threshold.
+Despite the legacy filename, this script now fits the full conjunctive gate
+against judged query-bank data instead of using explanation outputs as labels.
+
+Workflow:
+1. Load `gate_calibration` queries with `relevant_items`
+2. Retrieve top-K products from the live indexed corpus
+3. Build a frozen calibration dataset of query-level and query-product rows
+4. Sweep `min_tokens`, `min_chunks`, and `min_score`
+5. Recommend the gate that preserves most query-level utility while improving
+   accepted-product precision
 
 Usage:
-    python scripts/calibrate_token_threshold.py --samples 200
-    python scripts/calibrate_token_threshold.py --analyze-only  # Re-analyze existing data
+    .venv/bin/python scripts/calibrate_token_threshold.py
+    .venv/bin/python scripts/calibrate_token_threshold.py --query-limit 250
+    .venv/bin/python scripts/calibrate_token_threshold.py --analyze-only
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+import sys
 
-import numpy as np
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from sage.config import (
-    CHARS_PER_TOKEN,
-    EVALUATION_QUERIES,
     MIN_EVIDENCE_CHUNKS,
     MIN_EVIDENCE_TOKENS,
+    MIN_RETRIEVAL_SCORE,
+    DATA_DIR,
     get_logger,
     log_banner,
     log_section,
 )
-from sage.core import AggregationMethod, ProductScore
-from sage.core.evidence import check_evidence_quality
-from sage.services.retrieval import get_candidates
-
-if TYPE_CHECKING:
-    from sage.adapters.hhem import HallucinationDetector
-    from sage.services.explanation import Explainer
+from sage.core import AggregationMethod
+from sage.data.query_bank import QueryBankSubsetEmptyError
+from sage.services.calibration._analysis import analyze_gate_thresholds
+from sage.services.calibration._dataset import (
+    build_gate_calibration_dataset,
+    ensure_calibration_retrieval_ready,
+)
+from sage.services.calibration._io import (
+    load_gate_calibration_dataset,
+    save_gate_calibration_dataset,
+)
+from sage.services.calibration._types import (
+    DEFAULT_BOOTSTRAP_SAMPLES,
+    DEFAULT_CHUNK_THRESHOLDS,
+    DEFAULT_MAX_FAILED_QUERIES,
+    DEFAULT_MAX_FAILURE_RATE,
+    DEFAULT_QUERY_SUCCESS_RETENTION,
+    DEFAULT_SCORE_THRESHOLDS,
+    DEFAULT_SUBSET_TAG,
+    DEFAULT_TOKEN_THRESHOLDS,
+    DEFAULT_TOP_K,
+    GateCalibrationRetrievalError,
+)
 
 logger = get_logger(__name__)
 
-DEFAULT_OUTPUT = Path("data/calibration/token_threshold.json")
-
-
-@dataclass
-class CalibrationRecord:
-    """Single data point for threshold calibration."""
-
-    query: str
-    product_id: str
-    # Evidence metrics
-    chunk_count: int
-    total_tokens: int
-    min_chunk_tokens: int
-    max_chunk_tokens: int
-    top_score: float
-    avg_rating: float
-    # Outcome metrics
-    gate_passed: bool
-    hhem_score: float | None
-    is_hallucinated: bool | None
-
-
-def estimate_tokens(text: str) -> int:
-    """Estimate token count from character count."""
-    return len(text) // CHARS_PER_TOKEN
-
-
-def collect_evidence_metrics(product: ProductScore) -> dict:
-    """Extract detailed evidence metrics for a product."""
-    chunks = product.evidence
-    if not chunks:
-        return {
-            "chunk_count": 0,
-            "total_tokens": 0,
-            "min_chunk_tokens": 0,
-            "max_chunk_tokens": 0,
-        }
-
-    chunk_tokens = [estimate_tokens(c.text) for c in chunks]
-    return {
-        "chunk_count": len(chunks),
-        "total_tokens": sum(chunk_tokens),
-        "min_chunk_tokens": min(chunk_tokens),
-        "max_chunk_tokens": max(chunk_tokens),
-    }
-
-
-def collect_calibration_data(
-    explainer: Explainer,
-    detector: HallucinationDetector,
-    max_samples: int = 200,
-    output_path: Path | None = None,
-) -> list[CalibrationRecord]:
-    """
-    Collect calibration data by running pipeline with quality gate disabled.
-
-    Key insight: We disable the gate to collect data on explanations that
-    WOULD have been refused, so we can see their actual HHEM scores.
-    """
-    records: list[CalibrationRecord] = []
-
-    log_banner(logger, "COLLECTING CALIBRATION DATA", width=60)
-    logger.info("Target samples: %d", max_samples)
-
-    for query in EVALUATION_QUERIES:
-        # Get more candidates than usual to capture edge cases
-        products = get_candidates(
-            query=query,
-            k=10,
-            min_rating=2.0,  # Lower threshold to get thin-evidence cases
-            aggregation=AggregationMethod.MAX,
-        )
-
-        for product in products:
-            if len(records) >= max_samples:
-                break
-
-            # Check what the gate WOULD have decided
-            quality = check_evidence_quality(product)
-            evidence_metrics = collect_evidence_metrics(product)
-
-            # Generate explanation WITH GATE DISABLED to see actual outcome
-            result = explainer.generate_explanation(
-                query,
-                product,
-                max_evidence=5,
-                enforce_quality_gate=False,
-            )
-
-            # Measure faithfulness
-            hhem = detector.check_explanation(
-                result.evidence_texts,
-                result.explanation,
-            )
-
-            record = CalibrationRecord(
-                query=query,
-                product_id=product.product_id,
-                chunk_count=evidence_metrics["chunk_count"],
-                total_tokens=evidence_metrics["total_tokens"],
-                min_chunk_tokens=evidence_metrics["min_chunk_tokens"],
-                max_chunk_tokens=evidence_metrics["max_chunk_tokens"],
-                top_score=quality.top_score,
-                avg_rating=product.avg_rating,
-                gate_passed=quality.is_sufficient,
-                hhem_score=hhem.score,
-                is_hallucinated=hhem.is_hallucinated,
-            )
-            records.append(record)
-
-            logger.info(
-                "Sample %d: tokens=%d, gate=%s, hhem=%.3f",
-                len(records),
-                record.total_tokens,
-                "PASS" if record.gate_passed else "FAIL",
-                record.hhem_score,
-            )
-
-        if len(records) >= max_samples:
-            break
-
-    # Save raw data
-    if output_path:
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_path, "w") as f:
-            json.dump([asdict(r) for r in records], f, indent=2)
-        logger.info("Saved %d records to %s", len(records), output_path)
-
-    return records
-
-
-def load_calibration_data(path: Path) -> list[CalibrationRecord]:
-    """Load previously collected calibration data."""
-    with open(path) as f:
-        data = json.load(f)
-    return [CalibrationRecord(**r) for r in data]
-
-
-def _compute_classification_metrics(
-    would_pass: np.ndarray, hallucinated: np.ndarray
-) -> dict:
-    """Compute precision, recall, F1 for a gate decision."""
-    tp = int(np.sum(would_pass & ~hallucinated))
-    fp = int(np.sum(would_pass & hallucinated))
-    tn = int(np.sum(~would_pass & hallucinated))
-    fn = int(np.sum(~would_pass & ~hallucinated))
-
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-    f1 = (
-        2 * precision * recall / (precision + recall)
-        if (precision + recall) > 0
-        else 0.0
-    )
-
-    return {
-        "precision": round(precision, 3),
-        "recall": round(recall, 3),
-        "f1": round(f1, 3),
-        "tp": tp,
-        "fp": fp,
-        "tn": tn,
-        "fn": fn,
-        "n_passed": int(would_pass.sum()),
-        "n_refused": int((~would_pass).sum()),
-    }
-
-
-@dataclass
-class _ValidatedRecords:
-    """Pre-validated records with extracted numpy arrays."""
-
-    tokens: np.ndarray
-    chunks: np.ndarray
-    hhem: np.ndarray
-    hallucinated: np.ndarray
-    count: int
-
-
-def _validate_records(
-    records: list[CalibrationRecord], min_samples: int = 10
-) -> _ValidatedRecords | None:
-    """Filter and validate records, returning None if insufficient."""
-    valid = [r for r in records if r.hhem_score is not None]
-    if len(valid) < min_samples:
-        logger.warning("Not enough valid samples for analysis: %d", len(valid))
-        return None
-    return _ValidatedRecords(
-        tokens=np.array([r.total_tokens for r in valid]),
-        chunks=np.array([r.chunk_count for r in valid]),
-        hhem=np.array([r.hhem_score for r in valid]),
-        hallucinated=np.array([r.is_hallucinated for r in valid]),
-        count=len(valid),
-    )
-
-
-def _sweep_threshold(
-    values: np.ndarray,
-    hallucinated: np.ndarray,
-    hhem: np.ndarray,
-    thresholds: list[int],
-) -> list[dict]:
-    """Sweep a single threshold dimension and compute metrics."""
-    results = []
-    for thresh in thresholds:
-        would_pass = values >= thresh
-        metrics = _compute_classification_metrics(would_pass, hallucinated)
-        metrics["threshold"] = thresh
-        metrics["mean_hhem_above"] = (
-            round(float(hhem[would_pass].mean()), 3) if would_pass.any() else 0.0
-        )
-        results.append(metrics)
-    return results
-
-
-def analyze_threshold(records: list[CalibrationRecord]) -> dict:
-    """Analyze data to find optimal token threshold."""
-    validated = _validate_records(records)
-    if validated is None:
-        return {"error": "insufficient_samples", "count": len(records)}
-
-    thresholds = list(range(20, 200, 10))
-    results = _sweep_threshold(
-        validated.tokens, validated.hallucinated, validated.hhem, thresholds
-    )
-
-    best = max(results, key=lambda x: x["f1"])
-    correlation = float(np.corrcoef(validated.tokens, validated.hhem)[0, 1])
-
-    return {
-        "recommended_threshold": best["threshold"],
-        "best_f1": best["f1"],
-        "best_precision": best["precision"],
-        "best_recall": best["recall"],
-        "correlation_tokens_hhem": round(correlation, 3),
-        "current_threshold": MIN_EVIDENCE_TOKENS,
-        "total_samples": validated.count,
-        "hallucination_rate": round(float(validated.hallucinated.mean()), 3),
-        "mean_tokens": round(float(validated.tokens.mean()), 1),
-        "median_tokens": round(float(np.median(validated.tokens)), 1),
-        "all_thresholds": results,
-    }
-
-
-def analyze_chunk_threshold(records: list[CalibrationRecord]) -> dict:
-    """Analyze optimal MIN_EVIDENCE_CHUNKS threshold."""
-    validated = _validate_records(records)
-    if validated is None:
-        return {"error": "insufficient_samples", "count": len(records)}
-
-    thresholds = [1, 2, 3, 4, 5]
-    results = _sweep_threshold(
-        validated.chunks, validated.hallucinated, validated.hhem, thresholds
-    )
-
-    best = max(results, key=lambda x: x["f1"])
-    correlation = float(np.corrcoef(validated.chunks, validated.hhem)[0, 1])
-
-    return {
-        "recommended_threshold": best["threshold"],
-        "best_f1": best["f1"],
-        "best_precision": best["precision"],
-        "best_recall": best["recall"],
-        "correlation_chunks_hhem": round(correlation, 3),
-        "current_threshold": MIN_EVIDENCE_CHUNKS,
-        "mean_chunks": round(float(validated.chunks.mean()), 2),
-        "all_thresholds": results,
-    }
-
-
-def analyze_combined_thresholds(records: list[CalibrationRecord]) -> dict:
-    """2D sweep of token and chunk thresholds to find optimal combination."""
-    validated = _validate_records(records)
-    if validated is None:
-        return {"error": "insufficient_samples", "count": len(records)}
-
-    token_thresholds = [20, 30, 40, 50, 75, 100]
-    chunk_thresholds = [1, 2, 3]
-
-    results = []
-    for tok_thresh in token_thresholds:
-        for chunk_thresh in chunk_thresholds:
-            would_pass = (validated.tokens >= tok_thresh) & (
-                validated.chunks >= chunk_thresh
-            )
-            metrics = _compute_classification_metrics(
-                would_pass, validated.hallucinated
-            )
-            metrics["token_threshold"] = tok_thresh
-            metrics["chunk_threshold"] = chunk_thresh
-            results.append(metrics)
-
-    best = max(results, key=lambda x: x["f1"])
-
-    return {
-        "recommended_token_threshold": best["token_threshold"],
-        "recommended_chunk_threshold": best["chunk_threshold"],
-        "best_f1": best["f1"],
-        "best_precision": best["precision"],
-        "best_recall": best["recall"],
-        "current_token_threshold": MIN_EVIDENCE_TOKENS,
-        "current_chunk_threshold": MIN_EVIDENCE_CHUNKS,
-        "all_combinations": results,
-    }
-
-
-def print_token_analysis(analysis: dict) -> None:
-    """Print token threshold analysis."""
-    if "error" in analysis:
-        logger.error("Analysis failed: %s", analysis["error"])
-        return
-
-    log_banner(logger, "TOKEN THRESHOLD ANALYSIS", width=60)
-
-    log_section(logger, "Summary")
-    logger.info("Total samples:        %d", analysis["total_samples"])
-    logger.info("Mean tokens:          %.1f", analysis["mean_tokens"])
-    logger.info("Median tokens:        %.1f", analysis["median_tokens"])
-    logger.info("Hallucination rate:   %.1f%%", analysis["hallucination_rate"] * 100)
-    logger.info("Token-HHEM corr:      %+.3f", analysis["correlation_tokens_hhem"])
-
-    log_section(logger, "Recommendation")
-    logger.info("Current threshold:    %d tokens", analysis["current_threshold"])
-    logger.info("Recommended:          %d tokens", analysis["recommended_threshold"])
-    logger.info("Best F1:              %.3f", analysis["best_f1"])
-    logger.info("Best precision:       %.3f", analysis["best_precision"])
-    logger.info("Best recall:          %.3f", analysis["best_recall"])
-
-    log_section(logger, "Token Threshold Sweep")
-    logger.info("thresh | F1    | prec  | recall | passed | refused")
-    logger.info("-------|-------|-------|--------|--------|--------")
-    for r in analysis["all_thresholds"]:
-        marker = " *" if r["threshold"] == analysis["recommended_threshold"] else ""
-        logger.info(
-            "  %3d  | %.3f | %.3f |  %.3f |   %3d  |   %3d%s",
-            r["threshold"],
-            r["f1"],
-            r["precision"],
-            r["recall"],
-            r["n_passed"],
-            r["n_refused"],
-            marker,
-        )
-
-
-def print_chunk_analysis(analysis: dict) -> None:
-    """Print chunk threshold analysis."""
-    if "error" in analysis:
-        logger.error("Chunk analysis failed: %s", analysis["error"])
-        return
-
-    log_banner(logger, "CHUNK THRESHOLD ANALYSIS", width=60)
-
-    log_section(logger, "Summary")
-    logger.info("Mean chunks:          %.2f", analysis["mean_chunks"])
-    logger.info("Chunk-HHEM corr:      %+.3f", analysis["correlation_chunks_hhem"])
-
-    log_section(logger, "Recommendation")
-    logger.info("Current threshold:    %d chunks", analysis["current_threshold"])
-    logger.info("Recommended:          %d chunk(s)", analysis["recommended_threshold"])
-    logger.info("Best F1:              %.3f", analysis["best_f1"])
-
-    log_section(logger, "Chunk Threshold Sweep")
-    logger.info("chunks | F1    | prec  | recall | passed | refused")
-    logger.info("-------|-------|-------|--------|--------|--------")
-    for r in analysis["all_thresholds"]:
-        marker = " *" if r["threshold"] == analysis["recommended_threshold"] else ""
-        logger.info(
-            "   %d   | %.3f | %.3f |  %.3f |   %3d  |   %3d%s",
-            r["threshold"],
-            r["f1"],
-            r["precision"],
-            r["recall"],
-            r["n_passed"],
-            r["n_refused"],
-            marker,
-        )
-
-
-def print_combined_analysis(analysis: dict) -> None:
-    """Print combined threshold analysis."""
-    if "error" in analysis:
-        logger.error("Combined analysis failed: %s", analysis["error"])
-        return
-
-    log_banner(logger, "COMBINED THRESHOLD ANALYSIS", width=60)
-
-    log_section(logger, "Current vs Recommended")
+DEFAULT_OUTPUT = Path("data/calibration/evidence_gate_calibration.json")
+
+
+def _parse_int_list(raw: str) -> list[int]:
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    return [int(value) for value in values]
+
+
+def _parse_float_list(raw: str) -> list[float]:
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    return [float(value) for value in values]
+
+
+def _print_dataset_summary(summary: dict[str, object]) -> None:
+    log_banner(logger, "EVIDENCE GATE CALIBRATION", width=70)
+    log_section(logger, "Dataset")
+    logger.info("Subset tag:               %s", summary["subset_tag"])
+    logger.info("Attempted queries:        %s", summary["attempted_query_count"])
+    logger.info("Completed queries:        %s", summary["completed_query_count"])
+    logger.info("Failed queries:           %s", summary["failed_query_count"])
+    logger.info("Query coverage rate:      %.1f%%", summary["query_coverage_rate"] * 100)
+    logger.info("Failed query rate:        %.1f%%", summary["failed_query_rate"] * 100)
+    logger.info("Observations:             %s", summary["observation_count"])
+    logger.info("Candidate-hit queries:    %s", summary["candidate_hit_queries"])
+    logger.info("Candidate-hit rate:       %.1f%%", summary["candidate_hit_rate"] * 100)
     logger.info(
-        "Current:     %d tokens, %d chunks",
-        analysis["current_token_threshold"],
-        analysis["current_chunk_threshold"],
+        "Relevant items/query:     min=%s median=%s max=%s",
+        summary["min_relevant_items_per_query"],
+        summary["median_relevant_items_per_query"],
+        summary["max_relevant_items_per_query"],
     )
     logger.info(
-        "Recommended: %d tokens, %d chunk(s)",
-        analysis["recommended_token_threshold"],
-        analysis["recommended_chunk_threshold"],
+        "Mean retrieved/query:     %.2f",
+        summary["mean_retrieved_products_per_query"],
     )
-    logger.info("Best F1:     %.3f", analysis["best_f1"])
-    logger.info("Precision:   %.3f", analysis["best_precision"])
-    logger.info("Recall:      %.3f", analysis["best_recall"])
+    failed_examples = summary.get("failed_query_examples") or []
+    if failed_examples:
+        logger.warning("Skipped query examples:")
+        for row in failed_examples[:5]:
+            logger.warning(
+                "  %s | %s | %s",
+                row["query_id"],
+                row["error_type"],
+                row["query"],
+            )
 
-    log_section(logger, "2D Threshold Grid")
-    logger.info("tokens | chunks | F1    | prec  | recall | passed | refused")
-    logger.info("-------|--------|-------|-------|--------|--------|--------")
-    for r in sorted(
-        analysis["all_combinations"],
-        key=lambda x: (x["token_threshold"], x["chunk_threshold"]),
-    ):
-        is_best = (
-            r["token_threshold"] == analysis["recommended_token_threshold"]
-            and r["chunk_threshold"] == analysis["recommended_chunk_threshold"]
-        )
-        is_current = (
-            r["token_threshold"] == analysis["current_token_threshold"]
-            and r["chunk_threshold"] == analysis["current_chunk_threshold"]
-        )
-        marker = " *" if is_best else (" (current)" if is_current else "")
+
+def _print_threshold_metrics(label: str, threshold: dict, metrics: dict) -> None:
+    log_section(logger, label)
+    logger.info(
+        "Thresholds:               tokens>=%d chunks>=%d score>=%.2f",
+        threshold["min_tokens"],
+        threshold["min_chunks"],
+        threshold["min_score"],
+    )
+    logger.info("Precision@accept:         %.3f", metrics["precision_at_accept"])
+    logger.info("Acceptance rate:          %.1f%%", metrics["acceptance_rate"] * 100)
+    logger.info("Query success rate:       %.1f%%", metrics["query_success_rate"] * 100)
+    logger.info(
+        "Conditional query success %.1f%%",
+        metrics["conditional_query_success_rate"] * 100,
+    )
+    logger.info(
+        "Relevant pass rate:       %.1f%%",
+        metrics["retrieved_relevant_pass_rate"] * 100,
+    )
+    logger.info(
+        "Grade-mass pass rate:     %.1f%%",
+        metrics["retrieved_relevant_grade_mass_pass_rate"] * 100,
+    )
+    logger.info(
+        "Accepted relevant / irrel %d / %d",
+        metrics["accepted_relevant_count"],
+        metrics["accepted_irrelevant_count"],
+    )
+
+
+def _print_top_thresholds(rows: list[dict[str, object]], limit: int = 10) -> None:
+    log_section(logger, "Top Thresholds")
+    logger.info("tokens | chunks | score | precision | q_success | rel_pass | accept")
+    logger.info("-------|--------|-------|-----------|-----------|----------|--------")
+    for row in rows[:limit]:
         logger.info(
-            "  %3d  |   %d    | %.3f | %.3f |  %.3f |   %3d  |   %3d%s",
-            r["token_threshold"],
-            r["chunk_threshold"],
-            r["f1"],
-            r["precision"],
-            r["recall"],
-            r["n_passed"],
-            r["n_refused"],
-            marker,
+            "%6d | %6d | %5.2f |   %0.3f   |   %0.3f   |  %0.3f  | %0.3f",
+            row["min_tokens"],
+            row["min_chunks"],
+            row["min_score"],
+            row["precision_at_accept"],
+            row["query_success_rate"],
+            row["retrieved_relevant_pass_rate"],
+            row["acceptance_rate"],
         )
 
 
-def main() -> None:
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Calibrate MIN_EVIDENCE_TOKENS and MIN_EVIDENCE_CHUNKS thresholds"
-    )
-    parser.add_argument(
-        "--samples",
-        type=int,
-        default=200,
-        help="Number of samples to collect",
+        description=(
+            "Calibrate the evidence gate on judged gate_calibration queries "
+            "using tokens, chunks, and retrieval score."
+        )
     )
     parser.add_argument(
         "--output",
         type=Path,
         default=DEFAULT_OUTPUT,
-        help="Output path for calibration data",
+        help="Path for the raw calibration dataset JSON",
+    )
+    parser.add_argument(
+        "--analysis-output",
+        type=Path,
+        default=None,
+        help="Optional explicit path for the calibration analysis JSON",
     )
     parser.add_argument(
         "--analyze-only",
         action="store_true",
-        help="Skip collection, analyze existing data",
+        help="Skip live retrieval and analyze an existing raw calibration dataset",
     )
+    parser.add_argument(
+        "--query-bank-path",
+        type=Path,
+        default=None,
+        help="Optional path to a non-default query-bank JSONL",
+    )
+    parser.add_argument(
+        "--subset-tag",
+        default=DEFAULT_SUBSET_TAG,
+        help="Query-bank subset to use for calibration",
+    )
+    parser.add_argument(
+        "--query-limit",
+        type=int,
+        default=None,
+        help="Optional cap on the number of calibration queries",
+    )
+    parser.add_argument(
+        "--top-k",
+        type=int,
+        default=DEFAULT_TOP_K,
+        help="Number of retrieved products per query",
+    )
+    parser.add_argument(
+        "--min-rating",
+        type=float,
+        default=None,
+        help="Optional review-rating filter applied during retrieval",
+    )
+    parser.add_argument(
+        "--aggregation",
+        choices=[member.value for member in AggregationMethod],
+        default=AggregationMethod.MAX.value,
+        help="Chunk-to-product aggregation method",
+    )
+    parser.add_argument(
+        "--token-thresholds",
+        default=",".join(str(value) for value in DEFAULT_TOKEN_THRESHOLDS),
+        help="Comma-separated token thresholds to sweep",
+    )
+    parser.add_argument(
+        "--chunk-thresholds",
+        default=",".join(str(value) for value in DEFAULT_CHUNK_THRESHOLDS),
+        help="Comma-separated chunk thresholds to sweep",
+    )
+    parser.add_argument(
+        "--score-thresholds",
+        default=",".join(f"{value:.2f}" for value in DEFAULT_SCORE_THRESHOLDS),
+        help="Comma-separated retrieval-score thresholds to sweep",
+    )
+    parser.add_argument(
+        "--query-success-retention",
+        type=float,
+        default=DEFAULT_QUERY_SUCCESS_RETENTION,
+        help="Retain at least this fraction of the achievable query-success ceiling",
+    )
+    parser.add_argument(
+        "--bootstrap-samples",
+        type=int,
+        default=DEFAULT_BOOTSTRAP_SAMPLES,
+        help="Query-level bootstrap samples for current and recommended thresholds",
+    )
+    parser.add_argument(
+        "--strict-retrieval",
+        action="store_true",
+        help="Abort immediately on the first retrieval failure instead of skipping flaky queries",
+    )
+    parser.add_argument(
+        "--max-failed-queries",
+        type=int,
+        default=DEFAULT_MAX_FAILED_QUERIES,
+        help="Abort if skipped retrieval failures exceed this count",
+    )
+    parser.add_argument(
+        "--max-failure-rate",
+        type=float,
+        default=DEFAULT_MAX_FAILURE_RATE,
+        help="Abort if skipped retrieval failures exceed this fraction of attempted queries",
+    )
+    return parser
+
+
+def main() -> None:
+    parser = _build_parser()
     args = parser.parse_args()
 
-    if args.analyze_only:
-        if not args.output.exists():
-            logger.error("No data file found at %s", args.output)
-            return
-        records = load_calibration_data(args.output)
-        logger.info("Loaded %d records from %s", len(records), args.output)
-    else:
-        from sage.adapters.hhem import HallucinationDetector
-        from sage.services.explanation import Explainer
+    try:
+        if args.analyze_only:
+            if not args.output.exists():
+                raise SystemExit(f"ERROR: no calibration dataset found at {args.output}")
+            dataset = load_gate_calibration_dataset(args.output)
+            logger.info("Loaded raw calibration dataset from %s", args.output)
+        else:
+            query_bank_path = (
+                args.query_bank_path if args.query_bank_path is not None else DATA_DIR / "query_bank" / "query_bank.jsonl"
+            )
+            retrieval_info = ensure_calibration_retrieval_ready()
+            logger.info(
+                "Qdrant ready: collection=%s points=%s status=%s",
+                retrieval_info["collection_name"],
+                retrieval_info["points_count"],
+                retrieval_info["status"],
+            )
+            dataset = build_gate_calibration_dataset(
+                subset_tag=args.subset_tag,
+                path=query_bank_path,
+                query_limit=args.query_limit,
+                top_k=args.top_k,
+                min_rating=args.min_rating,
+                aggregation=args.aggregation,
+                continue_on_retrieval_error=not args.strict_retrieval,
+                max_failed_queries=args.max_failed_queries,
+                max_failure_rate=args.max_failure_rate,
+            )
+            save_gate_calibration_dataset(dataset, args.output)
+            logger.info("Saved raw calibration dataset to %s", args.output)
 
-        explainer = Explainer()
-        detector = HallucinationDetector()
-        records = collect_calibration_data(
-            explainer, detector, args.samples, args.output
+        analysis = analyze_gate_thresholds(
+            dataset,
+            token_thresholds=_parse_int_list(args.token_thresholds),
+            chunk_thresholds=_parse_int_list(args.chunk_thresholds),
+            score_thresholds=_parse_float_list(args.score_thresholds),
+            query_success_retention=args.query_success_retention,
+            bootstrap_samples=args.bootstrap_samples,
         )
 
-    # Run all three analyses
-    token_analysis = analyze_threshold(records)
-    chunk_analysis = analyze_chunk_threshold(records)
-    combined_analysis = analyze_combined_thresholds(records)
+        _print_dataset_summary(analysis["dataset_summary"])
+        _print_threshold_metrics(
+            "Current Gate",
+            analysis["current_threshold"],
+            analysis["current_metrics"],
+        )
+        _print_threshold_metrics(
+            "Recommended Gate",
+            analysis["recommended_threshold"],
+            analysis["recommended_metrics"],
+        )
 
-    # Print results
-    print_token_analysis(token_analysis)
-    print_chunk_analysis(chunk_analysis)
-    print_combined_analysis(combined_analysis)
+        log_section(logger, "Delta vs Current")
+        for key, value in analysis["metric_deltas_vs_current"].items():
+            logger.info("%-28s %+0.4f", key, value)
 
-    # Save all analyses
-    all_analysis = {
-        "token_analysis": token_analysis,
-        "chunk_analysis": chunk_analysis,
-        "combined_analysis": combined_analysis,
-    }
-    analysis_path = args.output.with_suffix(".analysis.json")
-    with open(analysis_path, "w") as f:
-        json.dump(all_analysis, f, indent=2)
-    logger.info("Saved analysis to %s", analysis_path)
+        log_section(logger, "Policy")
+        logger.info(
+            "Required query-success floor: %.1f%%",
+            analysis["selection_policy"]["required_query_success_rate"] * 100,
+        )
+        logger.info(
+            "Current config: tokens=%d chunks=%d score=%.2f",
+            MIN_EVIDENCE_TOKENS,
+            MIN_EVIDENCE_CHUNKS,
+            MIN_RETRIEVAL_SCORE,
+        )
+
+        _print_top_thresholds(analysis["top_thresholds"])
+
+        analysis_path = (
+            args.analysis_output
+            if args.analysis_output is not None
+            else args.output.with_suffix(".analysis.json")
+        )
+        analysis_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(analysis_path, "w", encoding="utf-8") as f:
+            json.dump(analysis, f, indent=2)
+        logger.info("Saved analysis to %s", analysis_path)
+    except GateCalibrationRetrievalError as exc:
+        raise SystemExit(
+            "ERROR: calibration retrieval failed. "
+            f"{exc} "
+            "Try a quick connectivity check first with `sage health` or "
+            "the API `/health` endpoint, then rerun calibration once Qdrant is healthy."
+        ) from exc
+    except QueryBankSubsetEmptyError as exc:
+        raise SystemExit(f"ERROR: {exc}") from exc
 
 
 if __name__ == "__main__":
