@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import random
 import string
 import threading
 import time
@@ -14,7 +15,8 @@ from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Callable, Generator, TypeVar
+from typing import TYPE_CHECKING, TypeVar
+from collections.abc import Callable, Generator
 
 if TYPE_CHECKING:
     import logging
@@ -200,6 +202,7 @@ def timed_operation(
     logger: logging.Logger | None = None,
     metrics_observer: Callable[[float], None] | None = None,
     log_format: str = "%s: %.0fms",
+    log_fn: Callable[..., object] | None = None,
 ) -> Generator[None, None, None]:
     """Context manager for timing operations with optional logging and metrics.
 
@@ -212,6 +215,7 @@ def timed_operation(
         logger: Logger instance for info-level timing output.
         metrics_observer: Callback that receives duration in seconds.
         log_format: Format string for log message (name, ms).
+        log_fn: Optional logger method (for example ``logger.debug``).
 
     Yields:
         None. Duration is computed and reported on exit.
@@ -223,8 +227,38 @@ def timed_operation(
         duration = time.perf_counter() - t0
         if metrics_observer is not None:
             metrics_observer(duration)
-        if logger is not None:
-            logger.info(log_format, name, duration * 1000)
+        if log_fn is None and logger is not None:
+            log_fn = logger.info
+        if log_fn is not None:
+            log_fn(log_format, name, duration * 1000)
+
+
+def calculate_exponential_backoff_delay(
+    *,
+    initial_delay: float,
+    attempt: int,
+    max_delay: float,
+    jitter: float = 0.0,
+    random_fn: Callable[[], float] | None = None,
+) -> float:
+    """Return an exponential backoff delay with optional jitter.
+
+    Args:
+        initial_delay: Delay for attempt 0 before jitter.
+        attempt: Zero-indexed retry attempt.
+        max_delay: Upper bound for the deterministic delay component.
+        jitter: Fractional jitter amplitude. ``0.25`` means add up to 25%.
+        random_fn: Optional zero-arg random source returning ``[0, 1)``.
+
+    Returns:
+        Delay in seconds.
+    """
+    base_delay = initial_delay * (2**attempt)
+    delay = min(base_delay, max_delay)
+    if jitter <= 0:
+        return delay
+    random_source = random_fn or random.random
+    return delay + delay * jitter * random_source()
 
 
 def normalize_text(text: str) -> str:
