@@ -2,6 +2,8 @@
 
 from sage.core.models import (
     ConfidenceInterval,
+    EvalCase,
+    EvalCaseProvenance,
     ExplanationResult,
     EvidenceQuality,
     MetricsReport,
@@ -55,11 +57,13 @@ class TestExplanationResult:
             evidence_ids=["id1", "id2"],
             tokens_used=100,
             model="test-model",
+            provider="test-provider",
         )
         dicts = result.to_evidence_dicts()
         assert len(dicts) == 2
         assert dicts[0] == {"id": "id1", "text": "text1"}
         assert dicts[1] == {"id": "id2", "text": "text2"}
+        assert result.provider == "test-provider"
 
     def test_to_evidence_dicts_empty(self):
         result = ExplanationResult(
@@ -70,6 +74,7 @@ class TestExplanationResult:
             evidence_ids=[],
             tokens_used=0,
             model="test-model",
+            provider="test-provider",
         )
         assert result.to_evidence_dicts() == []
 
@@ -84,6 +89,7 @@ class TestStreamingExplanation:
             evidence_texts=["ev"],
             evidence_ids=["id1"],
             model="test",
+            provider="test-provider",
         )
         collected = list(stream)
         assert collected == tokens
@@ -91,6 +97,7 @@ class TestStreamingExplanation:
         result = stream.get_complete_result()
         assert result.explanation == "Hello world"
         assert result.product_id == "P1"
+        assert result.provider == "test-provider"
 
     def test_empty_stream(self):
         stream = StreamingExplanation(
@@ -100,6 +107,7 @@ class TestStreamingExplanation:
             evidence_texts=[],
             evidence_ids=[],
             model="test",
+            provider="test-provider",
         )
         list(stream)
         result = stream.get_complete_result()
@@ -143,6 +151,82 @@ class TestConfidenceInterval:
             "ci_upper": 0.5986,
             "confidence": 0.95,
         }
+
+
+class TestEvalCase:
+    def test_to_dict_preserves_optional_metadata(self):
+        case = EvalCase(
+            query="latest travel keyboard to avoid double click",
+            relevant_items={"ASIN1": 3.0, "ASIN2": 1.0},
+            query_id="qb_001",
+            source_type="manual_seed",
+            category="keyboards_mice",
+            intent="problem_solving",
+            subset_tags=("retrieval_eval", "special_probe"),
+            query_slice_tags=(
+                "recency_sensitive_query",
+                "negative_problem_query",
+            ),
+            provenance=EvalCaseProvenance(
+                schema_version="query_provenance_v1",
+                origin_family="manual_seed",
+                curation_mode="candidate_bootstrap",
+                source_dataset="amazon_esci",
+                source_split="test",
+                selection_policy="corpus_overlap_min_relevant_items_v1",
+                subset_assignment_policy="normalized_query_sha256_v1",
+            ),
+        )
+
+        assert case.to_dict() == {
+            "query": "latest travel keyboard to avoid double click",
+            "relevant_items": {"ASIN1": 3.0, "ASIN2": 1.0},
+            "query_id": "qb_001",
+            "source_type": "manual_seed",
+            "category": "keyboards_mice",
+            "intent": "problem_solving",
+            "subset_tags": ["retrieval_eval", "special_probe"],
+            "query_slice_tags": [
+                "recency_sensitive_query",
+                "negative_problem_query",
+            ],
+            "provenance": {
+                "schema_version": "query_provenance_v1",
+                "origin_family": "manual_seed",
+                "curation_mode": "candidate_bootstrap",
+                "source_dataset": "amazon_esci",
+                "source_split": "test",
+                "selection_policy": "corpus_overlap_min_relevant_items_v1",
+                "subset_assignment_policy": "normalized_query_sha256_v1",
+            },
+        }
+
+
+class TestEvalCaseProvenance:
+    def test_from_dict_accepts_legacy_query_bank_provenance_payload(self):
+        provenance = EvalCaseProvenance.from_dict(
+            {
+                "schema_version": "query_provenance_v1",
+                "origin_family": "amazon_esci_overlap",
+                "curation_mode": "pure_import",
+                "upstream_source": {
+                    "dataset_name": "amazon_esci",
+                    "source_split": "test",
+                },
+                "selection": {"policy": "corpus_overlap_min_relevant_items_v1"},
+                "subset_assignment": {"policy": "normalized_query_sha256_v1"},
+            }
+        )
+
+        assert provenance == EvalCaseProvenance(
+            schema_version="query_provenance_v1",
+            origin_family="amazon_esci_overlap",
+            curation_mode="pure_import",
+            source_dataset="amazon_esci",
+            source_split="test",
+            selection_policy="corpus_overlap_min_relevant_items_v1",
+            subset_assignment_policy="normalized_query_sha256_v1",
+        )
 
 
 class TestMetricsReport:

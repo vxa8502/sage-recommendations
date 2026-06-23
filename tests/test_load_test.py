@@ -41,6 +41,20 @@ class TestEvaluateResponseQuality:
         assert result["grounded_success"] is False
         assert result["refusal_aware_success"] is True
 
+    def test_policy_decision_counts_as_refusal_aware_success(self):
+        payload = {
+            "recommendations": [],
+            "policy_decision": {
+                "observed_behavior": "clarify",
+                "reason_code": "ambiguous_query",
+            },
+        }
+
+        result = _evaluate_response_quality(payload, explain=True)
+
+        assert result["grounded_success"] is False
+        assert result["refusal_aware_success"] is True
+
 
 class TestSummarizePhase:
     def test_summarizes_cache_and_quality_rates(self):

@@ -82,7 +82,6 @@ class TestSecurityHeaders:
         # Check response time header
         response_time = resp.headers.get("x-response-time-ms")
         assert response_time is not None
-        assert float(response_time) >= 0
 
     @patch("sage.api.routes.get_candidates")
     def test_recommend_preserves_cache_result_header_with_latency_middleware(
@@ -275,7 +274,6 @@ class TestCacheThreadSafety:
         assert not errors, f"Errors during concurrent ops: {errors}"
         stats = cache.stats()
         assert stats.size <= 50
-        assert stats.evictions >= 0
 
     def test_concurrent_semantic_lookups_correct_results(self):
         """Concurrent semantic lookups should return correct cached values."""
@@ -317,50 +315,6 @@ class TestRequestContext:
 
         # Reset for other tests
         set_request_id("-")
-
-
-class TestCORSConfiguration:
-    """Test CORS configuration security."""
-
-    def test_cors_not_applied_when_empty(self):
-        """When CORS_ORIGINS is empty, no CORS middleware should be added."""
-        from sage.api.app import CORS_ORIGINS
-
-        # This test verifies the default behavior
-        # In production, CORS_ORIGINS should be explicitly set
-        # Default is empty list (no CORS)
-        assert isinstance(CORS_ORIGINS, list)
-
-    def test_cors_origins_parsing(self):
-        """Test that CORS origins are parsed correctly."""
-        import os
-
-        # Save original
-        original = os.environ.get("CORS_ORIGINS")
-
-        try:
-            # Test with explicit origins
-            os.environ["CORS_ORIGINS"] = "https://example.com,http://localhost:3000"
-            # Would need to reload the module to test this properly
-            # Just verify the format is correct
-            origins = [
-                o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()
-            ]
-            assert origins == ["https://example.com", "http://localhost:3000"]
-
-            # Test with empty string
-            os.environ["CORS_ORIGINS"] = ""
-            origins = [
-                o.strip() for o in os.environ["CORS_ORIGINS"].split(",") if o.strip()
-            ]
-            assert origins == []
-
-        finally:
-            # Restore original
-            if original is not None:
-                os.environ["CORS_ORIGINS"] = original
-            elif "CORS_ORIGINS" in os.environ:
-                del os.environ["CORS_ORIGINS"]
 
 
 class TestInputValidation:

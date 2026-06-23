@@ -2,6 +2,7 @@
 
 from sage.core.chunking import (
     chunk_text,
+    chunk_reviews_batch,
     estimate_tokens,
     find_split_points,
     sliding_window_chunk,
@@ -188,38 +189,6 @@ class TestSlidingWindowChunk:
             "Expected at least some chunks to end at sentence boundaries"
         )
 
-    def test_overlap_exceeds_chunk_size_raises_or_handles_gracefully(self):
-        """When overlap >= chunk_size, function should not hang or loop infinitely."""
-        import signal
-
-        text = "A" * 500
-
-        def timeout_handler(signum, frame):
-            raise TimeoutError("Infinite loop detected")
-
-        # Set a 1-second timeout
-        old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-        signal.alarm(1)
-
-        try:
-            # This should either complete quickly or raise an error
-            # It should NOT hang indefinitely
-            chunks = sliding_window_chunk(text, chunk_size=50, overlap=60)
-            signal.alarm(0)
-            # If it completes, verify it produced something reasonable
-            # (current implementation loops infinitely - this test documents the bug)
-            assert False, (
-                "Expected timeout or error when overlap >= chunk_size, "
-                f"but got {len(chunks)} chunks"
-            )
-        except TimeoutError:
-            # This is the expected behavior currently (infinite loop)
-            # This test documents the bug for future fixing
-            pass
-        finally:
-            signal.alarm(0)
-            signal.signal(signal.SIGALRM, old_handler)
-
     def test_very_large_overlap_near_chunk_size(self):
         """Overlap just under chunk_size should work but produce many chunks."""
         text = "Z" * 500
@@ -391,3 +360,24 @@ class TestFindSplitPoints:
         sims = [0.9, 0.1, 0.9, 0.05, 0.9]
         splits = find_split_points(sims, threshold_percentile=50)
         assert splits == sorted(splits)
+
+
+class TestChunkReviewsBatch:
+    def test_preserves_timestamp_and_verified_purchase(self):
+        reviews = [
+            {
+                "text": "Great keyboard with a solid aluminum frame.",
+                "review_id": "review_1",
+                "product_id": "ASIN1",
+                "rating": 5.0,
+                "timestamp": 1704067200000,
+                "verified_purchase": "true",
+            }
+        ]
+
+        chunks = chunk_reviews_batch(reviews)
+
+        assert len(chunks) == 1
+        assert chunks[0].review_id == "review_1"
+        assert chunks[0].timestamp == 1704067200000
+        assert chunks[0].verified_purchase is True

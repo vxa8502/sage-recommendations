@@ -4,7 +4,7 @@ Uses a test app with mocked state to avoid loading heavy models.
 """
 
 from types import SimpleNamespace
-from typing import Callable
+from collections.abc import Callable
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -105,39 +105,37 @@ def sample_product() -> ProductScore:
 
 
 class TestHealthEndpoint:
-    @patch("sage.api.routes.collection_exists", return_value=True)
-    def test_healthy_when_all_components_available(self, mock_collection_exists):
-        app = _make_app()
-        with TestClient(app) as c:
-            resp = c.get("/health")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["status"] == "healthy"
-            assert data["qdrant_connected"] is True
-            assert data["llm_reachable"] is True
+    def test_healthy_when_all_components_available(self):
+        with patch("sage.api.routes.collection_exists", return_value=True):
+            app = _make_app()
+            with TestClient(app) as c:
+                resp = c.get("/health")
+                assert resp.status_code == 200
+                data = resp.json()
+                assert data["status"] == "healthy"
+                assert data["qdrant_connected"] is True
+                assert data["llm_reachable"] is True
 
-    @patch("sage.api.routes.collection_exists", return_value=True)
-    def test_degraded_when_qdrant_available_but_llm_unavailable(
-        self, mock_collection_exists
-    ):
-        app = _make_app(explainer=None)
-        with TestClient(app) as c:
-            resp = c.get("/health")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["status"] == "degraded"
-            assert data["qdrant_connected"] is True
-            assert data["llm_reachable"] is False
+    def test_degraded_when_qdrant_available_but_llm_unavailable(self):
+        with patch("sage.api.routes.collection_exists", return_value=True):
+            app = _make_app(explainer=None)
+            with TestClient(app) as c:
+                resp = c.get("/health")
+                assert resp.status_code == 200
+                data = resp.json()
+                assert data["status"] == "degraded"
+                assert data["qdrant_connected"] is True
+                assert data["llm_reachable"] is False
 
-    @patch("sage.api.routes.collection_exists", return_value=False)
-    def test_unhealthy_when_qdrant_unavailable(self, mock_collection_exists):
-        app = _make_app()
-        with TestClient(app) as c:
-            resp = c.get("/health")
-            assert resp.status_code == 200
-            data = resp.json()
-            assert data["status"] == "unhealthy"
-            assert data["qdrant_connected"] is False
+    def test_unhealthy_when_qdrant_unavailable(self):
+        with patch("sage.api.routes.collection_exists", return_value=False):
+            app = _make_app()
+            with TestClient(app) as c:
+                resp = c.get("/health")
+                assert resp.status_code == 200
+                data = resp.json()
+                assert data["status"] == "unhealthy"
+                assert data["qdrant_connected"] is False
 
 
 class TestRecommendEndpoint:
@@ -147,7 +145,7 @@ class TestRecommendEndpoint:
         assert resp.status_code == 422
 
     @patch("sage.api.routes.get_candidates", return_value=[])
-    def test_empty_results(self, mock_get_candidates, client):
+    def test_empty_results(self, _mock_get_candidates, client):
         resp = client.post("/recommend", json={"query": "test query", "explain": False})
         assert resp.status_code == 200
         data = resp.json()
@@ -208,6 +206,29 @@ class TestRecommendEndpoint:
             resp = c.post("/recommend", json={"query": "headphones", "explain": True})
             assert resp.status_code == 503
             assert "unavailable" in resp.json()["error"].lower()
+
+    @patch("sage.api.routes.get_candidates")
+    def test_query_policy_refusal_skips_cache_embedding_and_retrieval(
+        self,
+        mock_get_candidates,
+    ):
+        app = _make_app()
+        with TestClient(app) as c:
+            resp = c.post(
+                "/recommend",
+                json={"query": "monitor with the lowest carbon footprint"},
+            )
+
+        assert resp.status_code == 200
+        assert resp.headers["X-Cache-Result"] == "policy"
+        data = resp.json()
+        assert data["recommendations"] == []
+        assert data["returned_count"] == 0
+        assert data["policy_decision"]["reason_code"] == "unsupported_attribute_claim"
+        assert data["policy_decision"]["observed_behavior"] == "refuse"
+        mock_get_candidates.assert_not_called()
+        app.state.embedder.embed_single_query.assert_not_called()
+        app.state.cache.get.assert_not_called()
 
 
 class TestCacheEndpoints:
@@ -272,7 +293,7 @@ def _make_stream_generator(
     if tokens is None:
         tokens = ["Test token."]
 
-    def generator(query, product, max_evidence) -> StreamingExplanation:
+    def generator(query, product, _max_evidence) -> StreamingExplanation:
         return StreamingExplanation(
             token_iterator=iter(tokens),
             product_id=product.product_id,
@@ -280,6 +301,7 @@ def _make_stream_generator(
             evidence_texts=["Evidence text"],
             evidence_ids=["r1"],
             model="test-model",
+            provider="test-provider",
         )
 
     return generator
@@ -302,7 +324,7 @@ class TestStreamingEndpoint:
     """Tests for POST /recommend/stream SSE endpoint."""
 
     @patch("sage.api.routes.get_candidates", return_value=[])
-    def test_empty_results_sends_done_event(self, mock_get_candidates):
+    def test_empty_results_sends_done_event(self, _mock_get_candidates):
         app = _make_app()
         with TestClient(app) as c:
             resp = c.post(
@@ -353,6 +375,31 @@ class TestStreamingEndpoint:
 
             # Verify done status
             assert _get_event(events, "done")["status"] == "complete"
+
+    @patch("sage.api.routes.get_candidates")
+    def test_query_policy_sends_policy_event_and_skips_retrieval(
+        self,
+        mock_get_candidates,
+    ):
+        app = _make_app()
+        with TestClient(app) as c:
+            resp = c.post(
+                "/recommend/stream",
+                json={"query": "good one for travel"},
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse_events(resp)
+        event_types = [e[0] for e in events]
+        assert event_types == ["metadata", "policy", "done"]
+        assert _get_event(events, "metadata")["policy"] is True
+        policy = _get_event(events, "policy")
+        assert policy["reason_code"] == "ambiguous_query"
+        assert policy["observed_behavior"] == "clarify"
+        done = _get_event(events, "done")
+        assert done["recommendations"] == []
+        assert done["policy_decision"]["observed_behavior"] == "clarify"
+        mock_get_candidates.assert_not_called()
 
     @patch("sage.api.routes.get_candidates")
     def test_streams_evidence_after_tokens(self, mock_get_candidates, sample_product):
@@ -437,7 +484,7 @@ class TestStreamingEndpoint:
             assert len(_get_events(events, "evidence")) == 2
 
             # Verify interleaved: P1 product → P1 evidence → P2 product
-            def idx(event_type: str, predicate=lambda e: True) -> int:
+            def idx(event_type: str, predicate=lambda _event: True) -> int:
                 return next(
                     i
                     for i, e in enumerate(events)
@@ -459,7 +506,7 @@ class TestStreamingEndpoint:
 
         mock_get_candidates.return_value = [sample_product]
 
-        def slow_generator(query, product, max_evidence):
+        def slow_generator(_query, product, _max_evidence):
             def slow_tokens():
                 time.sleep(1)  # Sleep longer than timeout
                 yield "Never reached"
@@ -467,10 +514,11 @@ class TestStreamingEndpoint:
             return StreamingExplanation(
                 token_iterator=slow_tokens(),
                 product_id=product.product_id,
-                query=query,
+                query=_query,
                 evidence_texts=["Evidence"],
                 evidence_ids=["r1"],
                 model="test-model",
+                provider="test-provider",
             )
 
         app = _make_app(explainer=_make_mock_explainer(slow_generator))
@@ -494,7 +542,7 @@ class TestStreamingEndpoint:
         """Verify refusal event when quality gate rejects thin evidence."""
         mock_get_candidates.return_value = [sample_product]
 
-        def refusing_generator(query, product, max_evidence):
+        def refusing_generator(_query, _product, _max_evidence):
             raise ValueError("Insufficient evidence: only 1 chunk with 45 tokens")
 
         app = _make_app(explainer=_make_mock_explainer(refusing_generator))
@@ -514,7 +562,7 @@ class TestStreamingEndpoint:
         """Verify error event when explanation generation fails unexpectedly."""
         mock_get_candidates.return_value = [sample_product]
 
-        def failing_generator(query, product, max_evidence):
+        def failing_generator(_query, _product, _max_evidence):
             raise RuntimeError("LLM API connection failed")
 
         app = _make_app(explainer=_make_mock_explainer(failing_generator))
@@ -545,7 +593,7 @@ class TestStreamingEndpoint:
             assert _get_event(events, "done")["status"] == "error"
 
     @patch("sage.api.routes.get_candidates", return_value=[])
-    def test_empty_results_done_payload_schema(self, mock_get_candidates):
+    def test_empty_results_done_payload_schema(self, _mock_get_candidates):
         """Verify done event payload for empty results."""
         app = _make_app()
         with TestClient(app) as c:
@@ -613,7 +661,7 @@ class TestCacheHitPath:
         explainer = MagicMock()
         explainer.client = MagicMock()
 
-        def generate_explanation(query, product, max_evidence):
+        def generate_explanation(query, product, _max_evidence):
             return ExplanationResult(
                 explanation="Great product with excellent reviews.",
                 product_id=product.product_id,
@@ -674,6 +722,7 @@ class TestCacheHitPath:
                 json={"query": "wireless headphones", "k": 3, "explain": True},
             )
             assert resp1.status_code == 200
+            assert resp1.headers["x-cache-result"] == "miss"
             data1 = resp1.json()
 
             # Verify cache was populated
@@ -687,6 +736,7 @@ class TestCacheHitPath:
                 json={"query": "wireless headphones", "k": 3, "explain": True},
             )
             assert resp2.status_code == 200
+            assert resp2.headers["x-cache-result"] == "exact"
             data2 = resp2.json()
 
             # Verify exact cache hit
@@ -745,16 +795,18 @@ class TestCacheHitPath:
         )
 
         with TestClient(app) as c:
-            c.post(
+            resp1 = c.post(
                 "/recommend",
                 json={"query": "wireless headphones", "k": 3, "explain": True},
             )
+            assert resp1.headers["x-cache-result"] == "miss"
             assert semantic_cache.stats().misses == 1
 
-            c.post(
+            resp2 = c.post(
                 "/recommend",
                 json={"query": "best wireless headphones", "k": 3, "explain": True},
             )
+            assert resp2.headers["x-cache-result"] == "semantic"
             stats = semantic_cache.stats()
             assert stats.semantic_hits == 1
             assert stats.misses == 1
@@ -855,8 +907,10 @@ class TestCacheHitPath:
         app = _make_app(embedder=mock_embedder, cache=cache)
 
         with TestClient(app) as c:
-            c.post("/recommend", json={"query": "headphones", "explain": False})
-            c.post("/recommend", json={"query": "headphones", "explain": False})
+            resp1 = c.post("/recommend", json={"query": "headphones", "explain": False})
+            resp2 = c.post("/recommend", json={"query": "headphones", "explain": False})
+            assert resp1.headers["x-cache-result"] == "disabled"
+            assert resp2.headers["x-cache-result"] == "disabled"
 
             # Cache should be untouched (explain=False bypasses cache)
             stats = cache.stats()

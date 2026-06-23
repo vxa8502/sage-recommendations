@@ -1,11 +1,16 @@
 """Tests for sage.data.loader — data loading and temporal split functions."""
 
+import json
+
 import pandas as pd
 import pytest
 
 from sage.data.loader import (
+    clean_reviews,
     create_temporal_splits,
     filter_5_core,
+    load_reviews,
+    validate_reviews,
     verify_temporal_boundaries,
 )
 
@@ -173,6 +178,96 @@ class TestVerifyTemporalBoundaries:
         # Should raise "empty" not "missing column"
         with pytest.raises(ValueError, match="Train split is empty"):
             verify_temporal_boundaries(train_df, val_df, test_df, verbose=False)
+
+
+class _FakeStreamingResponse:
+    def __init__(self, lines: list[bytes]):
+        self._lines = lines
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        del exc_type, exc, tb
+        return False
+
+    def raise_for_status(self) -> None:
+        return None
+
+    def iter_lines(self):
+        yield from self._lines
+
+
+class TestLoaderCleanup:
+    """Regression tests for loader cleanup behavior."""
+
+    def test_load_reviews_none_streams_all_rows(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("sage.data.loader.DATA_DIR", tmp_path)
+        monkeypatch.setattr(
+            "sage.data.loader.requests.get",
+            lambda *args, **kwargs: _FakeStreamingResponse(
+                [
+                    json.dumps(
+                        {
+                            "user_id": "U1",
+                            "parent_asin": "A1",
+                            "rating": 5,
+                            "text": "great",
+                        }
+                    ).encode("utf-8"),
+                    json.dumps(
+                        {
+                            "user_id": "U2",
+                            "parent_asin": "A2",
+                            "rating": 4,
+                            "text": "solid",
+                        }
+                    ).encode("utf-8"),
+                    json.dumps(
+                        {
+                            "user_id": "U3",
+                            "parent_asin": "A3",
+                            "rating": 3,
+                            "text": "fine",
+                        }
+                    ).encode("utf-8"),
+                ]
+            ),
+        )
+        monkeypatch.setattr(
+            pd.DataFrame,
+            "to_parquet",
+            lambda self, path: None,
+        )
+
+        df = load_reviews(subset_size=None, use_cache=False)
+
+        assert len(df) == 3
+        assert df["parent_asin"].tolist() == ["A1", "A2", "A3"]
+
+    def test_validate_reviews_clean_count_uses_row_mask(self):
+        df = pd.DataFrame(
+            [
+                {
+                    "text": None,
+                    "rating": 0,
+                    "user_id": None,
+                    "parent_asin": None,
+                }
+            ]
+        )
+
+        result = validate_reviews(df)
+
+        assert result["issues_found"] is True
+        assert result["clean_reviews"] == 0
+
+    def test_clean_reviews_empty_frame_does_not_divide_by_zero(self):
+        df = pd.DataFrame(columns=["text", "rating", "user_id", "parent_asin"])
+
+        cleaned = clean_reviews(df, verbose=True)
+
+        assert cleaned.empty
 
 
 class TestCreateTemporalSplits:

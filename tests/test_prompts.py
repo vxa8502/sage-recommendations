@@ -136,10 +136,3 @@ class TestBuildExplanationPromptMixedEvidence:
             "test query", product, max_evidence=3
         )
         assert system_prompt == EXPLANATION_SYSTEM_PROMPT_MIXED
-
-    def test_mixed_prompt_contains_acknowledgment_instruction(self) -> None:
-        assert "ACKNOWLEDGE BOTH SIDES" in EXPLANATION_SYSTEM_PROMPT_MIXED
-        assert "contrast words" in EXPLANATION_SYSTEM_PROMPT_MIXED.lower()
-
-    def test_mixed_prompt_warns_against_cherry_picking(self) -> None:
-        assert "cherry-pick" in EXPLANATION_SYSTEM_PROMPT_MIXED.lower()

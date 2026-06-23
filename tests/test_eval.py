@@ -29,6 +29,7 @@ class TestLoadEvalCases:
         assert cases[0].query == "wireless headphones"
         assert cases[0].relevant_items == {"B001": 3.0, "B002": 2.0}
         assert cases[1].query == "bluetooth speaker"
+        assert cases[0].query_slice_tags == ()
 
     def test_empty_list_returns_empty(self, tmp_path, monkeypatch):
         """Empty JSON array returns empty list without error."""
@@ -99,6 +100,16 @@ class TestLoadEvalCases:
         with pytest.raises(
             ValueError, match="Missing 'relevant_items' field in case 0"
         ):
+            load_eval_cases("test.json")
+
+    def test_query_must_be_non_empty_string(self, tmp_path, monkeypatch):
+        """Malformed query values should fail with a schema error, not AttributeError."""
+        monkeypatch.setattr("sage.data.eval.EVAL_DIR", tmp_path)
+
+        data = [{"query": 123, "relevant_items": {"B001": 1.0}}]
+        (tmp_path / "test.json").write_text(json.dumps(data))
+
+        with pytest.raises(ValueError, match="'query' must be a string"):
             load_eval_cases("test.json")
 
     def test_relevant_items_not_dict(self, tmp_path, monkeypatch):
@@ -174,6 +185,93 @@ class TestLoadEvalCases:
 
         assert len(cases) == 1
         assert cases[0].query == "smart speaker"
+
+    def test_recognized_metadata_is_preserved_and_query_slices_inferred(
+        self, tmp_path, monkeypatch
+    ):
+        """Known metadata fields survive round-trips into EvalCase objects."""
+        monkeypatch.setattr("sage.data.eval.EVAL_DIR", tmp_path)
+
+        data = [
+            {
+                "query": "latest smart speaker to avoid",
+                "query_id": "qb_001",
+                "source_type": "manual_seed",
+                "category": "speakers",
+                "intent": "problem_solving",
+                "subset_tags": ["retrieval_eval", "special_probe"],
+                "relevant_items": {"B001": 3.0},
+                "provenance": {
+                    "schema_version": "query_provenance_v1",
+                    "origin_family": "manual_seed",
+                    "curation_mode": "candidate_bootstrap",
+                    "source_dataset": "amazon_esci",
+                    "source_split": "test",
+                    "selection_policy": "corpus_overlap_min_relevant_items_v1",
+                    "subset_assignment_policy": "normalized_query_sha256_v1",
+                },
+            }
+        ]
+        (tmp_path / "test.json").write_text(json.dumps(data))
+
+        cases = load_eval_cases("test.json")
+
+        assert len(cases) == 1
+        assert cases[0].query_id == "qb_001"
+        assert cases[0].source_type == "manual_seed"
+        assert cases[0].category == "speakers"
+        assert cases[0].intent == "problem_solving"
+        assert cases[0].subset_tags == ("retrieval_eval", "special_probe")
+        assert cases[0].query_slice_tags == (
+            "recency_sensitive_query",
+            "negative_problem_query",
+        )
+        assert cases[0].provenance is not None
+        assert cases[0].provenance.origin_family == "manual_seed"
+        assert cases[0].provenance.curation_mode == "candidate_bootstrap"
+
+    def test_legacy_query_bank_provenance_payload_is_compacted(
+        self, tmp_path, monkeypatch
+    ):
+        """Older eval exports with full query-bank provenance still load cleanly."""
+        monkeypatch.setattr("sage.data.eval.EVAL_DIR", tmp_path)
+
+        data = [
+            {
+                "query": "wireless headphones",
+                "relevant_items": {"B001": 3.0},
+                "provenance": {
+                    "schema_version": "query_provenance_v1",
+                    "origin_family": "amazon_esci_overlap",
+                    "curation_mode": "pure_import",
+                    "upstream_source": {
+                        "dataset_name": "amazon_esci",
+                        "source_split": "test",
+                    },
+                    "selection": {
+                        "policy": "corpus_overlap_min_relevant_items_v1"
+                    },
+                    "subset_assignment": {
+                        "policy": "normalized_query_sha256_v1"
+                    },
+                },
+            }
+        ]
+        (tmp_path / "test.json").write_text(json.dumps(data))
+
+        cases = load_eval_cases("test.json")
+
+        assert cases[0].provenance is not None
+        assert cases[0].provenance.source_dataset == "amazon_esci"
+        assert cases[0].provenance.source_split == "test"
+        assert (
+            cases[0].provenance.selection_policy
+            == "corpus_overlap_min_relevant_items_v1"
+        )
+        assert (
+            cases[0].provenance.subset_assignment_policy
+            == "normalized_query_sha256_v1"
+        )
 
     def test_relevant_set_works_after_load(self, tmp_path, monkeypatch):
         """Loaded cases have working relevant_set property."""
