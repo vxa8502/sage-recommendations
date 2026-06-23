@@ -26,7 +26,7 @@ from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from sage.api.context import set_request_id
-from sage.api.metrics import observe_duration, record_request
+from sage.adapters.metrics import observe_duration, record_request
 from sage.config import get_logger
 
 logger = get_logger(__name__)

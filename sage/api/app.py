@@ -23,8 +23,12 @@ from sage.api.middleware import (
     get_shutdown_coordinator,
     reset_shutdown_coordinator,
 )
+from sage.api.context import get_request_id
 from sage.api.routes import router
 from sage.config import get_logger
+from sage.config.logging import register_request_id_provider
+
+register_request_id_provider(get_request_id)
 
 # CORS configuration - explicit origins required for security.
 # Default to empty (no CORS) rather than "*" (all origins).
@@ -109,15 +113,18 @@ async def _lifespan(app: FastAPI):
         if collection_exists(app.state.qdrant):
             logger.info("Qdrant collection verified")
         else:
-            logger.warning("Qdrant collection not found -- run 'make data' first")
+            logger.warning("Qdrant collection not found -- run 'sage data build' first")
     except Exception:
         logger.warning("Qdrant unreachable at startup -- will retry on requests")
 
     # HHEM hallucination detector (loads T5 model) -- required for grounding
     from sage.adapters.hhem import HallucinationDetector
+    from sage.adapters.metrics import observe_hhem_duration
 
     try:
-        app.state.detector = HallucinationDetector()
+        app.state.detector = HallucinationDetector(
+            duration_observer=observe_hhem_duration
+        )
         logger.info("HHEM detector loaded")
     except Exception:
         logger.exception("Failed to load HHEM model -- cannot start")
