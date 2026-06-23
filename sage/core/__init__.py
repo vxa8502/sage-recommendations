@@ -2,7 +2,8 @@
 Sage core domain layer.
 
 Pure domain logic with no external service dependencies.
-Contains models, chunking, aggregation, verification, evidence quality, and prompts.
+Contains models, chunking, aggregation, verification, evidence quality, prompts,
+query classification, and freshness policy.
 """
 
 # Models (all dataclasses)
@@ -36,6 +37,7 @@ from sage.core.models import (
     # Evaluation
     ConfidenceInterval,
     EvalCase,
+    EvalCaseProvenance,
     EvalResult,
     MetricsReport,
 )
@@ -88,6 +90,24 @@ from sage.core.prompts import (
     format_evidence,
 )
 
+# Query classification (query slice tagging)
+from sage.core.query_classification import (
+    RECENCY_SENSITIVE_QUERY,
+    NEGATIVE_PROBLEM_QUERY,
+    QUERY_SLICE_NAMES,
+    QUERY_SLICE_DESCRIPTIONS,
+    classify_query_slices,
+    is_recency_sensitive_query,
+)
+
+# Freshness policy (evidence-trust guardrails)
+from sage.core.freshness_policy import (
+    build_evidence_guardrail_report,
+    evaluate_freshness_guardrail_case,
+    summarize_evidence_guardrail_reports,
+    summarize_freshness_guardrail_cases,
+)
+
 __all__ = [
     # Models
     "AggregationMethod",
@@ -111,6 +131,7 @@ __all__ = [
     "FaithfulnessResult",
     "ConfidenceInterval",
     "EvalCase",
+    "EvalCaseProvenance",
     "EvalResult",
     "MetricsReport",
     # Chunking
@@ -148,4 +169,16 @@ __all__ = [
     "build_explanation_prompt",
     "detect_rating_spread",
     "format_evidence",
+    # Query classification
+    "RECENCY_SENSITIVE_QUERY",
+    "NEGATIVE_PROBLEM_QUERY",
+    "QUERY_SLICE_NAMES",
+    "QUERY_SLICE_DESCRIPTIONS",
+    "classify_query_slices",
+    "is_recency_sensitive_query",
+    # Freshness policy
+    "build_evidence_guardrail_report",
+    "evaluate_freshness_guardrail_case",
+    "summarize_evidence_guardrail_reports",
+    "summarize_freshness_guardrail_cases",
 ]

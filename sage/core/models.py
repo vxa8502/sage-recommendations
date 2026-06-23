@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Iterator
+from typing import Any
+from collections.abc import Iterator
 
 
 # ============================================================================
@@ -53,6 +54,7 @@ class Chunk:
     product_id: str
     rating: float
     timestamp: int
+    verified_purchase: bool | None = None
 
 
 @dataclass
@@ -69,6 +71,8 @@ class RetrievedChunk:
     product_id: str
     rating: float
     review_id: str
+    timestamp: int | None = None
+    verified_purchase: bool | None = None
 
 
 @dataclass
@@ -133,6 +137,7 @@ class ExplanationResult:
     evidence_ids: list[str]
     tokens_used: int
     model: str
+    provider: str = "unknown"
     citation_verification: CitationVerificationResult | None = None
 
     def to_evidence_dicts(self) -> list[dict]:
@@ -164,6 +169,7 @@ class StreamingExplanation:
     evidence_texts: list[str]
     evidence_ids: list[str]
     model: str
+    provider: str = "unknown"
     _collected_text: str = ""
 
     def __iter__(self) -> Iterator[str]:
@@ -187,6 +193,7 @@ class StreamingExplanation:
             evidence_ids=self.evidence_ids,
             tokens_used=0,  # Not available in streaming mode
             model=self.model,
+            provider=self.provider,
             citation_verification=None,  # Streaming skips verification for speed
         )
 
@@ -285,6 +292,8 @@ class HallucinationResult:
     threshold: float
     explanation: str
     premise_length: int
+    degraded: bool = False
+    error_message: str | None = None
 
 
 @dataclass
@@ -294,6 +303,8 @@ class ClaimResult:
     claim: str
     score: float
     is_hallucinated: bool
+    degraded: bool = False
+    error_message: str | None = None
 
 
 @dataclass
@@ -485,6 +496,116 @@ class FaithfulnessReport:
 # ============================================================================
 
 
+@dataclass(frozen=True)
+class EvalCaseProvenance:
+    """Compact provenance summary carried with an evaluation case."""
+
+    schema_version: str | None = None
+    origin_family: str | None = None
+    curation_mode: str | None = None
+    source_dataset: str | None = None
+    source_split: str | None = None
+    selection_policy: str | None = None
+    subset_assignment_policy: str | None = None
+
+    def to_dict(self) -> dict[str, str]:
+        """Convert to a compact JSON-serializable dict."""
+        payload = {
+            "schema_version": self.schema_version,
+            "origin_family": self.origin_family,
+            "curation_mode": self.curation_mode,
+            "source_dataset": self.source_dataset,
+            "source_split": self.source_split,
+            "selection_policy": self.selection_policy,
+            "subset_assignment_policy": self.subset_assignment_policy,
+        }
+        return {
+            key: value
+            for key, value in payload.items()
+            if isinstance(value, str) and value
+        }
+
+    @classmethod
+    def from_dict(
+        cls,
+        payload: dict[str, Any] | None,
+        *,
+        context: str = "eval case provenance",
+    ) -> EvalCaseProvenance | None:
+        """Parse compact or legacy provenance payloads into the compact schema."""
+        if payload is None:
+            return None
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"'{context}' must be an object, got {type(payload).__name__}"
+            )
+
+        upstream_source = payload.get("upstream_source")
+        if upstream_source is not None and not isinstance(upstream_source, dict):
+            raise ValueError(
+                f"'{context}.upstream_source' must be an object when present, got "
+                f"{type(upstream_source).__name__}"
+            )
+        selection = payload.get("selection")
+        if selection is not None and not isinstance(selection, dict):
+            raise ValueError(
+                f"'{context}.selection' must be an object when present, got "
+                f"{type(selection).__name__}"
+            )
+        subset_assignment = payload.get("subset_assignment")
+        if subset_assignment is not None and not isinstance(subset_assignment, dict):
+            raise ValueError(
+                f"'{context}.subset_assignment' must be an object when present, got "
+                f"{type(subset_assignment).__name__}"
+            )
+
+        def _clean_optional(field_name: str, value: Any) -> str | None:
+            if value is None:
+                return None
+            if not isinstance(value, str):
+                raise ValueError(
+                    f"'{context}.{field_name}' must be a string when present, got "
+                    f"{type(value).__name__}"
+                )
+            cleaned = value.strip()
+            return cleaned or None
+
+        resolved = cls(
+            schema_version=_clean_optional(
+                "schema_version",
+                payload.get("schema_version"),
+            ),
+            origin_family=_clean_optional(
+                "origin_family",
+                payload.get("origin_family"),
+            ),
+            curation_mode=_clean_optional(
+                "curation_mode",
+                payload.get("curation_mode"),
+            ),
+            source_dataset=_clean_optional(
+                "source_dataset",
+                payload.get("source_dataset")
+                or (upstream_source or {}).get("dataset_name"),
+            ),
+            source_split=_clean_optional(
+                "source_split",
+                payload.get("source_split") or (upstream_source or {}).get("source_split"),
+            ),
+            selection_policy=_clean_optional(
+                "selection_policy",
+                payload.get("selection_policy") or (selection or {}).get("policy"),
+            ),
+            subset_assignment_policy=_clean_optional(
+                "subset_assignment_policy",
+                payload.get("subset_assignment_policy")
+                or (subset_assignment or {}).get("policy"),
+            ),
+        )
+
+        return resolved if resolved.to_dict() else None
+
+
 @dataclass
 class EvalCase:
     """
@@ -500,11 +621,44 @@ class EvalCase:
     query: str
     relevant_items: dict[str, float]
     user_id: str | None = None
+    query_id: str | None = None
+    source_type: str | None = None
+    category: str | None = None
+    intent: str | None = None
+    subset_tags: tuple[str, ...] = ()
+    query_slice_tags: tuple[str, ...] = ()
+    provenance: EvalCaseProvenance | None = None
 
     @property
     def relevant_set(self) -> set[str]:
         """Return set of relevant product IDs (relevance > 0)."""
         return {pid for pid, rel in self.relevant_items.items() if rel > 0}
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a JSON-serializable dict, preserving optional metadata."""
+        payload: dict[str, Any] = {
+            "query": self.query,
+            "relevant_items": dict(self.relevant_items),
+        }
+        if self.user_id is not None:
+            payload["user_id"] = self.user_id
+        if self.query_id is not None:
+            payload["query_id"] = self.query_id
+        if self.source_type is not None:
+            payload["source_type"] = self.source_type
+        if self.category is not None:
+            payload["category"] = self.category
+        if self.intent is not None:
+            payload["intent"] = self.intent
+        if self.subset_tags:
+            payload["subset_tags"] = list(self.subset_tags)
+        if self.query_slice_tags:
+            payload["query_slice_tags"] = list(self.query_slice_tags)
+        if self.provenance is not None:
+            provenance_payload = self.provenance.to_dict()
+            if provenance_payload:
+                payload["provenance"] = provenance_payload
+        return payload
 
 
 @dataclass

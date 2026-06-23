@@ -74,7 +74,8 @@ def check_evidence_quality(
         )
 
     # Calculate total tokens (estimate from char count)
-    total_chars = sum(len(c.text) for c in chunks)
+    # Guard against None text (Qdrant payload missing field).
+    total_chars = sum(len(c.text) for c in chunks if c.text)
     total_tokens = total_chars // CHARS_PER_TOKEN
 
     # Get top retrieval score

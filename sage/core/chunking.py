@@ -293,6 +293,25 @@ def chunk_reviews_batch(
 
     all_chunks = []
 
+    def _coerce_optional_bool(value):
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, (int, float)):
+            if value == 1:
+                return True
+            if value == 0:
+                return False
+            return None
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y"}:
+                return True
+            if normalized in {"false", "0", "no", "n"}:
+                return False
+        return None
+
     for review in reviews:
         text = review.get("text", "")
         if not text or not text.strip():
@@ -302,6 +321,7 @@ def chunk_reviews_batch(
         product_id = review.get("product_id", "")
         rating = review.get("rating", 0.0)
         timestamp = review.get("timestamp", 0)
+        verified_purchase = _coerce_optional_bool(review.get("verified_purchase"))
 
         chunk_texts = chunk_text(text, embedder=embedder)
 
@@ -315,6 +335,7 @@ def chunk_reviews_batch(
                     product_id=product_id,
                     rating=float(rating),
                     timestamp=int(timestamp),
+                    verified_purchase=verified_purchase,
                 )
             )
 
