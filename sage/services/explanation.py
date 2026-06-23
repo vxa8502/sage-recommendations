@@ -5,9 +5,16 @@ Orchestrates LLM-based explanation generation with evidence quality gates
 and post-generation verification.
 """
 
+from __future__ import annotations
+
 from sage.adapters.llm import LLMClient, get_llm_client
-from sage.api.metrics import observe_llm_duration
+from sage.adapters.metrics import observe_llm_duration
 from sage.config import get_logger
+from sage.core.freshness_policy import (
+    build_evidence_guardrail_report,
+    evaluate_freshness_guardrail_case,
+)
+from sage.core.query_classification import RECENCY_SENSITIVE_QUERY, classify_query_slices
 from sage.utils import extract_evidence, timed_operation
 from sage.core import (
     CitationVerificationResult,
@@ -74,6 +81,94 @@ def _build_refusal_result(
         evidence_ids=evidence_ids,
         tokens_used=0,
         model="quality_gate_refusal",
+        provider="quality_gate",
+    )
+
+
+def _build_guardrail_result(
+    *,
+    query: str,
+    product: ProductScore,
+    message: str,
+    model: str,
+    provider: str,
+    max_evidence: int = 3,
+) -> ExplanationResult:
+    """Build an ExplanationResult for a deterministic runtime guardrail."""
+    evidence_texts, evidence_ids = extract_evidence(product.evidence, max_evidence)
+    return ExplanationResult(
+        explanation=message,
+        product_id=product.product_id,
+        query=query,
+        evidence_texts=evidence_texts,
+        evidence_ids=evidence_ids,
+        tokens_used=0,
+        model=model,
+        provider=provider,
+    )
+
+
+def _build_freshness_guardrail_result(
+    query: str,
+    product: ProductScore,
+    max_evidence: int = 3,
+) -> ExplanationResult | None:
+    """Return a hedge when stale evidence cannot support a current claim."""
+    query_slice_tags = classify_query_slices(query)
+    if RECENCY_SENSITIVE_QUERY not in query_slice_tags:
+        return None
+
+    evidence_guardrails = build_evidence_guardrail_report(product.evidence)
+    freshness = evaluate_freshness_guardrail_case(
+        query_slice_tags=query_slice_tags,
+        evidence_guardrails=evidence_guardrails,
+        observed_behavior="answer",
+    )
+    if freshness.get("applicable") is not True:
+        return None
+
+    risk_level = str(freshness.get("risk_level") or "stale")
+    newest_evidence_date = evidence_guardrails.get("evidence_date_max")
+    oldest_evidence_date = evidence_guardrails.get("evidence_date_min")
+    if (
+        isinstance(oldest_evidence_date, str)
+        and oldest_evidence_date
+        and isinstance(newest_evidence_date, str)
+        and newest_evidence_date
+    ):
+        if oldest_evidence_date == newest_evidence_date:
+            recency_detail = (
+                "The freshest review evidence I found is dated "
+                f"{newest_evidence_date}."
+            )
+        else:
+            recency_detail = (
+                "The available review evidence ranges from "
+                f"{oldest_evidence_date} to {newest_evidence_date}."
+            )
+    elif risk_level == "missing_timestamps":
+        recency_detail = (
+            "The available review evidence is missing reliable timestamps."
+        )
+    else:
+        recency_detail = (
+            "The available review evidence looks too old for a current claim."
+        )
+
+    message = (
+        "This may not be the best match for a confident current compatibility "
+        "or firmware recommendation because the available review evidence is "
+        f"{risk_level.replace('_', ' ')}. {recency_detail} "
+        "I can still summarize what older reviewers said, but I cannot ground a "
+        "confident answer about what is current right now."
+    )
+    return _build_guardrail_result(
+        query=query,
+        product=product,
+        message=message,
+        model="freshness_guardrail_hedge",
+        provider="freshness_guardrail",
+        max_evidence=max_evidence,
     )
 
 
@@ -94,7 +189,8 @@ class Explainer:
             provider: LLM provider if client not provided.
         """
         self.client = client or get_llm_client(provider)
-        self.model = getattr(self.client, "model", "unknown")
+        self.provider = getattr(self.client, "provider", None) or provider or "unknown"
+        self.model = getattr(self.client, "model", None) or "unknown"
 
     def _generate_timed(self, system: str, user: str) -> tuple[str, int]:
         """Run LLM generation with timing metrics."""
@@ -152,6 +248,14 @@ class Explainer:
             if not quality.is_sufficient:
                 return _build_refusal_result(query, product, quality, max_evidence)
 
+        freshness_guardrail_result = _build_freshness_guardrail_result(
+            query,
+            product,
+            max_evidence=max_evidence,
+        )
+        if freshness_guardrail_result is not None:
+            return freshness_guardrail_result
+
         explanation, tokens, evidence_texts, evidence_ids, user_prompt = (
             self._build_and_generate(query, product, max_evidence)
         )
@@ -199,6 +303,7 @@ class Explainer:
             evidence_ids=evidence_ids,
             tokens_used=total_tokens,
             model=self.model,
+            provider=self.provider,
             citation_verification=citation_result,
         )
 
@@ -257,6 +362,7 @@ class Explainer:
             evidence_texts=evidence_texts,
             evidence_ids=evidence_ids,
             model=self.model,
+            provider=self.provider,
         )
 
     def generate_explanations_batch(

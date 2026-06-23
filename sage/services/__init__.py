@@ -30,6 +30,12 @@ from sage.services.cold_start import (
     recommend_cold_start_user,
 )
 
+# Runtime query policy
+from sage.services.query_policy import (
+    QueryPolicyDecision,
+    evaluate_query_policy,
+)
+
 
 def get_explanation_services():
     """Initialize Explainer and HallucinationDetector.
@@ -56,6 +62,7 @@ _LAZY_IMPORTS = {
     "compute_item_popularity": "sage.services.evaluation",
     "evaluate_ranking": "sage.services.evaluation",
     "evaluate_recommendations": "sage.services.evaluation",
+    "evaluate_recommendations_with_details": "sage.services.evaluation",
     "rating_to_relevance": "sage.services.evaluation",
     # Faithfulness
     "FaithfulnessEvaluator": "sage.services.faithfulness",
@@ -93,11 +100,15 @@ __all__ = [
     # Cold-start
     "recommend_cold_start_user",
     "hybrid_recommend",
+    # Query policy
+    "QueryPolicyDecision",
+    "evaluate_query_policy",
     # Evaluation (lazy)
     "EvaluationService",
     "compute_item_popularity",
     "evaluate_ranking",
     "evaluate_recommendations",
+    "evaluate_recommendations_with_details",
     "rating_to_relevance",
     # Faithfulness (lazy)
     "FaithfulnessEvaluator",

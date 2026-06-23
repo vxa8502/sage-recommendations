@@ -16,7 +16,8 @@ Beyond-accuracy metrics:
 
 import math
 from collections import Counter
-from typing import Callable
+from typing import Any
+from collections.abc import Callable
 
 import numpy as np
 
@@ -173,6 +174,21 @@ def _compute_ci(scores: list[float]) -> ConfidenceInterval | None:
     return ConfidenceInterval(mean=mean, lower=lower, upper=upper)
 
 
+def _first_relevant_rank(recommended: list[str], relevant: set[str]) -> int | None:
+    """Return the first 1-indexed rank containing a relevant item, if any."""
+    for index, product_id in enumerate(recommended, start=1):
+        if product_id in relevant:
+            return index
+    return None
+
+
+def _round_metric(value: float | None) -> float | None:
+    """Round metric values for stable JSON artifacts."""
+    if value is None:
+        return None
+    return round(float(value), 4)
+
+
 class EvaluationService:
     """
     Service for evaluating recommendation quality.
@@ -201,33 +217,79 @@ class EvaluationService:
         self.item_popularity = item_popularity
         self.total_items = total_items
 
-    def evaluate_single(
+    def _evaluate_case(
         self,
         recommended: list[str],
         eval_case: EvalCase,
-    ) -> EvalResult:
-        """Evaluate a single recommendation list."""
-        return evaluate_ranking(recommended, eval_case, k=self.k)
+    ) -> tuple[EvalResult, float | None, float | None]:
+        """Score a single case and compute optional beyond-accuracy metrics."""
+        result = evaluate_ranking(recommended, eval_case, k=self.k)
 
-    def evaluate_batch(
+        diversity_score: float | None = None
+        if self.item_embeddings:
+            rec_embeddings = [
+                self.item_embeddings[pid]
+                for pid in recommended[: self.k]
+                if pid in self.item_embeddings
+            ]
+            if len(rec_embeddings) >= 2:
+                diversity_score = intra_list_diversity(np.array(rec_embeddings))
+
+        novelty_score: float | None = None
+        if self.item_popularity:
+            novelty_score = novelty(recommended[: self.k], self.item_popularity)
+
+        return result, diversity_score, novelty_score
+
+    def _build_case_result(
+        self,
+        *,
+        case: EvalCase,
+        recommended: list[str],
+        result: EvalResult,
+        diversity_score: float | None,
+        novelty_score: float | None,
+    ) -> dict[str, Any]:
+        """Render a single scored case as a JSON-serializable artifact row."""
+        recommended_top_k = recommended[: self.k]
+        payload = case.to_dict()
+        payload["recommended_product_ids"] = list(recommended_top_k)
+        payload["relevant_item_count"] = len(case.relevant_set)
+        payload["relevant_hits"] = [
+            {
+                "product_id": product_id,
+                "rank": rank,
+                "relevance": round(case.relevant_items[product_id], 4),
+            }
+            for rank, product_id in enumerate(recommended_top_k, start=1)
+            if case.relevant_items.get(product_id, 0.0) > 0
+        ]
+        payload["first_relevant_rank"] = _first_relevant_rank(
+            recommended_top_k,
+            case.relevant_set,
+        )
+        payload["metrics"] = {
+            "ndcg": round(result.ndcg, 4),
+            "hit": round(result.hit, 4),
+            "mrr": round(result.mrr, 4),
+            "precision": round(result.precision, 4),
+            "recall": round(result.recall, 4),
+            "diversity": _round_metric(diversity_score),
+            "novelty": _round_metric(novelty_score),
+        }
+        return payload
+
+    def _evaluate_batch_internal(
         self,
         recommend_fn: Callable[[str], list[str]],
         eval_cases: list[EvalCase],
-        verbose: bool = True,
-    ) -> MetricsReport:
-        """
-        Run full evaluation over a set of test cases.
-
-        Args:
-            recommend_fn: Function that takes query and returns product IDs.
-            eval_cases: List of EvalCase objects.
-            verbose: Print progress.
-
-        Returns:
-            MetricsReport with aggregated metrics.
-        """
+        *,
+        verbose: bool,
+        collect_case_results: bool,
+    ) -> tuple[MetricsReport, list[dict[str, Any]]]:
+        """Run evaluation and optionally retain per-case artifact rows."""
         if not eval_cases:
-            return MetricsReport(k=self.k)
+            return MetricsReport(k=self.k), []
 
         ndcg_scores = []
         hit_scores = []
@@ -237,37 +299,39 @@ class EvaluationService:
         diversity_scores = []
         novelty_scores = []
         all_recommended = []
+        case_results: list[dict[str, Any]] = []
 
         for i, case in enumerate(eval_cases):
             if verbose and (i + 1) % 50 == 0:
                 print(f"  Evaluated {i + 1}/{len(eval_cases)} cases...")
 
             recommended = recommend_fn(case.query)
-            all_recommended.append(recommended[: self.k])
+            recommended_top_k = recommended[: self.k]
+            all_recommended.append(recommended_top_k)
 
-            result = evaluate_ranking(recommended, case, k=self.k)
+            result, diversity_score, novelty_score = self._evaluate_case(
+                recommended,
+                case,
+            )
             ndcg_scores.append(result.ndcg)
             hit_scores.append(result.hit)
             mrr_scores.append(result.mrr)
             precision_scores.append(result.precision)
             recall_scores.append(result.recall)
+            if diversity_score is not None:
+                diversity_scores.append(diversity_score)
+            if novelty_score is not None:
+                novelty_scores.append(novelty_score)
 
-            # Diversity
-            if self.item_embeddings:
-                rec_embeddings = [
-                    self.item_embeddings[pid]
-                    for pid in recommended[: self.k]
-                    if pid in self.item_embeddings
-                ]
-                if len(rec_embeddings) >= 2:
-                    diversity_scores.append(
-                        intra_list_diversity(np.array(rec_embeddings))
+            if collect_case_results:
+                case_results.append(
+                    self._build_case_result(
+                        case=case,
+                        recommended=recommended_top_k,
+                        result=result,
+                        diversity_score=diversity_score,
+                        novelty_score=novelty_score,
                     )
-
-            # Novelty
-            if self.item_popularity:
-                novelty_scores.append(
-                    novelty(recommended[: self.k], self.item_popularity)
                 )
 
         report = MetricsReport(
@@ -288,7 +352,46 @@ class EvaluationService:
         if self.total_items:
             report.coverage = catalog_coverage(all_recommended, self.total_items)
 
+        return report, case_results
+
+    def evaluate_batch(
+        self,
+        recommend_fn: Callable[[str], list[str]],
+        eval_cases: list[EvalCase],
+        verbose: bool = True,
+    ) -> MetricsReport:
+        """
+        Run full evaluation over a set of test cases.
+
+        Args:
+            recommend_fn: Function that takes query and returns product IDs.
+            eval_cases: List of EvalCase objects.
+            verbose: Print progress.
+
+        Returns:
+            MetricsReport with aggregated metrics.
+        """
+        report, _case_results = self._evaluate_batch_internal(
+            recommend_fn,
+            eval_cases,
+            verbose=verbose,
+            collect_case_results=False,
+        )
         return report
+
+    def evaluate_batch_with_details(
+        self,
+        recommend_fn: Callable[[str], list[str]],
+        eval_cases: list[EvalCase],
+        verbose: bool = True,
+    ) -> tuple[MetricsReport, list[dict[str, Any]]]:
+        """Run evaluation and retain per-case artifact rows."""
+        return self._evaluate_batch_internal(
+            recommend_fn,
+            eval_cases,
+            verbose=verbose,
+            collect_case_results=True,
+        )
 
 
 def evaluate_recommendations(
@@ -322,6 +425,25 @@ def evaluate_recommendations(
         total_items=total_items,
     )
     return service.evaluate_batch(recommend_fn, eval_cases, verbose)
+
+
+def evaluate_recommendations_with_details(
+    recommend_fn: Callable[[str], list[str]],
+    eval_cases: list[EvalCase],
+    k: int = 10,
+    item_embeddings: dict[str, np.ndarray] | None = None,
+    item_popularity: dict[str, float] | None = None,
+    total_items: int | None = None,
+    verbose: bool = True,
+) -> tuple[MetricsReport, list[dict[str, Any]]]:
+    """Convenience wrapper that also returns per-case retrieval artifact rows."""
+    service = EvaluationService(
+        k=k,
+        item_embeddings=item_embeddings,
+        item_popularity=item_popularity,
+        total_items=total_items,
+    )
+    return service.evaluate_batch_with_details(recommend_fn, eval_cases, verbose)
 
 
 # Utility functions

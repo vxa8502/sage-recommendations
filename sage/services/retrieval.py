@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sage.adapters.vector_store import search
-from sage.api.metrics import observe_embedding_duration, observe_retrieval_duration
+from sage.adapters.metrics import observe_embedding_duration, observe_retrieval_duration
 from sage.utils import LazyServiceMixin, timed_operation
 from sage.core import (
     AggregationMethod,
@@ -119,10 +119,20 @@ class RetrievalService(LazyServiceMixin):
         limit = limit or self.candidate_limit
 
         if query_embedding is None:
-            with timed_operation("Embedding", logger, observe_embedding_duration):
+            with timed_operation(
+                "Embedding",
+                logger,
+                observe_embedding_duration,
+                log_fn=logger.debug,
+            ):
                 query_embedding = self.embedder.embed_single_query(query)
 
-        with timed_operation("Qdrant search", logger, observe_retrieval_duration):
+        with timed_operation(
+            "Qdrant search",
+            logger,
+            observe_retrieval_duration,
+            log_fn=logger.debug,
+        ):
             results = search(
                 client=self.client,
                 query_embedding=query_embedding.tolist(),
@@ -130,7 +140,7 @@ class RetrievalService(LazyServiceMixin):
                 limit=limit,
                 min_rating=min_rating,
             )
-        logger.info("Retrieved %d raw results", len(results))
+        logger.debug("Retrieved %d raw results", len(results))
 
         chunks = []
         for r in results:
@@ -145,11 +155,13 @@ class RetrievalService(LazyServiceMixin):
                     product_id=r["product_id"],
                     rating=r["rating"],
                     review_id=r["review_id"],
+                    timestamp=r.get("timestamp"),
+                    verified_purchase=r.get("verified_purchase"),
                 )
             )
 
         product_ids = {c.product_id for c in chunks}
-        logger.info(
+        logger.debug(
             "Retrieved %d chunks across %d products", len(chunks), len(product_ids)
         )
 
@@ -189,7 +201,7 @@ class RetrievalService(LazyServiceMixin):
         if rating_weight is None:
             rating_weight = self.rating_weight
 
-        # Stage 1: Candidate generation
+        # Step 1: Candidate generation
         chunks = self.retrieve_chunks(
             query=query,
             min_rating=min_rating,
@@ -199,10 +211,10 @@ class RetrievalService(LazyServiceMixin):
         if not chunks:
             return []
 
-        # Stage 2: Aggregation
+        # Step 2: Aggregation
         products = aggregate_chunks_to_products(chunks, method=aggregation)
 
-        # Stage 3: Ranking
+        # Step 3: Ranking
         products = apply_weighted_ranking(
             products,
             similarity_weight=similarity_weight,
@@ -308,7 +320,7 @@ def recommend(
 
 def _build_pseudo_query(
     reviews: list[dict],
-    embedder: "E5Embedder",
+    embedder: E5Embedder,
     max_tokens: int = PSEUDO_QUERY_MAX_TOKENS,
 ) -> str:
     """
@@ -422,27 +434,3 @@ def recommend_for_user(
         client=client,
         embedder=embedder,
     )
-
-
-def format_recommendations(
-    recommendations: list[Recommendation], show_evidence: bool = True
-) -> str:
-    """Format recommendations for display."""
-    if not recommendations:
-        return "No recommendations found."
-
-    lines = []
-    for rec in recommendations:
-        lines.append(f"\n{rec.rank}. Product: {rec.product_id}")
-        lines.append(
-            f"   Score: {rec.score:.3f} | Avg Rating: {rec.avg_rating:.1f} | "
-            f"Evidence: {rec.evidence_count} chunks"
-        )
-
-        if show_evidence and rec.top_evidence_text:
-            evidence = rec.top_evidence_text[:200]
-            if len(rec.top_evidence_text) > 200:
-                evidence += "..."
-            lines.append(f'   Evidence: "{evidence}"')
-
-    return "\n".join(lines)
