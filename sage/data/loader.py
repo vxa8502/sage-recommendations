@@ -20,6 +20,8 @@ from sage.config import (
 logger = get_logger(__name__)
 
 SPLITS_DIR = DATA_DIR / "splits"
+REQUIRED_REVIEW_COLUMNS = ("text", "rating", "user_id", "parent_asin")
+MIN_REVIEW_TEXT_LENGTH = 10
 
 # Base URL for HuggingFace dataset files
 HF_BASE_URL = "https://huggingface.co/datasets"
@@ -32,10 +34,10 @@ def load_reviews(
     Load Amazon Reviews from HuggingFace by streaming JSONL.
 
     Streams the file and reads only the requested number of lines
-    to avoid downloading the full 22GB file.
+    when `subset_size` is provided.
 
     Args:
-        subset_size: Number of reviews to load. None for all.
+        subset_size: Number of reviews to load. `None` streams the full file.
         use_cache: Whether to use cached parquet if available.
 
     Returns:
@@ -58,7 +60,7 @@ def load_reviews(
         headers["Authorization"] = f"Bearer {HF_TOKEN}"
 
     reviews = []
-    target = subset_size if subset_size is not None else 100_000
+    target = subset_size
 
     with requests.get(url, headers=headers, stream=True) as response:
         response.raise_for_status()
@@ -72,7 +74,7 @@ def load_reviews(
                     reviews.append(review)
                     pbar.update(1)
 
-                    if len(reviews) >= target:
+                    if target is not None and len(reviews) >= target:
                         break
                 except json.JSONDecodeError as e:
                     logger.debug("Skipping malformed JSON line: %s", e)
@@ -88,6 +90,46 @@ def load_reviews(
     logger.info("Cached to %s", cache_path)
 
     return df
+
+
+def _require_review_columns(df: pd.DataFrame) -> None:
+    """Fail clearly when required review columns are missing."""
+    for col in REQUIRED_REVIEW_COLUMNS:
+        if col not in df.columns:
+            raise ValueError(f"Missing required column: {col}")
+
+
+def _build_review_quality_masks(df: pd.DataFrame) -> dict[str, pd.Series]:
+    """Build reusable row-quality masks for validation and cleaning."""
+    _require_review_columns(df)
+
+    missing_text = df["text"].isna()
+    normalized_text = df["text"].fillna("").astype(str).str.strip()
+    empty_text = ~missing_text & normalized_text.eq("")
+    very_short = ~missing_text & ~empty_text & normalized_text.str.len().lt(
+        MIN_REVIEW_TEXT_LENGTH
+    )
+    invalid_ratings = ~df["rating"].between(1, 5)
+    missing_user = df["user_id"].isna()
+    missing_product = df["parent_asin"].isna()
+
+    return {
+        "missing_text": missing_text,
+        "normalized_text": normalized_text,
+        "empty_text": empty_text,
+        "very_short": very_short,
+        "invalid_ratings": invalid_ratings,
+        "missing_user_id": missing_user,
+        "missing_parent_asin": missing_product,
+        "clean_rows": ~(
+            missing_text
+            | empty_text
+            | very_short
+            | invalid_ratings
+            | missing_user
+            | missing_product
+        ),
+    }
 
 
 def filter_5_core(df: pd.DataFrame, min_interactions: int = 5) -> pd.DataFrame:
@@ -194,46 +236,22 @@ def validate_reviews(df: pd.DataFrame) -> dict:
     Run data quality checks on the reviews dataset.
     Returns a dict with quality metrics and issues found
     """
-    issues = {}
+    masks = _build_review_quality_masks(df)
+    issues = {
+        field_name: int(mask.sum())
+        for field_name, mask in masks.items()
+        if field_name != "clean_rows" and field_name != "normalized_text" and int(mask.sum()) > 0
+    }
 
-    # Check for missing text
-    missing_text = df["text"].isna().sum()
-    if missing_text > 0:
-        issues["missing_text"] = missing_text
-
-    # Check for empty text
-    empty_text = (df["text"].str.strip() == "").sum()
-    if empty_text > 0:
-        issues["empty_text"] = empty_text
-
-    # Check for very short reviews (likely not useful)
-    very_short = (df["text"].str.len() < 10).sum()
-    if very_short > 0:
-        issues["very_short"] = very_short
-
-    # Check for duplicate texts
-    duplicate_texts = df["text"].duplicated().sum()
+    duplicate_texts = masks["normalized_text"][~masks["missing_text"]].duplicated().sum()
     if duplicate_texts > 0:
-        issues["duplicate_texts"] = duplicate_texts
-
-    # Check rating validity
-    invalid_ratings = (~df["rating"].between(1, 5)).sum()
-    if invalid_ratings > 0:
-        issues["invalid_ratings"] = invalid_ratings
-
-    # Check for missing user_id or parent_asin
-    missing_user = df["user_id"].isna().sum()
-    missing_product = df["parent_asin"].isna().sum()
-    if missing_user > 0:
-        issues["missing_user_id"] = missing_user
-    if missing_product > 0:
-        issues["missing_parent_asin"] = missing_product
+        issues["duplicate_texts"] = int(duplicate_texts)
 
     return {
         "total_reviews": len(df),
         "issues_found": len(issues) > 0,
         "issues": issues,
-        "clean_reviews": len(df) - sum(issues.values()) if issues else len(df),
+        "clean_reviews": int(masks["clean_rows"].sum()),
     }
 
 
@@ -255,39 +273,147 @@ def clean_reviews(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     """
     original_len = len(df)
 
-    required_cols = ["text", "rating", "user_id", "parent_asin"]
-
-    # Check for required columns
-    for col in required_cols:
-        if col not in df.columns:
-            raise ValueError(f"Missing required column: {col}")
-
-    # Remove missing/empty text
-    df = df[df["text"].notna()]
-    df = df[df["text"].str.strip() != ""]
-
-    # Remove very short reviews
-    df = df[df["text"].str.len() >= 10]
-
-    # Remove invalid ratings
-    df = df[df["rating"].between(1, 5)]
-
-    # Remove missing identifiers
-    df = df[df["user_id"].notna()]
-    df = df[df["parent_asin"].notna()]
+    masks = _build_review_quality_masks(df)
+    df = df[masks["clean_rows"]]
 
     df = df.reset_index(drop=True)
 
     if verbose:
         removed = original_len - len(df)
+        removed_pct = (removed / original_len * 100) if original_len else 0.0
         logger.info(
             "Cleaned: removed %s reviews (%.1f%%)",
             f"{removed:,}",
-            removed / original_len * 100,
+            removed_pct,
         )
         logger.info("Remaining: %s reviews", f"{len(df):,}")
 
     return df
+
+
+def _clear_cache_file(path: Path, *, verbose: bool, label: str) -> None:
+    """Remove a cache file if present and optionally log the action."""
+    if not path.exists():
+        return
+
+    path.unlink()
+    if verbose:
+        logger.info("Cleared %s cache: %s", label, path.name)
+
+
+def _load_prepared_cache(path: Path, *, verbose: bool) -> pd.DataFrame:
+    """Load prepared-data cache with consistent logging."""
+    if verbose:
+        logger.info("Loading prepared data from cache: %s", path)
+    df = pd.read_parquet(path)
+    if verbose:
+        logger.info("Loaded %s prepared reviews", f"{len(df):,}")
+    return df
+
+
+def _validate_temporal_split_ratios(train_ratio: float, val_ratio: float) -> None:
+    """Validate train/validation ratios before temporal splitting."""
+    if not 0 <= train_ratio <= 1:
+        raise ValueError(f"train_ratio must be between 0 and 1, got {train_ratio}")
+    if not 0 <= val_ratio <= 1:
+        raise ValueError(f"val_ratio must be between 0 and 1, got {val_ratio}")
+    if train_ratio + val_ratio > 1:
+        raise ValueError(
+            f"train_ratio + val_ratio must be <= 1, "
+            f"got {train_ratio} + {val_ratio} = {train_ratio + val_ratio}"
+        )
+
+
+def _require_timestamp_column(df: pd.DataFrame, *, label: str) -> None:
+    """Fail clearly when a temporal operation is missing timestamps."""
+    if "timestamp" not in df.columns:
+        raise ValueError(f"{label} missing 'timestamp' column.")
+
+
+def _warn_on_empty_temporal_splits(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    *,
+    total_rows: int,
+    train_ratio: float,
+    val_ratio: float,
+) -> None:
+    """Log warnings for unexpectedly empty temporal splits."""
+    if train_df.empty:
+        logger.warning(
+            "Train split is empty (n=%d, train_ratio=%.2f)",
+            total_rows,
+            train_ratio,
+        )
+    if val_df.empty:
+        logger.warning(
+            "Validation split is empty (n=%d, val_ratio=%.2f)",
+            total_rows,
+            val_ratio,
+        )
+    if test_df.empty:
+        logger.warning(
+            "Test split is empty (n=%d, test_ratio=%.2f)",
+            total_rows,
+            1 - train_ratio - val_ratio,
+        )
+
+
+def _log_temporal_split_sizes(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    *,
+    train_ratio: float,
+    val_ratio: float,
+) -> None:
+    """Log human-friendly temporal split sizes."""
+    logger.info(
+        "Temporal splits (%.0f%%/%.0f%%/%.0f%%):",
+        train_ratio * 100,
+        val_ratio * 100,
+        (1 - train_ratio - val_ratio) * 100,
+    )
+    logger.info("  Train: %s reviews", f"{len(train_df):,}")
+    logger.info("  Val:   %s reviews", f"{len(val_df):,}")
+    logger.info("  Test:  %s reviews", f"{len(test_df):,}")
+
+
+def _save_temporal_splits(
+    train_df: pd.DataFrame,
+    val_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    *,
+    verbose: bool,
+) -> None:
+    """Persist temporal split parquet files with stable names."""
+    SPLITS_DIR.mkdir(exist_ok=True)
+    train_df.to_parquet(SPLITS_DIR / "train.parquet")
+    val_df.to_parquet(SPLITS_DIR / "val.parquet")
+    test_df.to_parquet(SPLITS_DIR / "test.parquet")
+    if verbose:
+        logger.info("  Saved to: %s", SPLITS_DIR)
+
+
+def _require_nonempty_split(df: pd.DataFrame, *, label: str) -> None:
+    """Validate that a saved temporal split is populated."""
+    if df.empty:
+        raise ValueError(f"{label} split is empty. Check split ratios.")
+
+
+def _timestamp_bounds(df: pd.DataFrame) -> tuple[int, int]:
+    """Return integer timestamp bounds for one split."""
+    return int(df["timestamp"].min()), int(df["timestamp"].max())
+
+
+def _log_temporal_boundaries(boundaries: dict[str, tuple[int, int]]) -> None:
+    """Log readable date boundaries for each temporal split."""
+    logger.info("Temporal boundaries verified (no leakage):")
+    for split, (start, end) in boundaries.items():
+        start_date = pd.to_datetime(start, unit="ms").strftime("%Y-%m-%d")
+        end_date = pd.to_datetime(end, unit="ms").strftime("%Y-%m-%d")
+        logger.info("  %s: %s to %s", split.capitalize().ljust(5), start_date, end_date)
 
 
 def prepare_data(
@@ -314,38 +440,20 @@ def prepare_data(
     cache_path = DATA_DIR / f"reviews_prepared_{subset_size}.parquet"
     raw_cache_path = DATA_DIR / f"reviews_{subset_size}.parquet"
 
-    # Handle cache invalidation
     if force:
-        if cache_path.exists():
-            cache_path.unlink()
-            if verbose:
-                logger.info("Cleared prepared data cache: %s", cache_path.name)
-        if raw_cache_path.exists():
-            raw_cache_path.unlink()
-            if verbose:
-                logger.info("Cleared raw data cache: %s", raw_cache_path.name)
+        _clear_cache_file(cache_path, verbose=verbose, label="prepared data")
+        _clear_cache_file(raw_cache_path, verbose=verbose, label="raw data")
 
-    # Use cache if available
     if cache_path.exists():
-        if verbose:
-            logger.info("Loading prepared data from cache: %s", cache_path)
-        df = pd.read_parquet(cache_path)
-        if verbose:
-            logger.info("Loaded %s prepared reviews", f"{len(df):,}")
-        return df
+        return _load_prepared_cache(cache_path, verbose=verbose)
 
     if verbose:
         logger.info("Preparing data from scratch...")
 
-    # Load raw
     df = load_reviews(subset_size=subset_size, use_cache=True)
-
-    # Clean
     if verbose:
         logger.info("Cleaning data quality issues...")
     df = clean_reviews(df, verbose=verbose)
-
-    # 5-core filter
     if verbose:
         logger.info("Applying 5-core filtering...")
     df = filter_5_core(df, min_interactions=min_interactions)
@@ -415,24 +523,12 @@ def create_temporal_splits(
         ValueError: If DataFrame is empty, missing timestamp column,
             or ratios are invalid.
     """
-    # Validate ratios
-    if not 0 <= train_ratio <= 1:
-        raise ValueError(f"train_ratio must be between 0 and 1, got {train_ratio}")
-    if not 0 <= val_ratio <= 1:
-        raise ValueError(f"val_ratio must be between 0 and 1, got {val_ratio}")
-    if train_ratio + val_ratio > 1:
-        raise ValueError(
-            f"train_ratio + val_ratio must be <= 1, "
-            f"got {train_ratio} + {val_ratio} = {train_ratio + val_ratio}"
-        )
+    _validate_temporal_split_ratios(train_ratio, val_ratio)
 
-    # Check for empty DataFrame before splitting
     if df.empty:
         raise ValueError("DataFrame is empty. Cannot create splits.")
 
-    # Validate timestamp column exists
-    if "timestamp" not in df.columns:
-        raise ValueError("DataFrame missing 'timestamp' column.")
+    _require_timestamp_column(df, label="DataFrame")
 
     df = df.sort_values("timestamp").reset_index(drop=True)
 
@@ -444,33 +540,26 @@ def create_temporal_splits(
     val_df = df.iloc[train_end:val_end].reset_index(drop=True)
     test_df = df.iloc[val_end:].reset_index(drop=True)
 
-    # Warn about empty splits (can happen with small n)
-    if train_df.empty:
-        logger.warning("Train split is empty (n=%d, train_ratio=%.2f)", n, train_ratio)
-    if val_df.empty:
-        logger.warning("Validation split is empty (n=%d, val_ratio=%.2f)", n, val_ratio)
-    if test_df.empty:
-        test_ratio = 1 - train_ratio - val_ratio
-        logger.warning("Test split is empty (n=%d, test_ratio=%.2f)", n, test_ratio)
+    _warn_on_empty_temporal_splits(
+        train_df,
+        val_df,
+        test_df,
+        total_rows=n,
+        train_ratio=train_ratio,
+        val_ratio=val_ratio,
+    )
 
     if verbose:
-        logger.info(
-            "Temporal splits (%.0f%%/%.0f%%/%.0f%%):",
-            train_ratio * 100,
-            val_ratio * 100,
-            (1 - train_ratio - val_ratio) * 100,
+        _log_temporal_split_sizes(
+            train_df,
+            val_df,
+            test_df,
+            train_ratio=train_ratio,
+            val_ratio=val_ratio,
         )
-        logger.info("  Train: %s reviews", f"{len(train_df):,}")
-        logger.info("  Val:   %s reviews", f"{len(val_df):,}")
-        logger.info("  Test:  %s reviews", f"{len(test_df):,}")
 
     if save:
-        SPLITS_DIR.mkdir(exist_ok=True)
-        train_df.to_parquet(SPLITS_DIR / "train.parquet")
-        val_df.to_parquet(SPLITS_DIR / "val.parquet")
-        test_df.to_parquet(SPLITS_DIR / "test.parquet")
-        if verbose:
-            logger.info("  Saved to: %s", SPLITS_DIR)
+        _save_temporal_splits(train_df, val_df, test_df, verbose=verbose)
 
     return train_df, val_df, test_df
 
@@ -499,28 +588,16 @@ def verify_temporal_boundaries(
     Raises:
         ValueError: If splits are empty, missing timestamp column, or overlap.
     """
-    # Check for empty splits FIRST
-    if train_df.empty:
-        raise ValueError("Train split is empty. Check split ratios.")
-    if val_df.empty:
-        raise ValueError("Validation split is empty. Check split ratios.")
-    if test_df.empty:
-        raise ValueError("Test split is empty. Check split ratios.")
+    _require_nonempty_split(train_df, label="Train")
+    _require_nonempty_split(val_df, label="Validation")
+    _require_nonempty_split(test_df, label="Test")
+    _require_timestamp_column(train_df, label="Train split")
+    _require_timestamp_column(val_df, label="Validation split")
+    _require_timestamp_column(test_df, label="Test split")
 
-    # Validate timestamp column exists
-    if "timestamp" not in train_df.columns:
-        raise ValueError("Train split missing 'timestamp' column.")
-    if "timestamp" not in val_df.columns:
-        raise ValueError("Validation split missing 'timestamp' column.")
-    if "timestamp" not in test_df.columns:
-        raise ValueError("Test split missing 'timestamp' column.")
-
-    train_min = train_df["timestamp"].min()
-    train_max = train_df["timestamp"].max()
-    val_min = val_df["timestamp"].min()
-    val_max = val_df["timestamp"].max()
-    test_min = test_df["timestamp"].min()
-    test_max = test_df["timestamp"].max()
+    train_min, train_max = _timestamp_bounds(train_df)
+    val_min, val_max = _timestamp_bounds(val_df)
+    test_min, test_max = _timestamp_bounds(test_df)
 
     # Check for temporal leakage (raise when boundaries overlap)
     if train_max >= val_min:
@@ -532,19 +609,13 @@ def verify_temporal_boundaries(
         raise ValueError(f"Val/test overlap! Val max: {val_max}, Test min: {test_min}")
 
     boundaries = {
-        "train": (int(train_min), int(train_max)),
-        "val": (int(val_min), int(val_max)),
-        "test": (int(test_min), int(test_max)),
+        "train": (train_min, train_max),
+        "val": (val_min, val_max),
+        "test": (test_min, test_max),
     }
 
     if verbose:
-        logger.info("Temporal boundaries verified (no leakage):")
-        for split, (start, end) in boundaries.items():
-            start_date = pd.to_datetime(start, unit="ms").strftime("%Y-%m-%d")
-            end_date = pd.to_datetime(end, unit="ms").strftime("%Y-%m-%d")
-            logger.info(
-                "  %s: %s to %s", split.capitalize().ljust(5), start_date, end_date
-            )
+        _log_temporal_boundaries(boundaries)
 
     return boundaries
 
