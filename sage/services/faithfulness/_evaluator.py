@@ -21,11 +21,11 @@ from tenacity import (
 )
 
 from sage.config import (
-    ANTHROPIC_MODEL,
     FAITHFULNESS_TARGET,
     LLM_PROVIDER,
     OPENAI_API_KEY,
     OPENAI_MODEL,
+    RAGAS_MODEL,
 )
 from sage.core import (
     ExplanationResult,
@@ -36,15 +36,35 @@ from sage.utils import ensure_ragas_installed
 
 logger = logging.getLogger(__name__)
 
+# Hard read timeout for each Anthropic API call inside RAGAS.
+# The Anthropic client defaults to 600s; a hung connection would block the
+# entire batch for 10 minutes per case. 60s is generous for a single
+# claim-extraction or NLI call and still allows complex explanations to finish.
+_RAGAS_API_TIMEOUT_SECONDS = 60.0
+
+try:
+    from anthropic import APIConnectionError as _AnthropicConnectionError
+    from anthropic import APITimeoutError as _AnthropicTimeoutError
+    _ANTHROPIC_EXCEPTIONS: tuple[type[BaseException], ...] = (
+        _AnthropicConnectionError,
+        _AnthropicTimeoutError,
+    )
+except ImportError:
+    _ANTHROPIC_EXCEPTIONS = ()
+
 # Transient exceptions that should trigger retries
-TRANSIENT_EXCEPTIONS = (TimeoutError, ConnectionError, OSError)
+TRANSIENT_EXCEPTIONS = (
+    TimeoutError, ConnectionError, OSError
+) + _ANTHROPIC_EXCEPTIONS
 
 
 def _log_retry(retry_state) -> None:  # type: ignore[no-untyped-def]
     """Log retry attempts for transient LLM failures."""
     exc = retry_state.outcome.exception() if retry_state.outcome else None
     logger.warning(
-        f"LLM call failed, retrying (attempt {retry_state.attempt_number}/3): {exc}"
+        "LLM call failed, retrying (attempt %d/3): %s",
+        retry_state.attempt_number,
+        exc,
     )
 
 
@@ -132,55 +152,6 @@ def _clean_explanation_for_ragas(explanation: str) -> str:
     return text.strip()
 
 
-def create_ragas_sample(query: str, explanation: str, evidence_texts: list[str]):
-    """
-    Create a RAGAS SingleTurnSample from explanation data.
-
-    Cleans the explanation to remove citations and framing that RAGAS
-    incorrectly penalizes, and combines evidence into a single context
-    for proper claim verification.
-
-    Args:
-        query: User's original query.
-        explanation: Generated explanation text.
-        evidence_texts: List of review texts used as context.
-
-    Returns:
-        RAGAS SingleTurnSample object.
-
-    Raises:
-        ImportError: If ragas is not installed.
-    """
-    ensure_ragas_installed()
-    from ragas import SingleTurnSample
-
-    # Clean explanation for RAGAS evaluation
-    cleaned_explanation = _clean_explanation_for_ragas(explanation)
-
-    # Combine evidence into single context (RAGAS has issues with multiple contexts)
-    combined_evidence = " ".join(evidence_texts)
-
-    return SingleTurnSample(
-        user_input=query,
-        response=cleaned_explanation,
-        retrieved_contexts=[combined_evidence],
-    )
-
-
-def _explanation_results_to_samples(
-    explanation_results: list[ExplanationResult],
-) -> list:
-    """Convert ExplanationResults to RAGAS samples."""
-    return [
-        create_ragas_sample(
-            query=er.query,
-            explanation=er.explanation,
-            evidence_texts=er.evidence_texts,
-        )
-        for er in explanation_results
-    ]
-
-
 def get_ragas_llm(provider: str | None = None):
     """
     Get configured LLM for RAGAS evaluation.
@@ -205,9 +176,13 @@ def get_ragas_llm(provider: str | None = None):
         # RAGAS 0.4.x calls agenerate() internally, which requires an async
         # client. The sync Anthropic() client raises TypeError at eval time
         # and causes ragas.evaluate() to silently retry forever (hangs at 0%).
-        anthropic_client = AsyncAnthropic()
+        # timeout overrides the default 600s read timeout — without it a
+        # silent hung socket blocks the entire batch for 10 min per case.
+        anthropic_client = AsyncAnthropic(
+            timeout=_RAGAS_API_TIMEOUT_SECONDS
+        )
         llm = llm_factory(
-            ANTHROPIC_MODEL,
+            RAGAS_MODEL,
             provider="anthropic",
             client=anthropic_client,
         )
@@ -216,6 +191,14 @@ def get_ragas_llm(provider: str | None = None):
         # for OpenAI reasoning models, not Anthropic. Remove it here.
         if hasattr(llm, "model_args") and isinstance(llm.model_args, dict):
             llm.model_args.pop("top_p", None)
+            llm.model_args["max_tokens"] = 4096
+        elif hasattr(llm, "model_args"):
+            logger.warning(
+                "RAGAS LLM model_args is not a dict (%s); "
+                "top_p and max_tokens patches were not applied. "
+                "Requests may fail with Anthropic 400 errors.",
+                type(llm.model_args).__name__,
+            )
         return llm
     elif provider == "openai":
         try:
@@ -259,13 +242,13 @@ class FaithfulnessEvaluator:
         self,
         query: str,
         explanation: str,
-        evidence_texts: list[str],
+        contexts: list[str],
     ) -> float:
         """Score with retry logic for transient failures."""
         result = await self.scorer.ascore(
             user_input=query,
             response=explanation,
-            retrieved_contexts=evidence_texts,
+            retrieved_contexts=contexts,
         )
         # ragas 0.4.x returns MetricResult(value=float), not a bare float
         v = result.value if hasattr(result, "value") else result
@@ -283,7 +266,10 @@ class FaithfulnessEvaluator:
         # "Reviewers call it X" as a compound claim requiring evidence that
         # *multiple reviewers* said X — cleaning avoids both false penalties.
         cleaned = _clean_explanation_for_ragas(explanation)
-        score = await self._score_with_retry(query, cleaned, evidence_texts)
+        # RAGAS has issues with multi-element retrieved_contexts — combine into
+        # a single context string so claim verification uses all evidence at once.
+        combined = [" ".join(evidence_texts)]
+        score = await self._score_with_retry(query, cleaned, combined)
 
         return FaithfulnessResult(
             score=float(score),
@@ -309,31 +295,16 @@ class FaithfulnessEvaluator:
         coro = self.evaluate_single_async(query, explanation, evidence_texts)
         return asyncio.run(coro)
 
-    def _evaluate_batch_with_retry(
-        self,
-        dataset,
-        metrics: list,
-    ):
-        """Run RAGAS evaluate with retry logic for transient failures."""
-        ensure_ragas_installed()
-        from ragas import evaluate
-
-        @_llm_retry
-        def _run():
-            return evaluate(
-                dataset=dataset,
-                metrics=metrics,
-                llm=self.llm,
-                show_progress=True,
-            )
-
-        return _run()
-
     def evaluate_batch(
         self,
         explanation_results: list[ExplanationResult],
     ) -> FaithfulnessReport:
         """Evaluate faithfulness for multiple explanations."""
+        if is_event_loop_running():
+            raise RuntimeError(
+                "Cannot call evaluate_batch() from async context.\n"
+                "Await evaluate_single_async() per item instead."
+            )
         # ragas.evaluate() batch API is incompatible with ragas 0.4.x
         # collections metrics; score each sample individually via async loop.
         async def _run_all() -> list[FaithfulnessResult]:

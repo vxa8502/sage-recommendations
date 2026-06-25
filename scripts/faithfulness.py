@@ -97,6 +97,20 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--ragas-only",
+        nargs="?",
+        metavar="CHECKPOINT",
+        const="",
+        default=None,
+        help=(
+            "Skip explanation generation and HHEM; run RAGAS only. "
+            "Omit the value to use the default checkpoint at "
+            "data/eval_results/ragas_checkpoint.json, or pass an explicit "
+            "path. Use when a prior run completed HHEM but RAGAS failed "
+            "(e.g. network error)."
+        ),
+    )
+    parser.add_argument(
         "--delta",
         action="store_true",
         help=(
@@ -117,7 +131,19 @@ def main(argv: Sequence[str] | None = None) -> None:
         normalize_faithfulness_surface,
     )
     from sage.data.query_bank import QueryBankSubsetEmptyError
-    from sage.services.faithfulness._runner import run_evaluation, run_grounding_delta
+    from sage.services.faithfulness._runner import (
+        run_evaluation,
+        run_grounding_delta,
+        run_ragas_from_checkpoint,
+    )
+
+    if args.ragas_only is not None:
+        checkpoint_path = args.ragas_only if args.ragas_only else None
+        run_ragas_from_checkpoint(
+            checkpoint_path=checkpoint_path,
+            ragas_samples=args.ragas_samples,
+        )
+        return
 
     surface = normalize_faithfulness_surface(args.surface)
     cases_path = args.cases_path or faithfulness_cases_path_for_surface(surface)

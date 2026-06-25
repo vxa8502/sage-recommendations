@@ -18,7 +18,7 @@ load_dotenv()
 # ---------------------------------------------------------------------------
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-DATA_DIR = Path(os.getenv("SAGE_DATA_DIR", PROJECT_ROOT / "data"))
+DATA_DIR = Path(os.getenv("SAGE_DATA_DIR", PROJECT_ROOT / "data")).resolve()
 DATA_DIR.mkdir(exist_ok=True)
 
 RESULTS_DIR = DATA_DIR / "eval_results"
@@ -99,6 +99,7 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", PROVIDER_ANTHROPIC)
 
 # Model selection
 ANTHROPIC_MODEL = "claude-sonnet-4-6"
+RAGAS_MODEL = "claude-haiku-4-5-20251001"  # NLI scoring; doesn't need Sonnet
 OPENAI_MODEL = "gpt-4o-mini"
 
 # Generation settings
@@ -227,6 +228,7 @@ __all__ = [
     "PROVIDER_OPENAI",
     "LLM_PROVIDER",
     "ANTHROPIC_MODEL",
+    "RAGAS_MODEL",
     "OPENAI_MODEL",
     "LLM_TEMPERATURE",
     "LLM_MAX_TOKENS",

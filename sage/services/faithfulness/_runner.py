@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import numpy as np
 from sage.config import (
     FAITHFULNESS_TARGET,
     MAX_EVIDENCE,
+    RESULTS_DIR,
     get_logger,
     log_banner,
     log_section,
@@ -239,6 +241,14 @@ def run_evaluation(
     }
     query_bank_identity = _copy_object_dict(cases_manifest.get("query_bank_identity"))
 
+    if not _RAGAS_PROGRESS_PATH.exists():
+        _save_ragas_checkpoint(evaluated_cases, all_explanations)
+    else:
+        logger.info(
+            "Skipping checkpoint write — ragas_progress.json exists "
+            "(run in progress). Delete it to allow a fresh checkpoint."
+        )
+
     ragas_report = None
     ragas_scope = {
         "enabled": run_ragas,
@@ -439,6 +449,144 @@ def run_evaluation(
     return results
 
 
+_RAGAS_CHECKPOINT_PATH = Path(RESULTS_DIR) / "ragas_checkpoint.json"
+
+
+def _save_ragas_checkpoint(
+    evaluated_cases: list,
+    all_explanations: list,
+) -> None:
+    checkpoint = {
+        "cases": [
+            {
+                "case_id": case.case_id,
+                "query": case.query,
+                "product_id": case.product_id,
+                "explanation": expl.explanation,
+                "evidence_texts": expl.evidence_texts,
+            }
+            for case, expl in zip(
+                evaluated_cases, all_explanations, strict=True
+            )
+        ]
+    }
+    with open(_RAGAS_CHECKPOINT_PATH, "w", encoding="utf-8") as f:
+        json.dump(checkpoint, f, indent=2)
+    logger.info("Checkpoint saved: %s", _RAGAS_CHECKPOINT_PATH)
+
+
+_RAGAS_PROGRESS_PATH = Path(RESULTS_DIR) / "ragas_progress.json"
+
+
+def run_ragas_from_checkpoint(
+    checkpoint_path: str | Path | None = None,
+    ragas_samples: int | None = DEFAULT_RAGAS_SAMPLES,
+) -> None:
+    """Run RAGAS only, using explanations saved by a prior run's checkpoint.
+
+    Saves progress after every case — safe to interrupt and resume at any
+    point. Re-running reloads completed scores from ragas_progress.json and
+    skips already-scored cases.
+    """
+    from sage.services.faithfulness._evaluator import FaithfulnessEvaluator
+
+    path = Path(checkpoint_path).resolve() if checkpoint_path else _RAGAS_CHECKPOINT_PATH
+    from sage.config import DATA_DIR
+    if not str(path).startswith(str(DATA_DIR)):
+        raise ValueError(
+            f"Checkpoint path {path} is outside DATA_DIR ({DATA_DIR}). "
+            "Pass a path within the project data directory."
+        )
+    with open(path, encoding="utf-8") as f:
+        checkpoint = json.load(f)
+
+    cases_data: list[dict] = checkpoint["cases"]
+    if ragas_samples is not None and ragas_samples < len(cases_data):
+        cases_data = cases_data[:ragas_samples]
+
+    # Load any progress saved by a previous interrupted run.
+    completed: dict[str, dict] = {}
+    if _RAGAS_PROGRESS_PATH.exists():
+        with open(_RAGAS_PROGRESS_PATH, encoding="utf-8") as f:
+            completed = json.load(f)
+
+    log_banner(logger, "RAGAS EVALUATION (FROM CHECKPOINT)")
+    logger.info("Loaded %d cases from %s", len(cases_data), path)
+    logger.info("Target: %.2f", FAITHFULNESS_TARGET)
+    if completed:
+        logger.info(
+            "Resuming: %d/%d already scored", len(completed), len(cases_data)
+        )
+
+    evaluator = FaithfulnessEvaluator()
+    per_case: list[dict] = []
+    scores: list[float] = []
+
+    for i, c in enumerate(cases_data, 1):
+        case_id = c["case_id"]
+        if case_id in completed:
+            cached = completed[case_id]
+            score = cached["score"]
+            logger.info(
+                "[%d/%d] %.3f (cached) — %s", i, len(cases_data), score, c["query"]
+            )
+        else:
+            result = evaluator.evaluate_single(
+                c["query"], c["explanation"], c["evidence_texts"]
+            )
+            score = result.score
+            completed[case_id] = {
+                "score": score,
+                "query": c["query"],
+                "product_id": c["product_id"],
+                "meets_target": result.meets_target,
+            }
+            with open(_RAGAS_PROGRESS_PATH, "w", encoding="utf-8") as f:
+                json.dump(completed, f, indent=2)
+            logger.info(
+                "[%d/%d] %.3f — %s", i, len(cases_data), score, c["query"]
+            )
+
+        meets = (
+            cached["meets_target"]
+            if case_id in completed
+            else score >= FAITHFULNESS_TARGET
+        )
+        per_case.append({
+            "case_id": case_id,
+            "query": c["query"],
+            "product_id": c["product_id"],
+            "score": score,
+            "meets_target": meets,
+        })
+        scores.append(score)
+
+    scores_arr = np.array(scores)
+    mean = float(np.mean(scores_arr))
+    std = float(np.std(scores_arr, ddof=1)) if len(scores_arr) > 1 else 0.0
+    n_passing = sum(1 for s in scores if s >= FAITHFULNESS_TARGET)
+
+    logger.info(
+        "Faithfulness: %.3f +/- %.3f (n=%d)", mean, std, len(scores)
+    )
+    logger.info("Passing: %d/%d", n_passing, len(scores))
+
+    results = {
+        "faithfulness_mean": mean,
+        "faithfulness_std": std,
+        "n_samples": len(scores),
+        "n_passing": n_passing,
+        "pass_rate": n_passing / len(scores) if scores else 0.0,
+        "target": FAITHFULNESS_TARGET,
+        "source_checkpoint": str(path),
+        "per_case": per_case,
+    }
+    ts_file = save_results(results, "ragas_only")
+    logger.info("Saved: %s", ts_file)
+
+    _RAGAS_PROGRESS_PATH.unlink(missing_ok=True)
+
+
 def run_grounding_delta(*, cases_path: str | Path = FAITHFULNESS_CASES_PATH) -> None:
     """
     Compare HHEM scores WITH vs WITHOUT evidence grounding.
@@ -469,6 +617,8 @@ def run_grounding_delta(*, cases_path: str | Path = FAITHFULNESS_CASES_PATH) -> 
     with_evidence = []
     without_evidence = []
 
+    from sage.utils import sanitize_query
+
     for index, case in enumerate(cases, 1):
         logger.info('[%d/%d] "%s"', index, len(cases), case.query)
         evidence_texts = [item.text for item in case.evidence[:MAX_EVIDENCE]]
@@ -476,8 +626,9 @@ def run_grounding_delta(*, cases_path: str | Path = FAITHFULNESS_CASES_PATH) -> 
         if not evidence_texts:
             continue
 
+        safe_query = sanitize_query(case.query)
         system_prompt = "You are a helpful product recommendation assistant."
-        grounded_user = f"""Based on customer reviews, explain why this product is good for: "{case.query}"
+        grounded_user = f"""Based on customer reviews, explain why this product is good for: "{safe_query}"
 
 EVIDENCE FROM REVIEWS:
 {chr(10).join(f"- {text}" for text in evidence_texts[:3])}
@@ -495,7 +646,7 @@ Write a brief 2-3 sentence recommendation based ONLY on the evidence above."""
             logger.exception("  Error with grounded generation")
             continue
 
-        ungrounded_user = f"""Recommend a product for: "{case.query}"
+        ungrounded_user = f"""Recommend a product for: "{safe_query}"
 
 Write a brief 2-3 sentence recommendation. You may make reasonable assumptions about the product."""
 
