@@ -42,6 +42,19 @@ def test_ndcg_empty_relevances():
     assert ndcg_at_k([], k=5) == 0.0
 
 
+def test_ndcg_global_norm_penalises_missed_relevant():
+    """Global IDCG lowers score when relevant corpus items are not retrieved."""
+    # Retrieved: [relevant, not-relevant]; corpus has 2 relevant items
+    local = ndcg_at_k([3.0, 0.0], k=2)
+    global_ = ndcg_at_k([3.0, 0.0], k=2, ideal_relevances=[3.0, 3.0])
+    assert global_ < local
+
+
+def test_ndcg_global_norm_perfect_retrieval():
+    """Global IDCG returns 1.0 when all corpus-relevant items are retrieved."""
+    assert ndcg_at_k([3.0, 2.0], k=2, ideal_relevances=[3.0, 2.0]) == 1.0
+
+
 def test_evaluate_recommendations_with_details_preserves_case_metadata():
     cases = [
         EvalCase(
@@ -115,7 +128,7 @@ def test_evaluate_recommendations_with_details_preserves_case_metadata():
             ],
             "first_relevant_rank": 2,
             "metrics": {
-                "ndcg": 0.6309,
+                "ndcg": 0.5213,
                 "hit": 1.0,
                 "mrr": 0.5,
                 "precision": 0.5,

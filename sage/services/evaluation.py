@@ -41,11 +41,20 @@ def dcg_at_k(relevances: list[float], k: int) -> float:
     return dcg
 
 
-def ndcg_at_k(relevances: list[float], k: int) -> float:
-    """Compute Normalized Discounted Cumulative Gain at K."""
+def ndcg_at_k(
+    relevances: list[float],
+    k: int,
+    *,
+    ideal_relevances: list[float] | None = None,
+) -> float:
+    """Compute Normalized Discounted Cumulative Gain at K.
+
+    ideal_relevances: corpus-level ground truth for global normalization.
+        Omit only when no separate ground-truth pool exists (local norm).
+    """
     dcg = dcg_at_k(relevances, k)
-    ideal_relevances = sorted(relevances, reverse=True)
-    idcg = dcg_at_k(ideal_relevances, k)
+    pool = ideal_relevances if ideal_relevances is not None else relevances
+    idcg = dcg_at_k(sorted(pool, reverse=True), k)
 
     if idcg == 0:
         return 0.0
@@ -93,11 +102,14 @@ def evaluate_ranking(
     k: int = 10,
 ) -> EvalResult:
     """Evaluate a single recommendation list against ground truth."""
-    relevances = [eval_case.relevant_items.get(pid, 0.0) for pid in recommended[:k]]
+    relevances = [
+        eval_case.relevant_items.get(pid, 0.0) for pid in recommended[:k]
+    ]
+    all_relevant = list(eval_case.relevant_items.values())
     relevant_set = eval_case.relevant_set
 
     return EvalResult(
-        ndcg=ndcg_at_k(relevances, k),
+        ndcg=ndcg_at_k(relevances, k, ideal_relevances=all_relevant),
         hit=hit_at_k(recommended, relevant_set, k),
         mrr=mrr(recommended, relevant_set),
         precision=precision_at_k(recommended, relevant_set, k),
