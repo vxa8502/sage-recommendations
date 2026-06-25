@@ -420,20 +420,28 @@ def save_results(data: dict, prefix: str, directory: Path | None = None) -> Path
 
     directory.mkdir(parents=True, exist_ok=True)
 
+    import re as _re
+    safe_prefix = _re.sub(r"[^a-z0-9_\-]", "_", prefix.lower())
+    if safe_prefix != prefix:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "save_results prefix %r sanitized to %r", prefix, safe_prefix
+        )
+
     # Microseconds prevent same-second collisions between concurrent runs
     ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-    ts_file = directory / f"{prefix}_{ts}.json"
-    latest_link = directory / f"{prefix}_latest.json"
+    ts_file = directory / f"{safe_prefix}_{ts}.json"
+    latest_link = directory / f"{safe_prefix}_latest.json"
 
     with open(ts_file, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2)
 
     # Atomic symlink update: create temp link, then rename
     # os.rename is atomic on POSIX when src and dst are on same filesystem
-    tmp_link = directory / f".{prefix}_latest.tmp.{ts}"
+    tmp_link = directory / f".{safe_prefix}_latest.tmp.{ts}"
     try:
         # Clean up any orphaned temp files from previous runs
-        for stale in directory.glob(f".{prefix}_latest.tmp.*"):
+        for stale in directory.glob(f".{safe_prefix}_latest.tmp.*"):
             stale.unlink(missing_ok=True)
         tmp_link.symlink_to(ts_file.name)
         tmp_link.rename(latest_link)

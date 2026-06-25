@@ -395,7 +395,7 @@ async def recommend(request: Request, body: RecommendationRequest, response: Res
         if "Explanation service unavailable" in error_msg:
             logger.warning("Explanation service unavailable for query: %s", q)
             record_error("llm_unavailable")
-            return _error_response(503, str(e), q)
+            return _error_response(503, "Explanation service unavailable", q)
         # LLM rate limited (translated from API error)
         if "rate limit" in error_msg.lower():
             logger.warning("LLM rate limited for query: %s", q)

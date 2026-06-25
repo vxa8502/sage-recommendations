@@ -12,7 +12,7 @@ Prompt design rationale:
 """
 
 from sage.core.models import ProductScore, RetrievedChunk
-from sage.utils import extract_evidence
+from sage.utils import extract_evidence, sanitize_query
 
 
 # Threshold for detecting mixed evidence (rating spread in stars)
@@ -122,7 +122,8 @@ def format_evidence(
         return "(No review evidence available)"
 
     return "\n\n".join(
-        f'[{chunk.review_id}] ({int(chunk.rating or 0)}/5 stars): "{chunk.text}"'
+        f'[{chunk.review_id}] ({int(chunk.rating or 0)}/5 stars): '
+        f'"{sanitize_query(chunk.text)}"'
         for chunk in chunks[:max_chunks]
     )
 
