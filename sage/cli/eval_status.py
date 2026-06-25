@@ -112,16 +112,39 @@ def _validate_boundary_artifact(payload: dict[str, Any]) -> list[str]:
     return []
 
 
+_LOAD_TEST_MIN_GROUNDED_SUCCESS_RATE = 0.70
+
+
 def _validate_load_test_artifact(payload: dict[str, Any]) -> list[str]:
+    errors: list[str] = []
+
     headline = payload.get("headline_metric")
     if isinstance(headline, dict) and _is_number(headline.get("value_ms")):
-        return []
-    if _is_number(payload.get("p99_ms")):
-        return []
-    return [
-        "Load-test artifact is missing a measurable latency headline "
-        "(`headline_metric.value_ms` or legacy `p99_ms`)."
-    ]
+        pass
+    elif _is_number(payload.get("p99_ms")):
+        pass
+    else:
+        errors.append(
+            "Load-test artifact is missing a measurable latency headline "
+            "(`headline_metric.value_ms` or legacy `p99_ms`)."
+        )
+
+    # Guard against runs where the service was broken (e.g. model 404,
+    # stale cache serving empty results). A low grounded_success_rate
+    # means the load test measured a broken deployment, not a healthy one.
+    measured = payload.get("measured") or {}
+    api_quality = measured.get("api_quality") or {}
+    grounded_rate = api_quality.get("grounded_success_rate")
+    min_rate = _LOAD_TEST_MIN_GROUNDED_SUCCESS_RATE
+    if _is_number(grounded_rate) and grounded_rate < min_rate:
+        errors.append(
+            "Load test grounded success rate is too low: "
+            f"{grounded_rate:.1%} < {min_rate:.0%}. "
+            "The deployed service may be broken — check that "
+            "explanations are generating correctly."
+        )
+
+    return errors
 
 
 _EVAL_ARTIFACT_SPECS = (
@@ -389,6 +412,23 @@ def build_eval_status(
     reportable_green = not reportable_reasons
     reportable_status = "PASS  [reportable-green]" if reportable_green else "WITHHELD"
 
+    ragas_canonical: dict[str, Any] | None = None
+    ragas_only_path = resolved_results_dir / "ragas_only_latest.json"
+    if ragas_only_path.exists():
+        try:
+            with open(ragas_only_path, encoding="utf-8") as _f:
+                _payload = json.load(_f)
+            ragas_canonical = {
+                "faithfulness_mean": _payload.get("faithfulness_mean"),
+                "faithfulness_std": _payload.get("faithfulness_std"),
+                "n_samples": _payload.get("n_samples"),
+                "n_passing": _payload.get("n_passing"),
+                "pass_rate": _payload.get("pass_rate"),
+                "source_checkpoint": _payload.get("source_checkpoint"),
+            }
+        except Exception:
+            pass
+
     return {
         "latest_artifacts": latest_artifacts,
         "artifact_statuses": artifacts,
@@ -407,5 +447,6 @@ def build_eval_status(
             "faithfulness_metric_name": faithfulness_metric_name,
             "faithfulness_metric_value": faithfulness_metric_value,
             "faithfulness_target": faithfulness_target,
+            "ragas_canonical": ragas_canonical,
         },
     }

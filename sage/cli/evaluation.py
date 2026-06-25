@@ -65,6 +65,8 @@ def _run_full_eval_workflow(
     ragas_samples: int | None,
     url: str,
     requests: int,
+    *,
+    enforce_gate: bool,
 ) -> None:
     run_started_at = datetime.now().astimezone()
     build_dataset = python_command("scripts/build_natural_eval_dataset.py")
@@ -177,19 +179,43 @@ def _run_full_eval_workflow(
     print()
     _print_eval_status_surfaces(status)
     print()
-    print("=== AUTOMATED EVALUATION COMPLETE ===")
+
+    if enforce_gate:
+        # Exit non-zero if the run is sampled, below metric thresholds, or
+        # missing artifacts — prevents a dev-lane result from silently
+        # becoming the canonical baseline.
+        run_command(python_command("scripts/eval_gate.py"))
+        print("=== CANONICAL EVALUATION COMPLETE ===")
+    else:
+        print(
+            "DEV LANE: results are sampled and NOT a canonical baseline."
+        )
+        print(
+            f"  faithfulness samples: {_sample_limit_label(samples)}"
+        )
+        print(f"  RAGAS samples:        {_sample_limit_label(ragas_samples)}")
+        print(
+            "  Run 'sage eval run' for the reportable canonical evaluation."
+        )
+        print("=== DEV LANE EVALUATION COMPLETE ===")
+
     print()
     print("Results saved to: data/eval_results/")
     print("  - eval_natural_queries_latest.json  (NDCG, Hit@K, MRR)")
     print("  - faithfulness_latest.json          (HHEM, RAGAS)")
     print("  - adjusted_faithfulness_latest.json (refusal-aware pass rate)")
-    print("  - boundary_behavior_latest.json     (refusal/clarify guardrail benchmark)")
     print(
-        "  - load_test_latest.json             (steady-state latency headline + drill-down)"
+        "  - boundary_behavior_latest.json"
+        "     (refusal/clarify guardrail benchmark)"
     )
-    print()
-    print("NEXT STEPS:")
-    print(f"  1. {cli_display_command('eval', 'summary')}")
+    print(
+        "  - load_test_latest.json"
+        "             (steady-state latency headline + drill-down)"
+    )
+    if enforce_gate:
+        print()
+        print("NEXT STEPS:")
+        print(f"  1. {cli_display_command('eval', 'summary')}")
 
 
 def command_eval_boundary(args: argparse.Namespace) -> None:
@@ -223,6 +249,7 @@ def _run_eval(
     ragas_samples: int | None,
     url: str,
     requests: int,
+    enforce_gate: bool,
 ) -> None:
     evaluation_readiness.ensure_eval_query_bank_ready()
     evaluation_readiness.ensure_faithfulness_cases_ready()
@@ -237,6 +264,7 @@ def _run_eval(
         ragas_samples,
         url,
         requests,
+        enforce_gate=enforce_gate,
     )
 
 
@@ -246,6 +274,7 @@ def command_eval(args: argparse.Namespace) -> None:
         ragas_samples=getattr(args, "ragas_samples", None),
         url=args.url,
         requests=args.requests,
+        enforce_gate=True,
     )
 
 
@@ -256,6 +285,7 @@ def command_eval_dev(args: argparse.Namespace) -> None:
         ragas_samples=args.ragas_samples,
         url=args.url,
         requests=args.requests,
+        enforce_gate=False,
     )
 
 
