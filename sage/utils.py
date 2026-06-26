@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib
 import json
 import random
+import re
 import string
 import threading
 import time
@@ -276,6 +277,12 @@ def normalize_text(text: str) -> str:
     return " ".join(text.split())
 
 
+# Matches C0/C1 control characters that survive newline replacement.
+# Equivalent to `not c.isprintable()` for all characters a query string
+# would realistically contain, but avoids a Python-level character loop.
+_CTRL_CHARS_RE = re.compile(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]")
+
+
 def sanitize_query(query: str) -> str:
     """Sanitize user query for safe LLM prompt insertion.
 
@@ -293,15 +300,9 @@ def sanitize_query(query: str) -> str:
     Returns:
         Sanitized query safe for prompt template insertion.
     """
-    # Strip newlines - prevents "ignore above\n\nNEW INSTRUCTIONS:"
     sanitized = query.replace("\n", " ").replace("\r", " ")
-
-    # Remove non-printable control characters (keep normal spaces)
-    sanitized = "".join(c for c in sanitized if c.isprintable())
-
-    # Collapse whitespace
+    sanitized = _CTRL_CHARS_RE.sub("", sanitized)
     sanitized = " ".join(sanitized.split())
-
     return sanitized.strip()
 
 

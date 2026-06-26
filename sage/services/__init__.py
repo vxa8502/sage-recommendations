@@ -46,9 +46,9 @@ def get_explanation_services():
     Returns:
         Tuple of (Explainer, HallucinationDetector) instances.
     """
-    from sage.adapters.hhem import HallucinationDetector
+    from sage.adapters.hhem import get_detector
 
-    return Explainer(), HallucinationDetector()
+    return Explainer(), get_detector()
 
 
 # Evaluation and faithfulness services are loaded lazily to avoid
