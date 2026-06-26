@@ -534,8 +534,7 @@ def _run_async(coro):
     """Helper to run async code in sync tests."""
     import asyncio
 
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 class TestShutdownMiddlewareIntegration:
