@@ -7,6 +7,7 @@ import json
 import os
 import threading
 from collections.abc import AsyncIterator
+from typing import cast
 
 import sage.api.routes as _routes_pkg
 from fastapi import APIRouter, Request
@@ -15,6 +16,8 @@ from fastapi.responses import StreamingResponse
 from sage.config import MAX_EVIDENCE, get_logger
 from sage.utils import sanitize_query
 from sage.services.query_policy import evaluate_query_policy
+
+from sage.core.models import ExplanationResult
 
 from ._models import RecommendationRequest
 from ._recommend import (
@@ -147,7 +150,13 @@ async def _stream_recommendations(
                 elif kind == "result":
                     yield _sse_event(
                         "evidence",
-                        json.dumps({"evidence_sources": _build_evidence_list(value)}),
+                        json.dumps(
+                            {
+                                "evidence_sources": _build_evidence_list(
+                                    cast(ExplanationResult, value)
+                                )
+                            }
+                        ),
                     )
         except TimeoutError:
             logger.warning(

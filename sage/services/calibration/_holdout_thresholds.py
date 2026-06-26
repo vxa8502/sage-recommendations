@@ -26,7 +26,7 @@ def _positive_int_field(
     if isinstance(raw_value, bool) or raw_value is None:
         raise ValueError(f"`{field_name}` must be a positive integer in {context}.")
     try:
-        value = int(raw_value)
+        value = int(raw_value)  # type: ignore[arg-type, call-overload]
     except (TypeError, ValueError) as exc:
         raise ValueError(
             f"`{field_name}` must be a positive integer in {context}."
@@ -46,7 +46,7 @@ def _unit_float_field(
     if isinstance(raw_value, bool) or raw_value is None:
         raise ValueError(f"`{field_name}` must be numeric in {context}.")
     try:
-        value = float(raw_value)
+        value = float(raw_value)  # type: ignore[arg-type]
     except (TypeError, ValueError) as exc:
         raise ValueError(f"`{field_name}` must be numeric in {context}.") from exc
     if value < 0.0 or value > 1.0:

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from collections.abc import Mapping, Sequence
+from typing import Any, cast
 
 import numpy as np
 
@@ -42,7 +43,9 @@ def _build_query_slice_metrics(
         is_refusal,
     )
 
-    slice_indices = {slice_name: [] for slice_name in QUERY_SLICE_NAMES}
+    slice_indices: dict[str, list[int]] = {
+        slice_name: [] for slice_name in QUERY_SLICE_NAMES
+    }
     for index, case in enumerate(cases):
         for slice_name in classify_query_slices(case.query):
             slice_indices[slice_name].append(index)
@@ -143,7 +146,7 @@ def _log_freshness_guardrail(summary: dict[str, object]) -> None:
     logger.info(
         "Status: %s (safe %s, violations=%d, applicable=%d, recency-sensitive=%d)",
         summary["promotion_status"],
-        _percent_or_unavailable(summary.get("safe_rate")),
+        _percent_or_unavailable(cast(float | None, summary.get("safe_rate"))),
         summary["violation_count"],
         summary["applicable_case_count"],
         summary["recency_sensitive_case_count"],
@@ -187,8 +190,10 @@ def _build_case_diagnostics(
             }
         )
         rows[-1]["freshness_guardrail"] = evaluate_freshness_guardrail_case(
-            query_slice_tags=rows[-1]["query_slice_tags"],
-            evidence_guardrails=rows[-1]["evidence_guardrails"],
+            query_slice_tags=cast(Sequence[str], rows[-1]["query_slice_tags"]),
+            evidence_guardrails=cast(
+                Mapping[str, Any] | None, rows[-1]["evidence_guardrails"]
+            ),
             observed_behavior=rows[-1]["observed_behavior"],
         )
     return rows

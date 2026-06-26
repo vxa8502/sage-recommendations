@@ -163,7 +163,7 @@ def _collection_names(client) -> set[str]:
     return {collection.name for collection in client.get_collections().collections}
 
 
-def _embedding_to_vector(embedding) -> list | object:
+def _embedding_to_vector(embedding) -> list[float]:
     """Normalize an embedding row into the payload expected by Qdrant."""
     return embedding.tolist() if hasattr(embedding, "tolist") else embedding
 

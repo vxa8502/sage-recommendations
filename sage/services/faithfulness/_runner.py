@@ -116,7 +116,7 @@ def run_evaluation(
     if coverage_summary is not None:
         logger.info(
             "Coverage: %.1f%% materialized (%d/%d seed queries)",
-            coverage_summary["materialization_rate"] * 100,
+            coverage_summary["materialization_rate"] * 100,  # type: ignore[operator]
             coverage_summary["materialized_case_count"],
             coverage_summary["total_queries"],
         )
@@ -202,7 +202,7 @@ def run_evaluation(
     logger.info(
         "Adjusted HHEM:    %.3f adjusted, %.1f%% refusal rate",
         adjusted_results["adjusted_pass_rate"],
-        adjusted_results["refusal_rate"] * 100,
+        adjusted_results["refusal_rate"] * 100,  # type: ignore[operator]
     )
     query_slice_metrics = _build_query_slice_metrics(
         evaluated_cases,
@@ -217,17 +217,17 @@ def run_evaluation(
         reference_timestamp_ms=reference_timestamp_ms,
     )
     evidence_guardrails = summarize_evidence_guardrail_reports(
-        [row["evidence_guardrails"] for row in case_diagnostics]
+        [row["evidence_guardrails"] for row in case_diagnostics]  # type: ignore[misc]
     )
     freshness_guardrail = summarize_freshness_guardrail_cases(
-        [row.get("freshness_guardrail") for row in case_diagnostics]
+        [row.get("freshness_guardrail") for row in case_diagnostics]  # type: ignore[misc]
     )
     _log_query_slice_metrics(query_slice_metrics)
     _log_freshness_guardrail(freshness_guardrail)
     run_provenance = build_run_provenance(
         explainer=explainer,
         retrieval_profile=(
-            retrieval_policy["retrieval_profile"]
+            str(retrieval_policy["retrieval_profile"])
             if isinstance(retrieval_policy.get("retrieval_profile"), str)
             else None
         ),
@@ -395,11 +395,11 @@ def run_evaluation(
                 "pool reached that evaluation surface."
             ),
         }
-        results["evaluation_scope"]["available_materialized_case_count"] = (
+        results["evaluation_scope"]["available_materialized_case_count"] = (  # type: ignore[index]
             coverage_summary["materialized_case_count"]
         )
-        results["evaluation_scope"]["coverage_sample_limited"] = (
-            results["evaluation_scope"]["selected_case_count"]
+        results["evaluation_scope"]["coverage_sample_limited"] = (  # type: ignore[index]
+            results["evaluation_scope"]["selected_case_count"]  # type: ignore[index]
             < coverage_summary["materialized_case_count"]
         )
 

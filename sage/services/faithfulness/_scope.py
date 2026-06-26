@@ -116,7 +116,7 @@ def _select_case_scope(
     *,
     requested_samples: int | None,
     seed: int = DEFAULT_SAMPLE_SELECTION_SEED,
-) -> tuple[list[Any], dict[str, object]]:
+) -> tuple[list[Any], dict[str, Any]]:
     """Select the full case set or a deterministic stratified sample."""
     available_count = len(cases)
     if requested_samples is None or requested_samples >= available_count:

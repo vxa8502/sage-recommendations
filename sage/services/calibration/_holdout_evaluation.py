@@ -68,13 +68,15 @@ def _build_query_slice_metrics(
     baseline_threshold: GateThreshold,
     candidate_threshold: GateThreshold,
 ) -> dict[str, object]:
-    query_ids_by_slice = {slice_name: set() for slice_name in QUERY_SLICE_NAMES}
+    query_ids_by_slice: dict[str, set[str]] = {
+        slice_name: set() for slice_name in QUERY_SLICE_NAMES
+    }
     for row in dataset.queries:
         for slice_name in classify_query_slices(row.query):
             query_ids_by_slice[slice_name].add(row.query_id)
-    for row in dataset.failed_queries:
-        for slice_name in classify_query_slices(row.query):
-            query_ids_by_slice[slice_name].add(row.query_id)
+    for failure in dataset.failed_queries:
+        for slice_name in classify_query_slices(failure.query):
+            query_ids_by_slice[slice_name].add(failure.query_id)
 
     slice_metrics: dict[str, object] = {}
     for slice_name, query_ids in query_ids_by_slice.items():

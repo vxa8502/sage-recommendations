@@ -41,11 +41,11 @@ def _log_threshold_section(
     logger.info("Precision@accept:         %.3f", metrics["precision_at_accept"])
     logger.info(
         "Query success rate:       %.1f%%",
-        metrics["query_success_rate"] * 100,
+        metrics["query_success_rate"] * 100,  # type: ignore[operator]
     )
     logger.info(
         "Relevant pass rate:       %.1f%%",
-        metrics["retrieved_relevant_pass_rate"] * 100,
+        metrics["retrieved_relevant_pass_rate"] * 100,  # type: ignore[operator]
     )
 
 
@@ -66,7 +66,7 @@ def _print_comparison(subset: str, result: dict[str, object]) -> None:
     logger.info("Attempted queries:        %s", summary["attempted_query_count"])
     logger.info("Completed queries:        %s", summary["completed_query_count"])
     logger.info("Failed queries:           %s", summary["failed_query_count"])
-    logger.info("Candidate-hit rate:       %.1f%%", summary["candidate_hit_rate"] * 100)
+    logger.info("Candidate-hit rate:       %.1f%%", summary["candidate_hit_rate"] * 100)  # type: ignore[operator]
 
     _log_threshold_section(
         "Baseline",
