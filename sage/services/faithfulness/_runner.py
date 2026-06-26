@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import datetime
 from pathlib import Path
@@ -151,10 +152,10 @@ def run_evaluation(
 
     log_section(logger, "2. HHEM HALLUCINATION DETECTION")
 
-    hhem_results = [
-        detector.check_explanation(expl.evidence_texts, expl.explanation)
+    hhem_results = detector.check_batch([
+        (expl.evidence_texts, expl.explanation)
         for expl in all_explanations
-    ]
+    ])
 
     for expl, result in zip(all_explanations, hhem_results, strict=True):
         status = "GROUNDED" if not result.is_hallucinated else "HALLUCINATED"
@@ -518,48 +519,51 @@ def run_ragas_from_checkpoint(
             "Resuming: %d/%d already scored", len(completed), len(cases_data)
         )
 
-    evaluator = FaithfulnessEvaluator()
-    per_case: list[dict] = []
-    scores: list[float] = []
+    # Single event loop for all cases — one AsyncAnthropic client, one
+    # connection pool, one TLS handshake reused across all 120 API calls.
+    async def _score_all() -> tuple[list[dict], list[float]]:
+        evaluator = FaithfulnessEvaluator()
+        per_case_inner: list[dict] = []
+        scores_inner: list[float] = []
+        n = len(cases_data)
 
-    for i, c in enumerate(cases_data, 1):
-        case_id = c["case_id"]
-        if case_id in completed:
-            cached = completed[case_id]
-            score = cached["score"]
-            logger.info(
-                "[%d/%d] %.3f (cached) — %s", i, len(cases_data), score, c["query"]
-            )
-        else:
-            result = evaluator.evaluate_single(
-                c["query"], c["explanation"], c["evidence_texts"]
-            )
-            score = result.score
-            completed[case_id] = {
-                "score": score,
+        for i, c in enumerate(cases_data, 1):
+            case_id = c["case_id"]
+            if case_id in completed:
+                cached = completed[case_id]
+                score = cached["score"]
+                meets = cached["meets_target"]
+                logger.info(
+                    "[%d/%d] %.3f (cached) — %s", i, n, score, c["query"]
+                )
+            else:
+                result = await evaluator.evaluate_single_async(
+                    c["query"], c["explanation"], c["evidence_texts"]
+                )
+                score = result.score
+                meets = result.meets_target
+                completed[case_id] = {
+                    "score": score,
+                    "query": c["query"],
+                    "product_id": c["product_id"],
+                    "meets_target": meets,
+                }
+                with open(_RAGAS_PROGRESS_PATH, "w", encoding="utf-8") as f:
+                    json.dump(completed, f, indent=2)
+                logger.info("[%d/%d] %.3f — %s", i, n, score, c["query"])
+
+            per_case_inner.append({
+                "case_id": case_id,
                 "query": c["query"],
                 "product_id": c["product_id"],
-                "meets_target": result.meets_target,
-            }
-            with open(_RAGAS_PROGRESS_PATH, "w", encoding="utf-8") as f:
-                json.dump(completed, f, indent=2)
-            logger.info(
-                "[%d/%d] %.3f — %s", i, len(cases_data), score, c["query"]
-            )
+                "score": score,
+                "meets_target": meets,
+            })
+            scores_inner.append(score)
 
-        meets = (
-            cached["meets_target"]
-            if case_id in completed
-            else score >= FAITHFULNESS_TARGET
-        )
-        per_case.append({
-            "case_id": case_id,
-            "query": c["query"],
-            "product_id": c["product_id"],
-            "score": score,
-            "meets_target": meets,
-        })
-        scores.append(score)
+        return per_case_inner, scores_inner
+
+    per_case, scores = asyncio.run(_score_all())
 
     scores_arr = np.array(scores)
     mean = float(np.mean(scores_arr))

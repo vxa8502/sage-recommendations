@@ -11,6 +11,7 @@ Target: >0.85 faithfulness score
 
 import asyncio
 import logging
+import re
 
 import numpy as np
 from tenacity import (
@@ -86,30 +87,11 @@ def is_event_loop_running() -> bool:
         return False
 
 
-def _clean_explanation_for_ragas(explanation: str) -> str:
-    """
-    Clean explanation text for RAGAS evaluation.
-
-    RAGAS fails on explanations with quotes + citations together, even when
-    the quoted content is verbatim from evidence. This is a known limitation.
-    We clean the explanation to remove metadata (citations, framing) while
-    preserving the factual claims for evaluation.
-
-    Args:
-        explanation: Original explanation with framing and citations.
-
-    Returns:
-        Cleaned explanation suitable for RAGAS faithfulness evaluation.
-    """
-    import re
-
-    text = explanation
-
-    # Remove [review_X] citations - these are metadata, not claims
-    text = re.sub(r"\s*\[review_\d+\]", "", text)
-
-    # Remove framing phrases that aren't factual claims (order matters - longer first)
-    framing_patterns = [
+# Compiled once at module load — avoids 2880 recompilations across a 120-case run.
+_REVIEW_ID_RE = re.compile(r"\s*\[review_\d+\]")
+_FRAMING_RES = [
+    re.compile(p, re.IGNORECASE)
+    for p in [
         r"According to reviews?,?\s*",
         r"Customers report\s+",
         r"Reviewers?\s+call\s+it\s+",
@@ -133,22 +115,37 @@ def _clean_explanation_for_ragas(explanation: str) -> str:
         r"Reviewers?\s+praise\s+",
         r"Reviewers?\s+highlight\s+",
     ]
-    for pattern in framing_patterns:
-        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+]
+_AND_QUOTE_RE = re.compile(r'\s+and\s+"')
+_DOT_QUOTE_RE = re.compile(r'\.\s+"')
+_HANGING_DOT_RE = re.compile(r"\s+\.")
+_HANGING_COMMA_RE = re.compile(r"\s+,")
+_MULTI_SPACE_RE = re.compile(r"\s{2,}")
 
-    # Convert 'and "quote"' between two quoted phrases into a new sentence.
-    # Produces 'The product is "quote"' rather than an orphaned '. "quote"'
-    # fragment that RAGAS's claim extractor may skip.
-    text = re.sub(r'\s+and\s+"', '. The product is "', text)
 
-    # Fix any remaining '. "quote"' fragments left by other cleaning passes.
-    text = re.sub(r'\.\s+"', '. The product is "', text)
+def _clean_explanation_for_ragas(explanation: str) -> str:
+    """
+    Clean explanation text for RAGAS evaluation.
 
-    # Clean up residual empty/hanging parts
-    text = re.sub(r"\s+\.", ".", text)
-    text = re.sub(r"\s+,", ",", text)
-    text = re.sub(r"\s{2,}", " ", text)
+    RAGAS fails on explanations with quotes + citations together, even when
+    the quoted content is verbatim from evidence. This is a known limitation.
+    We clean the explanation to remove metadata (citations, framing) while
+    preserving the factual claims for evaluation.
 
+    Args:
+        explanation: Original explanation with framing and citations.
+
+    Returns:
+        Cleaned explanation suitable for RAGAS faithfulness evaluation.
+    """
+    text = _REVIEW_ID_RE.sub("", explanation)
+    for pattern in _FRAMING_RES:
+        text = pattern.sub("", text)
+    text = _AND_QUOTE_RE.sub('. The product is "', text)
+    text = _DOT_QUOTE_RE.sub('. The product is "', text)
+    text = _HANGING_DOT_RE.sub(".", text)
+    text = _HANGING_COMMA_RE.sub(",", text)
+    text = _MULTI_SPACE_RE.sub(" ", text)
     return text.strip()
 
 

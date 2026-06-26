@@ -353,8 +353,8 @@ def compute_multi_metric_faithfulness(
 
     detector = get_detector()
 
-    # 1. Full-explanation HHEM (structural)
-    full_scores = [detector.check_explanation(ev, exp).score for ev, exp in items]
+    # 1. Full-explanation HHEM (structural) — single batched forward pass
+    full_scores = [r.score for r in detector.check_batch(items)]
 
     # 2. Claim-level HHEM
     claim_report = compute_claim_level_hhem(
