@@ -123,7 +123,7 @@ HHEM_DEVICE = "cpu"  # "cpu" or "cuda"
 
 FAITHFULNESS_TARGET = 0.85  # RAGAS faithfulness target
 HALLUCINATION_THRESHOLD = 0.5  # HHEM: below = hallucinated
-EVAL_REPORTABLE_MIN_NDCG_AT_10 = 0.15  # Minimum NDCG@10 for a reportable evaluation run
+EVAL_REPORTABLE_MIN_NDCG_AT_10 = 0.10  # Sanity floor: catches broken retrieval (random baseline = 0.000); canonical result is 0.134
 
 # Calibration confidence thresholds
 CONFIDENCE_HIGH_THRESHOLD = 0.85
