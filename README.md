@@ -31,33 +31,24 @@ A recommendation system that refuses to hallucinate. Sage grounds product explan
 
 ---
 
-## Workflow Status
+## Evaluation Results
 
-The checked-in repo now targets a strict Stage 0 scaffold state.
+Formal evaluation over 423,165 Qdrant points (Amazon Electronics reviews), 227 ESCI-graded retrieval queries, and 120 frozen explanation cases.
 
-What that means:
+| Metric | Value | Notes |
+|--------|-------|-------|
+| NDCG@10 | 0.134 | 227 ESCI queries; global IDCG; retrieval holdout baseline 0.193 |
+| Hit@10 | 0.308 | — |
+| Recall@10 | 0.209 | — |
+| Claim-level HHEM | 0.939 avg · 97.4% pass | Primary faithfulness instrument; threshold 0.5; 120/120 cases |
+| RAGAS faithfulness | 0.759 ± 0.364 | Canonical n=120; secondary diagnostic |
+| Cached P99 latency | ~121 ms | Meets < 500 ms target ✓ |
+| Uncached latency | ~5,400 ms | Cache carries the latency SLO |
+| Refusal rate | ~10% | Low-evidence queries; by design |
 
-- `data/` shows scaffold structure, placeholder directories, README guidance,
-  and the small checked-in manual boundary source used for `boundary_eval`
-- Stage 1 data-staging outputs are intentionally absent from the clone-state
-- experiment and evaluation artifacts are intentionally absent from the
-  clone-state
+**Faithfulness:** HHEM is the primary instrument — it runs on every query at serving time (same 0.5 threshold as the runtime gate), covers all 120 cases, and is deterministic. RAGAS is secondary and diagnostic: the 0.759 canonical score reflects retrieval noise (queries where the top chunk describes a competing product), not generation fabrication.
 
-The workflow is modular:
-
-1. Stage 1 data staging
-2. Stage 2 experiments
-3. Stage 3 formal evaluation
-
-The experiment charter still lives in
-[home/EXPERIMENTATION.md](/Users/victoriaalabi/Projects/sage/home/EXPERIMENTATION.md:1),
-but experiments do not begin until Stage 1 has produced the local query-bank
-and corpus-alignment artifacts. Stage 1 now produces a judged retrieval holdout
-plus a disjoint `faithfulness_seed` pool; the frozen explanation benchmark is
-materialized later from that seed pool during Stage 2. It also merges a small
-checked-in `boundary_eval` slice so refusal, clarification, low-evidence, and
-recency-sensitive behavior are part of the canonical Stage 1 bank rather than
-an ad hoc prompt set.
+**Retrieval:** NDCG@10 0.134 vs the retrieval holdout baseline 0.193 under the same corpus and formula. The gap is real and is the primary open item for a v2 upgrade (hybrid dense+sparse BM25).
 
 ---
 
@@ -74,8 +65,8 @@ User Query: "wireless earbuds for running"
 │  2. CACHE CHECK   │  Exact + semantic cache                │
 │  3. RETRIEVE      │  Qdrant vector search                  │
 │  4. AGGREGATE     │  Chunk → Product                       │
-│  5. EXPLAIN       │  Claude/GPT + evidence                 │
-│  6. VERIFY        │  Quote / citation / faithfulness checks│
+│  5. EXPLAIN       │  Claude Sonnet + evidence              │
+│  6. VERIFY        │  Quote / citation / HHEM checks        │
 └─────────────────────────────────────────────────────────────┘
                     │
                     ▼
@@ -88,9 +79,9 @@ User Query: "wireless earbuds for running"
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Data flow after Stage 1:** Amazon Electronics reviews → filtering and
-chunking → embeddings in Qdrant → product aggregation → evidence-grounded
-explanations.
+**Stack:** E5-small-v2 embeddings · Qdrant Cloud (HNSW, int8 quantization) · Claude Sonnet (`claude-sonnet-4-6`) · Redis L1 exact + L2 semantic cache · FastAPI · Prometheus metrics
+
+**Data flow:** Amazon Electronics reviews → filtering and chunking → embeddings in Qdrant → evidence-grounded explanations.
 
 ---
 
@@ -100,10 +91,10 @@ explanations.
 |------------|----------|
 | Insufficient evidence | Refuses to explain |
 | Low relevance | Refuses to explain |
-| Single category (Electronics) | Architecture supports broader coverage; current corpus is narrower |
+| Single category (Electronics) | Architecture supports broader coverage; corpus is narrower |
 | No image features | Text-only retrieval |
 | English only | Embedding setup is English-first |
-| Cold start | Hosted latency and cache behavior should be remeasured after the reset |
+| Cache dependency | Uncached cold-path latency (~5,400 ms) does not meet the < 500 ms SLO |
 
 ---
 
@@ -111,169 +102,49 @@ explanations.
 
 ```bash
 git clone https://github.com/vxa8502/sage-recommendations && cd sage-recommendations
-cp .env.example .env   # Then add QDRANT_URL, QDRANT_API_KEY, and one LLM key
+cp .env.example .env   # Add QDRANT_URL, QDRANT_API_KEY, and ANTHROPIC_API_KEY
 ```
 
 **Hosted Qdrant:** Create a Qdrant Cloud cluster first and copy its endpoint + API key into `.env`.
 
-**Run locally against your hosted cluster:**
+**Run the demo locally:**
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,pipeline,api,anthropic]"
 sage health
 sage qdrant status
-sage data build
+sage data build        # embed and index reviews into Qdrant
 sage serve
 ```
 
-**CLI:** `sage --help`
+**Full pipeline** (data staging + experiments + evaluation):
+```bash
+sage stage data all                  # index corpus and build query bank
+sage stage experiments all           # retrieval and gate calibration
+sage stage experiments finalize \
+  --decision baseline-retained \
+  --retrieval-decision baseline-retained \
+  --with-boundary                    # freeze explanation cases
+sage eval run                        # canonical evaluation
+sage eval summary                    # print saved results
+```
 
-If you are already inside `.venv`, use `sage ...`.
-`-m` is a Python flag, so `-m sage.cli ...` by itself is not a shell command.
-Fallback form when you want it explicitly: `python -m sage.cli ...`
+**CLI:** `sage --help` · `make help`
 
-**Reduced CLI surface:** The public CLI keeps the core paths only: build data, run the full evaluation, demo the system, serve the API, inspect Qdrant, clear rerunnable artifacts, and run contributor checks.
-
-**Clean restart:** `sage reset artifacts` clears saved evaluation outputs only.
-`sage reset eval-dev` is the simpler paired reset for the sampled Stage 3 dev
-lane.
-`sage reset experiments` clears the broader rerunnable experimentation surface
-while preserving any Stage 1 staging artifacts that already exist locally.
-`sage reset stage0` goes further and returns local `data/` state to the Stage 0
-scaffold contract. Add `--dry-run` first if you want a preview.
-
-**Make:** `make help` shows the canonical CLI surface. `make ci-fresh` is the one special-case Make target kept to recreate `.venv` and catch GitHub-CI-only failures.
+**Clean restart:** `sage reset artifacts` clears evaluation outputs. `sage reset stage0` returns `data/` to the scaffold state (add `--dry-run` first for a preview).
 
 ---
 
-## Workflow
-
-### Stage 1: Data Staging
-
-The checked-in repo does not ship staged data. Stage 1 is responsible for
-creating it.
-
-Expected Stage 1 outputs:
-
-- `data/indexed_product_ids.json`
-- `data/query_bank/query_bank.jsonl`
-- `data/query_bank/manifest.json`
-- optionally `data/query_bank/query_candidates.jsonl` as supplemental
-  raw-source inventory
-
-Within the canonical bank, the key Stage 1 subsets are:
-
-- `gate_calibration`
-- `retrieval_eval`
-- `faithfulness_seed`
-- `boundary_eval`
-
-Every canonical query-bank row is also expected to carry structured provenance
-covering source, curation mode, selection policy, and subset assignment.
-
-Typical Stage 1 sequence:
-
-1. Stage raw ESCI query data under `data/query_bank/sources/`
-2. Keep the checked-in `data/query_bank/sources/manual_boundary_queries_v1.jsonl`
-   source alongside it
-3. Run `scripts/kaggle_pipeline.py` with valid Kaggle and Qdrant credentials
-4. Build the overlap-filtered canonical bank with
-   `scripts/build_esci_overlap_query_bank.py`
-5. Freeze query-bank metadata in `data/query_bank/manifest.json`
-
-If those local Stage 1 outputs already exist, `sage stage data all` now blocks
-before overwriting them. Use `--allow-overwrite` when you intentionally want an
-in-place refresh, or `sage reset stage0` when you want to go back to the clean
-scaffold boundary first.
-
-### Stage 2: Experiments
-
-Experiments choose configs. They happen after Stage 1 has fixed the corpus and
-query-bank reality, and they stop before the frozen metrics pass.
-
-The exact repo-state contract for this stage lives in
-[data/README.md](/Users/victoriaalabi/Projects/sage/data/README.md:167).
-
-Core work:
-
-- retrieval experiments
-- evidence-gate calibration
-- materializing frozen explanation cases from `faithfulness_seed`
-- explanation grounding comparisons on frozen cases
-- report-only Sofia-lite slice checks on recency-sensitive and
-  complaint-oriented queries
-
-Expected Stage 2 outputs:
-
-- decision artifacts under `data/calibration/` or another non-reporting
-  experiment location
-- frozen explanation artifacts under `data/explanations/`
-  (`faithfulness_cases.jsonl`, `faithfulness_case_outcomes.jsonl`, and the
-  manifest for the chosen retrieval profile)
-- active config or code updated to reflect the intended Stage 3 settings
-- optional provisional boundary diagnostics before the formal Stage 3 gate
-- no frozen reportable evaluation snapshot yet
-
-### Stage 3: Formal Evaluation
-
-Formal evaluation is the frozen, reportable metrics pass run after Stage 2 has
-settled the intended config story.
-
-## After Stage 1
-
-Once `scripts/kaggle_pipeline.py` has populated hosted Qdrant successfully and
-the query-bank artifacts have been created locally, the recommended next steps
-are:
+## Evaluation
 
 ```bash
-sage reset experiments --dry-run
-sage stage experiments all
-# review the holdout artifacts, choose both decisions, and update config if promoting:
-sage stage experiments finalize --decision baseline-retained --retrieval-decision baseline-retained --with-boundary
-# if both decisions are already known and the repo config already matches them:
-sage stage experiments full --decision baseline-retained --retrieval-decision baseline-retained --with-boundary
-# then begin Stage 3:
-sage eval run
-sage eval summary
+sage eval dev        # sampled dev-lane run (fast)
+sage eval run        # full canonical evaluation
+sage eval summary    # print the latest saved snapshot
+sage eval boundary   # refusal / clarification guardrail benchmark
 ```
 
-Notes:
-
-- the exact command-by-command Stage 2 runbook now lives in
-  [data/README.md](/Users/victoriaalabi/Projects/sage/data/README.md:388)
-- `sage stage experiments all` stops at the decision checkpoint on purpose; it
-  does not rewrite config automatically
-- the default Stage 2 holdout now evaluates `retrieval_dev_holdout` only; add
-  `--subsets retrieval_dev_holdout,faithfulness_dev_seed` only when you
-  explicitly want a diagnostic read on the dev seed pool before case freezing
-- `sage stage experiments finalize` freezes faithfulness artifacts from the
-  current repo config only after you pass an explicit
-  `--decision baseline-retained|candidate-promoted` and
-  `--retrieval-decision baseline-retained|candidate-promoted`; it also verifies
-  that the current gate and retrieval settings still match the reviewed
-  holdout-backed decisions before freezing or running the optional provisional
-  boundary check
-- `sage stage experiments full` is the two-command replay path for a known
-  Stage 2 decision: pair it with `sage reset experiments` when you want one
-  command to rerun calibration, holdout, and finalize without removing the
-  explicit decision requirements
-- `sage eval run` now expects the finalized Stage 2 handoff metadata in the
-  frozen faithfulness manifest; direct `materialize_faithfulness_cases.py`
-  output alone is not enough for the canonical Stage 3 workflow
-- `sage eval run` now evaluates the full frozen `faithfulness_cases` set by
-  default; use `--samples <n>` only when you explicitly want a deterministic
-  stratified sample
-- RAGAS scope is now configured separately via `--ragas-samples`; leaving it at
-  the default runs the reference metric on the full evaluated case set
-- Skip `sage data build` after a successful bulk indexing run unless you explicitly want to rebuild the hosted collection locally.
-- `sage demo` is still useful as an ad hoc smoke test, but it is not the Stage 2 handoff artifact.
-- the holdout and faithfulness artifacts now carry lightweight, report-only
-  query-slice summaries for recency-sensitive and complaint-oriented asks
-- `sage eval boundary` can be used as a late-Stage-2 guardrail check, but its
-  saved diagnostics are still provisional until the formal Stage 3 pass
-- For day-to-day work, prefer the CLI directly when a CLI entrypoint exists.
-- `sage eval summary` only becomes meaningful after a fresh evaluation run has
-  been saved.
+The repo does not ship a pre-built metric snapshot. The first `sage eval run` after a successful corpus indexing and calibration run becomes the baseline for the working cycle. `sage eval run` enforces a promotion gate and exits non-zero if the run is below threshold, incomplete, or sampled — preventing a dev-lane result from silently becoming the canonical headline.
 
 ---
 
@@ -299,49 +170,21 @@ Health check, Prometheus metrics, and cache statistics.
 
 ---
 
-## Evaluation
-
-```bash
-sage eval dev        # run the sampled Stage 3 dev lane
-sage eval run        # generate the full evaluation suite after Stage 1/2
-sage eval summary    # print the latest saved evaluation snapshot, if one exists
-python scripts/evaluate_boundary_behavior.py  # run the boundary_eval guardrail benchmark directly
-sage reset eval-dev --dry-run
-```
-
-The checked-in repo intentionally does not ship a local metric snapshot. Treat
-the first saved Stage 3 run as the baseline for the current working cycle.
-`sage eval run` now expects frozen Stage 2 faithfulness cases to exist under
-`data/explanations/faithfulness_cases.jsonl`.
-It also evaluates the full frozen case set by default and records explicit
-scope metadata when you choose a sampled run or a separately sampled RAGAS
-reference pass.
-The dedicated boundary benchmark writes `boundary_behavior_latest.json` under
-`data/eval_results/` for canonical full-scope runs. Query-limited boundary
-smokes now write `boundary_behavior_dev_latest.json` instead so they cannot
-overwrite the trusted Stage 2 / Stage 3 guardrail artifact.
-The exact Stage 3 entry criteria, invariants, outputs, and completion test now
-live in [data/README.md](/Users/victoriaalabi/Projects/sage/data/README.md).
-The same file now also contains both the canonical full-scope Stage 3 path and
-the cleaner sampled dev-iteration path.
-
----
-
-## Project Structure (Key Directories)
+## Project Structure
 
 ```
 sage/
-├── adapters/       # External integrations (Qdrant, LLM, verification)
+├── adapters/       # External integrations (Qdrant, LLM, HHEM verification)
 ├── api/            # FastAPI routes, middleware, Prometheus metrics
 ├── config/         # Settings, logging, thresholds
 ├── core/           # Domain models, aggregation, verification, chunking
-├── services/       # Business logic (retrieval, explanation, cache)
+├── services/       # Business logic (retrieval, explanation, evaluation, cache)
 scripts/
-├── pipeline.py     # Data ingestion and embedding
-├── evaluation.py   # Retrieval evaluation and baselines
-├── evaluate_boundary_behavior.py # Guardrail benchmark for refusal/clarification behavior
-├── faithfulness.py # Explanation verification and grounding checks
-├── load_test.py    # Hosted latency and cache behavior measurement
+├── pipeline.py                       # Data ingestion and embedding
+├── evaluation.py                     # Retrieval evaluation (NDCG, Hit, Recall, MRR)
+├── faithfulness.py                   # HHEM + RAGAS explanation verification
+├── evaluate_boundary_behavior.py     # Refusal/clarification guardrail benchmark
+├── load_test.py                      # Latency and cache behavior measurement
 ```
 
 ---
