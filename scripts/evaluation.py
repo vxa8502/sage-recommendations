@@ -569,7 +569,16 @@ def run_baseline_comparison(cases, train_records, all_products, product_embeddin
         if baseline > 0:
             logger.info("  vs %s: +%.1f%%", name, (rag / baseline - 1) * 100)
 
-    return results
+    return {
+        name: {
+            "ndcg_at_10": report.ndcg_at_k,
+            "hit_at_10": report.hit_at_k,
+            "mrr": report.mrr,
+            "precision_at_10": report.precision_at_k,
+            "recall_at_10": report.recall_at_k,
+        }
+        for name, report in results.items()
+    }
 
 
 # ============================================================================
@@ -687,7 +696,9 @@ def main():
                 for _ in range(count)
             ]
         if train_records is not None:
-            run_baseline_comparison(cases, train_records, all_products, item_embeddings)
+            all_results["experiments"]["baselines"] = run_baseline_comparison(
+                cases, train_records, all_products, item_embeddings
+            )
         else:
             logger.warning("Skipping baselines - no data available")
 
