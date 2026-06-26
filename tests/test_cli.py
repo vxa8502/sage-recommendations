@@ -170,11 +170,12 @@ def test_eval_dev_parser_defaults():
 def test_command_eval_dev_delegates_to_eval_with_dev_defaults(monkeypatch):
     recorded = {}
 
-    def fake_run_eval(*, samples, ragas_samples, url, requests):
+    def fake_run_eval(*, samples, ragas_samples, url, requests, enforce_gate):
         recorded["samples"] = samples
         recorded["ragas_samples"] = ragas_samples
         recorded["url"] = url
         recorded["requests"] = requests
+        recorded["enforce_gate"] = enforce_gate
 
     monkeypatch.setattr(evaluation_cli, "_run_eval", fake_run_eval)
 
@@ -192,6 +193,7 @@ def test_command_eval_dev_delegates_to_eval_with_dev_defaults(monkeypatch):
         "ragas_samples": DEFAULT_DEV_RAGAS_SAMPLES,
         "url": "https://example.com",
         "requests": DEFAULT_DEV_REQUESTS,
+        "enforce_gate": False,
     }
 
 
@@ -227,6 +229,7 @@ def test_eval_workflow_passes_full_scope_defaults_to_faithfulness_script(
         ragas_samples=None,
         url="https://example.com",
         requests=25,
+        enforce_gate=True,
     )
 
     assert len(recorded_steps) == 8
@@ -291,6 +294,7 @@ def test_eval_workflow_rejects_incomplete_current_cycle_artifacts(monkeypatch):
             ragas_samples=None,
             url="https://example.com",
             requests=25,
+            enforce_gate=True,
         )
 
 

@@ -28,7 +28,13 @@ def _write_complete_eval_artifacts(
                 "ndcg_at_10": ndcg_at_10,
                 "hit_at_10": 0.33,
                 "mrr": 0.16,
-            }
+            },
+            "experiments": {
+                "baselines": {
+                    "random": {"ndcg_at_10": 0.000},
+                    "item_knn": {"ndcg_at_10": 0.134},
+                }
+            },
         },
     )
     _write_json(
@@ -85,14 +91,14 @@ def test_eval_status_passes_when_required_artifacts_are_complete(tmp_path: Path)
 def test_eval_status_withholds_reportable_when_retrieval_floor_is_missed(
     tmp_path: Path,
 ):
-    _write_complete_eval_artifacts(tmp_path, ndcg_at_10=0.10)
+    _write_complete_eval_artifacts(tmp_path, ndcg_at_10=0.05)
 
     status = build_eval_status(results_dir=tmp_path)
 
     assert status["execution_complete"] is True
     assert status["reportable_green"] is False
     assert any(
-        "NDCG@10=0.100 < 0.150" in reason for reason in status["reportable_reasons"]
+        "NDCG@10=0.050 < 0.100" in reason for reason in status["reportable_reasons"]
     )
 
 

@@ -420,7 +420,7 @@ def test_stage_experiments_all_runs_check_calibrate_and_holdout(monkeypatch, cap
     assert calls[0]["analysis_path"] is None
     assert calls[0]["holdout_output"] is None
     output = capsys.readouterr().out
-    assert "Stage 2 decision artifacts ready" in output
+    assert "Config decision artifacts ready" in output
     assert "stage experiments finalize" in output
 
 
@@ -457,7 +457,7 @@ def test_stage_experiments_all_reports_diagnostic_only_holdout(monkeypatch, caps
     assert len(calls) == 1
     assert calls[0]["subsets"] == "faithfulness_dev_seed"
     output = capsys.readouterr().out
-    assert "Stage 2 diagnostic artifacts ready" in output
+    assert "Diagnostic artifacts ready" in output
     assert "rerun holdout with `retrieval_dev_holdout`" in output
     assert "reserved for later case freezing" in output
 
@@ -769,7 +769,7 @@ def test_stage_experiments_finalize_rejects_conflicting_retrieval_override(
 
     with pytest.raises(
         SystemExit,
-        match="finalize retrieval arguments do not match the chosen Stage 2 retrieval decision",
+        match="finalize retrieval arguments do not match the chosen retrieval decision",
     ):
         experiment_finalize_commands.command_stage_experiments_finalize(
             argparse.Namespace(
@@ -1619,7 +1619,7 @@ def test_ensure_stage2_decision_ready_rejects_config_mismatch(monkeypatch):
         },
     )
 
-    with pytest.raises(SystemExit, match="does not match the chosen Stage 2 decision"):
+    with pytest.raises(SystemExit, match="does not match the chosen decision"):
         experiment_gate_decisions.ensure_stage2_decision_ready(
             decision="candidate-promoted",
         )
@@ -1932,7 +1932,7 @@ def test_ensure_stage2_decision_ready_rejects_query_bank_identity_mismatch(
 
     _patch_experiment_symbol(monkeypatch, "_load_json_object", fake_load_json_object)
 
-    with pytest.raises(SystemExit, match="different Stage 1 query bank"):
+    with pytest.raises(SystemExit, match="different corpus query bank"):
         experiment_gate_decisions.ensure_stage2_decision_ready()
 
 
@@ -2120,7 +2120,7 @@ def test_ensure_stage2_retrieval_decision_ready_rejects_config_mismatch(
 
     with pytest.raises(
         SystemExit,
-        match="does not match the chosen Stage 2 retrieval decision",
+        match="does not match the chosen retrieval decision",
     ):
         experiment_retrieval_decisions.ensure_stage2_retrieval_decision_ready(
             decision="candidate-promoted",
@@ -2584,7 +2584,7 @@ def test_ensure_stage2_retrieval_decision_ready_rejects_corpus_fingerprint_misma
 
     with pytest.raises(
         SystemExit,
-        match="generated against a different Stage 1 corpus fingerprint",
+        match="generated against a different corpus fingerprint",
     ):
         experiment_retrieval_decisions.ensure_stage2_retrieval_decision_ready()
 
@@ -2918,7 +2918,7 @@ def test_record_stage2_handoff_metadata_writes_expected_schema(tmp_path: Path):
     stage2_note = (
         "This manifest was finalized through `sage stage experiments finalize`, "
         "which verified the current repo retrieval and gate configs against "
-        "recorded Stage 2 decisions before freezing Stage 3 inputs."
+        "recorded config decisions before freezing evaluation inputs."
     )
 
     experiment_handoff_metadata._record_stage2_handoff_metadata(

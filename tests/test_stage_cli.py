@@ -510,63 +510,6 @@ def test_build_bank_rejects_incomplete_ingestion_outputs(monkeypatch, tmp_path: 
         )
 
 
-def test_prepare_kaggle_kernel_workspace_writes_metadata(monkeypatch, tmp_path: Path):
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-
-    def fake_mkdtemp(prefix: str = "") -> str:
-        assert prefix.startswith("sage-stage-data-")
-        return str(workspace)
-
-    monkeypatch.setattr(stage_kaggle.tempfile, "mkdtemp", fake_mkdtemp)
-    monkeypatch.delenv("SAGE_KAGGLE_KERNEL_TITLE", raising=False)
-
-    prepared = stage_kaggle._prepare_kaggle_kernel_workspace(
-        kernel_ref="victoria/sage-stage-data",
-        package_dataset="owner/sage-package",
-        accelerator="NvidiaTeslaT4",
-        subset_size=250_000,
-    )
-
-    metadata = json.loads(
-        (prepared / "kernel-metadata.json").read_text(encoding="utf-8")
-    )
-    stage_config = json.loads(
-        (prepared / "sage_stage_config.json").read_text(encoding="utf-8")
-    )
-    assert prepared == workspace
-    assert (prepared / "kaggle_pipeline.py").exists()
-    assert metadata["id"] == "victoria/sage-stage-data"
-    assert metadata["title"] == "Sage Stage Data"
-    assert metadata["dataset_sources"] == ["owner/sage-package"]
-    assert metadata["code_file"] == "kaggle_pipeline.py"
-    assert metadata["enable_gpu"] is True
-    assert "keywords" not in metadata
-    assert stage_config == {"subset_size": 250_000}
-
-
-def test_prepare_kaggle_kernel_workspace_can_disable_gpu(monkeypatch, tmp_path: Path):
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-
-    def fake_mkdtemp(prefix: str = "") -> str:
-        assert prefix.startswith("sage-stage-data-")
-        return str(workspace)
-
-    monkeypatch.setattr(stage_kaggle.tempfile, "mkdtemp", fake_mkdtemp)
-
-    prepared = stage_kaggle._prepare_kaggle_kernel_workspace(
-        kernel_ref="victoria/sage-stage-data",
-        package_dataset="owner/sage-package",
-        accelerator="none",
-        subset_size=1_000_000,
-    )
-
-    metadata = json.loads(
-        (prepared / "kernel-metadata.json").read_text(encoding="utf-8")
-    )
-    assert metadata["enable_gpu"] is False
-
 
 def test_run_kaggle_stage_kernel_uses_metadata_not_push_flag(monkeypatch):
     workspace = Path("/tmp/sage-stage-data-workspace")

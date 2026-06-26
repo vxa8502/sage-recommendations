@@ -388,6 +388,18 @@ def test_run_evaluation_uses_frozen_manifest_reference(monkeypatch, tmp_path):
                 premise_length=42,
             )
 
+        def check_batch(self, pairs):
+            return [
+                HallucinationResult(
+                    score=0.9,
+                    is_hallucinated=False,
+                    threshold=0.5,
+                    explanation=explanation,
+                    premise_length=42,
+                )
+                for _evidence_texts, explanation in pairs
+            ]
+
     monkeypatch.setattr(
         "sage.services.get_explanation_services",
         lambda: (_FakeExplainer(), _FakeDetector()),
