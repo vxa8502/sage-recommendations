@@ -66,7 +66,7 @@ def command_stage_data_check(_args: argparse.Namespace) -> None:
 
     if missing:
         raise SystemExit(
-            "ERROR: Stage 1 prerequisites are incomplete: " + ", ".join(missing)
+            "ERROR: Prerequisites are incomplete: " + ", ".join(missing)
         )
 
 
@@ -212,4 +212,4 @@ def command_stage_data_all(args: argparse.Namespace) -> None:
         allow_overwrite=args.allow_overwrite,
         chunk_manifest=chunk_manifest_path,
     )
-    print("Stage 1 data staging complete")
+    print("Data ingestion complete")

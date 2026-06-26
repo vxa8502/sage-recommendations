@@ -128,7 +128,7 @@ def add_faithfulness_parsers(
 
     boundary_parser = subparsers.add_parser(
         "boundary",
-        help="Run the provisional Stage 2 boundary guardrail check",
+        help="Run the provisional boundary guardrail check",
     )
     _add_query_bank_path_argument(boundary_parser)
     boundary_parser.add_argument(

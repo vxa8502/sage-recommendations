@@ -28,7 +28,7 @@ def _validate_subset_size_against_anchor(
     try:
         payload = load_optional_json_object_file(
             anchor_path,
-            description="Stage 1 corpus anchor",
+            description="corpus anchor",
         )
     except (FileNotFoundError, ValueError):
         return

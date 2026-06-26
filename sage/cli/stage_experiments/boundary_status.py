@@ -28,7 +28,7 @@ def _boundary_latest_status(*, query_bank_path: Path) -> dict[str, object]:
         subset_tag="boundary_eval",
         current_corpus_fingerprint=current_corpus_fingerprint,
         corpus_alignment_error=corpus_alignment_error,
-        corpus_mismatch_label="Stage 1 corpus fingerprint",
+        corpus_mismatch_label="corpus fingerprint",
     )
 
     return {

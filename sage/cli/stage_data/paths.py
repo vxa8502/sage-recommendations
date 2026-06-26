@@ -80,7 +80,7 @@ def _stage_indexed_product_ids_summary() -> dict[str, object]:
     try:
         payload = load_optional_json_object_file(
             _stage_indexed_product_ids_path(),
-            description="Stage 1 corpus anchor",
+            description="corpus anchor",
         )
     except (FileNotFoundError, ValueError):
         payload = {}

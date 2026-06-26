@@ -27,7 +27,7 @@ def add_retrieval_parsers(
 ) -> None:
     fit_parser = subparsers.add_parser(
         "fit-retrieval",
-        help="Run the fit-side retrieval comparison lane on judged Stage 2 queries",
+        help="Run the fit-side retrieval comparison lane on judged retrieval queries",
     )
     _add_query_bank_path_argument(fit_parser)
     _add_retrieval_output_argument(

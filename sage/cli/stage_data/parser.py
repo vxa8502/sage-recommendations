@@ -100,7 +100,7 @@ def _add_check_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "check",
-        help="Validate local Stage 1 tooling, auth, and current artifacts",
+        help="Validate local tooling, auth, and current artifacts",
     )
     parser.set_defaults(
         func=_lazy_command("sage.cli.stage_data.commands", "command_stage_data_check")
@@ -151,12 +151,12 @@ def _add_run_kaggle_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "run-kaggle",
-        help="Push the Kaggle Stage 1 kernel and optionally wait for completion",
+        help="Push the Kaggle indexing kernel and optionally wait for completion",
     )
     _add_run_kaggle_options(parser)
     _add_kaggle_wait_arguments(
         parser,
-        wait_help="Poll Kaggle until the Stage 1 run completes",
+        wait_help="Poll Kaggle until the indexing run completes",
     )
     parser.set_defaults(
         func=_lazy_command(
@@ -170,7 +170,7 @@ def _add_status_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "status",
-        help="Show Stage 1 local artifact status and Kaggle run status",
+        help="Show local corpus artifact status and Kaggle run status",
     )
     parser.set_defaults(
         func=_lazy_command("sage.cli.stage_data.commands", "command_stage_data_status")
@@ -182,7 +182,7 @@ def _add_pull_artifacts_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "pull-artifacts",
-        help="Download indexed_product_ids.json from the latest Kaggle Stage 1 run",
+        help="Download indexed_product_ids.json from the latest Kaggle indexing run",
     )
     _add_kaggle_wait_arguments(
         parser,
@@ -196,7 +196,7 @@ def _add_pull_artifacts_parser(
     parser.add_argument(
         "--allow-overwrite",
         action="store_true",
-        help="Refresh existing local Stage 1 artifact downloads in place",
+        help="Refresh existing local corpus artifact downloads in place",
     )
     parser.set_defaults(
         func=_lazy_command(
@@ -210,7 +210,7 @@ def _add_build_bank_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "build-bank",
-        help="Build the canonical query bank and manifest from Stage 1 inputs",
+        help="Build the canonical query bank and manifest from corpus inputs",
     )
     parser.add_argument(
         "--subset-size",
@@ -251,7 +251,7 @@ def _add_all_parser(
 ) -> None:
     parser = subparsers.add_parser(
         "all",
-        help="Run the full Stage 1 data-staging critical path",
+        help="Run the full data ingestion critical path",
     )
     parser.add_argument(
         "--force-fetch",
@@ -291,7 +291,7 @@ def _add_all_parser(
     parser.add_argument(
         "--allow-overwrite",
         action="store_true",
-        help="Refresh existing local Stage 1 outputs in place instead of blocking",
+        help="Refresh existing local corpus outputs in place instead of blocking",
     )
     parser.set_defaults(
         func=_lazy_command("sage.cli.stage_data.commands", "command_stage_data_all")
@@ -303,7 +303,7 @@ def add_stage_data_parser(
 ) -> None:
     parser = stage_subparsers.add_parser(
         "data",
-        help="Stage 1 data-staging workflows",
+        help="Data ingestion workflows",
     )
     subparsers = parser.add_subparsers(dest="stage_data_command", required=True)
 

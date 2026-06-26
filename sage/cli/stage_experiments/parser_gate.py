@@ -85,7 +85,7 @@ def add_gate_parsers(
 
     all_parser = subparsers.add_parser(
         "all",
-        help="Run the clean Stage 2 decision-artifact path through calibration and holdout",
+        help="Run the clean config decision-artifact path through calibration and holdout",
     )
     _add_query_bank_path_argument(all_parser)
     _add_calibration_artifact_arguments(all_parser)

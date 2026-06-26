@@ -114,4 +114,4 @@ def _pull_stage_artifacts(
             "ERROR: Kaggle output download completed, but data/indexed_product_ids.json "
             "was not found."
         )
-    print(f"Pulled Stage 1 artifacts into {destination}")
+    print(f"Pulled corpus artifacts into {destination}")

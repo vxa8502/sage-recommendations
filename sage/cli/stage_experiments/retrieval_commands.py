@@ -155,7 +155,7 @@ def command_stage_experiments_all_retrieval(args: argparse.Namespace) -> None:
         candidate_profile_label=getattr(args, "candidate_profile_label", None),
     )
 
-    print("Stage 2 retrieval artifacts ready")
+    print("Retrieval artifacts ready")
     print("Suggested next steps:")
     print(f"  - inspect {display_path(fit_output)}")
     print(

@@ -112,7 +112,7 @@ def _resolve_finalize_runtime_config(
     ]
     if expected_retrieval_config is None:
         raise SystemExit(
-            "ERROR: finalize could not resolve the chosen Stage 2 retrieval "
+            "ERROR: finalize could not resolve the chosen retrieval "
             "decision into a runtime config."
         )
     expected_min_rating = expected_retrieval_config["min_rating"]
@@ -121,7 +121,7 @@ def _resolve_finalize_runtime_config(
         requested_min_rating is not None and requested_min_rating != expected_min_rating
     ) or requested_aggregation != expected_aggregation:
         raise SystemExit(
-            "ERROR: finalize retrieval arguments do not match the chosen Stage 2 "
+            "ERROR: finalize retrieval arguments do not match the chosen "
             "retrieval decision.\n"
             f"Expected aggregation={expected_aggregation!r}, "
             f"min_rating={expected_min_rating!r}; found "
@@ -134,7 +134,7 @@ def _resolve_finalize_runtime_config(
     expected_threshold = decision_context["expected_runtime_threshold"]
     if expected_threshold is None:
         raise SystemExit(
-            "ERROR: finalize could not resolve the chosen Stage 2 gate decision "
+            "ERROR: finalize could not resolve the chosen gate decision "
             "into a runtime threshold."
         )
     return _FinalizeRuntimeConfig(
@@ -243,7 +243,7 @@ def _verify_finalize_manifest(
     manifest = _load_json_object(manifest_path)
     if manifest is None:
         raise SystemExit(
-            f"ERROR: Stage 2 finalize could not verify {label} because "
+            f"ERROR: Finalize could not verify {label} because "
             f"{display_path(manifest_path)} is missing or invalid."
         )
     identity_error = _query_bank_identity_error(
@@ -274,11 +274,11 @@ def _verify_finalize_seed_bundle_manifests(
             manifest_path=bundle_paths["manifest_path"],
             label=f"the frozen {surface_label} seed bundle manifest",
             identity_error_title=(
-                "ERROR: Stage 2 finalize froze "
+                "ERROR: Finalize froze "
                 f"{surface_label} seed bundles against the wrong canonical query bank:"
             ),
             sample_limited_error=(
-                "ERROR: Stage 2 finalize cannot freeze canonical "
+                "ERROR: Finalize cannot freeze canonical "
                 f"{surface_label} faithfulness seed bundles from a query-limited "
                 "bundle-freeze run."
             ),
@@ -308,11 +308,11 @@ def _materialize_and_verify_finalize_cases(
         manifest_path=paths.case_paths["manifest_path"],
         label="the frozen manifest",
         identity_error_title=(
-            "ERROR: Stage 2 finalize materialized cases against the wrong "
+            "ERROR: Finalize materialized cases against the wrong "
             "canonical query bank:"
         ),
         sample_limited_error=(
-            "ERROR: Stage 2 finalize cannot freeze canonical faithfulness artifacts "
+            "ERROR: Finalize cannot freeze canonical faithfulness artifacts "
             "from a query-limited materialization run."
         ),
         decision_context=decision_context,
@@ -357,7 +357,7 @@ def _run_finalize_boundary_completion(
 
 
 def _print_finalize_next_steps(*, paths: _FinalizePaths, with_boundary: bool) -> None:
-    print("Stage 2 finalize complete")
+    print("Config finalization complete")
     print("Suggested next steps:")
     print(f"  - inspect {display_path(paths.dev_bundle_paths['manifest_path'])}")
     print(f"  - inspect {display_path(paths.final_bundle_paths['manifest_path'])}")
@@ -366,7 +366,7 @@ def _print_finalize_next_steps(*, paths: _FinalizePaths, with_boundary: bool) ->
         print(f"  - inspect {display_path(_boundary_latest_path())}")
     print(f"  - run '{cli_display_command('stage', 'experiments', 'status')}'")
     print(
-        f"  - run '{cli_display_command('eval', 'run')}' when you are ready for Stage 3"
+        f"  - run '{cli_display_command('eval', 'run')}' when you are ready for evaluation"
     )
 
 
@@ -578,11 +578,11 @@ def command_stage_experiments_all(args: argparse.Namespace) -> None:
     )
     sample_limited = getattr(args, "query_limit", None) is not None
     if sample_limited:
-        print("Stage 2 dry-run artifacts ready")
+        print("Dry-run artifacts ready")
     elif promotion_eligible:
-        print("Stage 2 decision artifacts ready")
+        print("Config decision artifacts ready")
     else:
-        print("Stage 2 diagnostic artifacts ready")
+        print("Diagnostic artifacts ready")
     print("Suggested next steps:")
     print(
         f"  - inspect {display_path(_gate_calibration_analysis_path(getattr(args, 'analysis_path', None)))}"
@@ -593,7 +593,7 @@ def command_stage_experiments_all(args: argparse.Namespace) -> None:
     if sample_limited:
         print(
             "  - rerun without `--query-limit` before using these artifacts for a "
-            "canonical Stage 2 decision"
+            "canonical config decision"
         )
     elif promotion_eligible:
         print(

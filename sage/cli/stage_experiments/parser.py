@@ -14,7 +14,7 @@ def _add_status_parsers(
 ) -> None:
     check_parser = subparsers.add_parser(
         "check",
-        help="Validate Stage 2 prerequisites against the staged corpus, query bank, and Qdrant",
+        help="Validate experiment prerequisites against the staged corpus, query bank, and Qdrant",
     )
     _add_query_bank_path_argument(check_parser)
     check_parser.set_defaults(
@@ -26,7 +26,7 @@ def _add_status_parsers(
 
     status_parser = subparsers.add_parser(
         "status",
-        help="Show Stage 2 artifact status and the current gate configuration",
+        help="Show experiment artifact status and the current gate configuration",
     )
     _add_query_bank_path_argument(status_parser)
     status_parser.set_defaults(
@@ -42,7 +42,7 @@ def add_stage_experiments_parser(
 ) -> None:
     parser = stage_subparsers.add_parser(
         "experiments",
-        help="Stage 2 experimentation and handoff workflows",
+        help="Retrieval experimentation and handoff workflows",
     )
     subparsers = parser.add_subparsers(
         dest="stage_experiments_command",

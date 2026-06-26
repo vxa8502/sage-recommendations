@@ -106,7 +106,7 @@ def _ensure_stage2_handoff_context(
 
     if errors:
         _raise_stage2_consistency_error(
-            title="Stage 2 handoff is incomplete or inconsistent for `sage eval run`",
+            title="Experiment handoff is incomplete or inconsistent for `sage eval run`",
             errors=errors,
             next_step=(
                 "Re-run `sage stage experiments finalize --decision ... "

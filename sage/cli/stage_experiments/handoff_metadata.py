@@ -21,7 +21,7 @@ def _record_stage2_handoff_metadata(
     manifest = _load_json_object(manifest_path)
     if manifest is None:
         raise SystemExit(
-            "ERROR: Stage 2 finalize could not update the frozen manifest metadata "
+            "ERROR: Finalize could not update the frozen manifest metadata "
             f"because {manifest_path} is missing or invalid JSON."
         )
 
@@ -67,7 +67,7 @@ def _record_stage2_handoff_metadata(
     note = (
         "This manifest was finalized through `sage stage experiments finalize`, "
         "which verified the current repo retrieval and gate configs against "
-        "recorded Stage 2 decisions before freezing Stage 3 inputs."
+        "recorded config decisions before freezing evaluation inputs."
     )
     if isinstance(notes, list):
         if note not in notes:

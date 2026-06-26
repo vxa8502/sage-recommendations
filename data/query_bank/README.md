@@ -1,20 +1,20 @@
-# Query Bank Staging
+# Query Bank
 
-This directory starts empty in Stage 0.
+This directory starts empty in the scaffold state.
 
-Its purpose is to hold the query-side artifacts produced during Stage 1 data
-staging, not to ship those artifacts in the checked-in scaffold.
+Its purpose is to hold the query-side artifacts produced during corpus indexing
+and data ingestion, not to ship those artifacts in the checked-in scaffold.
 
 ## Critical Path
 
-The required Stage 1 flow is:
+The required data ingestion flow is:
 
 1. `sage stage data fetch-queries`
 2. `sage stage data run-kaggle --wait`
 3. `sage stage data pull-artifacts`
 4. `sage stage data build-bank`
 
-Required Stage 1 outputs:
+Required corpus outputs:
 
 - `data/indexed_product_ids.json`
 - `data/query_bank/query_bank.jsonl`

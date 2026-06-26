@@ -41,7 +41,7 @@ from ..shared import display_path, normalize_string_list
 
 def _load_json_object(path: str | Path) -> dict[str, object] | None:
     try:
-        return load_optional_json_object_file(path, description="Stage 2 artifact")
+        return load_optional_json_object_file(path, description="experiment artifact")
     except (FileNotFoundError, ValueError):
         return None
 
@@ -192,7 +192,7 @@ def _query_bank_identity_error(
 
     if artifact_identity["query_bank_sha256"] != current_identity["query_bank_sha256"]:
         return (
-            f"{display_path(artifact_path)} was generated from a different Stage 1 "
+            f"{display_path(artifact_path)} was generated from a different corpus "
             "query bank than the current canonical bank."
         )
     return None
@@ -231,7 +231,7 @@ def _artifact_corpus_alignment_error(
     if artifact_corpus_fingerprint != anchor["corpus_fingerprint"]:
         return (
             f"{display_path(artifact_path)} was generated against a different "
-            "Stage 1 corpus fingerprint."
+            "corpus fingerprint."
         )
     return None
 

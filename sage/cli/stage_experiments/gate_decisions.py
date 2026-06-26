@@ -68,7 +68,7 @@ def _ensure_stage2_decision_context(
     if _artifact_summary_is_sample_limited(calibration_analysis):
         errors.append(
             f"{display_path(resolved_calibration_analysis_path)} was generated from "
-            "a query-limited calibration run and cannot support a canonical Stage 2 "
+            "a query-limited calibration run and cannot support a canonical "
             "decision."
         )
 
@@ -133,7 +133,7 @@ def _ensure_stage2_decision_context(
         errors.append(
             f"{display_path(resolved_holdout_output_path)} evaluated "
             f"`{DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG}` with a query limit; "
-            "rerun holdout on the full promotion slice before finalizing Stage 2."
+            "rerun holdout on the full promotion slice before finalizing the config."
         )
     if (
         recommended_threshold is not None
@@ -150,7 +150,7 @@ def _ensure_stage2_decision_context(
         decision,
         baseline=baseline_threshold,
         candidate=candidate_threshold,
-        error_label="Stage 2 decision",
+        error_label="config decision",
         errors=errors,
     )
 
@@ -160,18 +160,18 @@ def _ensure_stage2_decision_context(
     )
     if decision is not None and expected_runtime_threshold is None:
         errors.append(
-            "unable to verify the chosen Stage 2 decision against the holdout "
+            "unable to verify the chosen config decision against the holdout "
             "artifact because the expected threshold payload is missing."
         )
     elif decision is not None and not current_config_matches_decision:
         errors.append(
-            "current repo gate config does not match the chosen Stage 2 decision. "
+            "current repo gate config does not match the chosen decision. "
             f"Expected {expected_runtime_threshold}, found {current_config}."
         )
 
     if errors:
         _raise_stage2_consistency_error(
-            title="Stage 2 decision artifacts are incomplete or inconsistent",
+            title="Config decision artifacts are incomplete or inconsistent",
             errors=errors,
             next_step=(
                 "Review the holdout artifact, update `sage/config/__init__.py` if "

@@ -16,7 +16,7 @@ def _parse_holdout_subset_selection(raw: str | None) -> list[str]:
         parse_unique_csv_strings(
             str(raw),
             field_name="subsets",
-            context="Stage 2 holdout subset selection",
+            context="holdout subset selection",
         )
     )
 

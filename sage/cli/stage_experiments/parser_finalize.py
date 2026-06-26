@@ -41,7 +41,7 @@ def add_finalize_parsers(
         "full",
         help=(
             "Run calibration, holdout, and finalize in one explicit command "
-            "for an already-reviewed Stage 2 decision"
+            "for an already-reviewed config decision"
         ),
     )
     _add_query_bank_path_argument(full_parser)
@@ -80,7 +80,7 @@ def add_finalize_parsers(
     finalize_parser = subparsers.add_parser(
         "finalize",
         help=(
-            "Verify the Stage 2 gate and retrieval decisions, then freeze "
+            "Verify the gate and retrieval decisions, then freeze "
             "faithfulness artifacts from the chosen config"
         ),
     )

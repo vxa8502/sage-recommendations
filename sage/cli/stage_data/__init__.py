@@ -1,3 +1,3 @@
-"""Stage 1 data-staging CLI internals."""
+"""Data ingestion CLI internals."""
 
 from __future__ import annotations

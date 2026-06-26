@@ -46,7 +46,7 @@ def _validate_seed_bundle_manifest(
     ):
         errors.append(
             f"{display_path(path)} was frozen from a retrieval config that does not "
-            "match the finalized Stage 2 retrieval decision."
+            "match the finalized retrieval decision."
         )
 
 
@@ -144,7 +144,7 @@ def _validate_current_seed_bundle_manifest(
     ):
         errors.append(
             f"{display_path(current_manifest_path)} was frozen from a retrieval "
-            "config that does not match the finalized Stage 2 retrieval decision."
+            "config that does not match the finalized retrieval decision."
         )
 
     if _seed_bundle_signature(source_manifest) != _seed_bundle_signature(
@@ -153,5 +153,5 @@ def _validate_current_seed_bundle_manifest(
         errors.append(
             f"{display_path(cases_manifest_path)} was materialized from seed bundles "
             "that no longer match the current canonical seed bundle manifest. "
-            "Re-freeze bundles and re-materialize cases before running Stage 3."
+            "Re-freeze bundles and re-materialize cases before running evaluation."
         )

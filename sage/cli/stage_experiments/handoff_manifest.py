@@ -65,7 +65,7 @@ def _stage2_handoff_payload(
     errors.append(
         f"{display_path(manifest_path)} is missing `stage2_handoff`; use "
         "`sage stage experiments finalize --decision ... --retrieval-decision ...` "
-        "to freeze the canonical Stage 2 handoff."
+        "to freeze the canonical experiment handoff."
     )
     return {}
 
@@ -191,7 +191,7 @@ def _validate_current_runtime_configs(
         current_config, expected_threshold
     ):
         errors.append(
-            "current repo gate config does not match the finalized Stage 2 handoff "
+            "current repo gate config does not match the finalized experiment handoff "
             f"manifest. Expected {expected_threshold}, found {current_config}."
         )
 
@@ -201,7 +201,7 @@ def _validate_current_runtime_configs(
         expected_retrieval_config,
     ):
         errors.append(
-            "current repo retrieval config does not match the finalized Stage 2 "
+            "current repo retrieval config does not match the finalized experiment "
             f"handoff manifest. Expected {expected_retrieval_config}, found "
             f"{current_retrieval_config}."
         )
@@ -228,7 +228,7 @@ def _validate_manifest_retrieval_config(
     ):
         errors.append(
             f"{display_path(manifest_path)} was materialized from a retrieval config "
-            "that does not match the finalized Stage 2 retrieval decision."
+            "that does not match the finalized retrieval decision."
         )
 
 
@@ -264,5 +264,5 @@ def _validate_manifest_corpus_alignment(
         if manifest_corpus_fingerprint != anchor["corpus_fingerprint"]:
             errors.append(
                 f"{display_path(manifest_path)} was frozen against a different "
-                "corpus fingerprint than the current Stage 1 anchor."
+                "corpus fingerprint than the current corpus anchor."
             )

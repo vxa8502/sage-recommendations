@@ -58,7 +58,7 @@ def _build_stage_bank(
         raise SystemExit(
             "ERROR: Checked-in manual boundary source not found at "
             f"{manual_boundary_path}. Restore it before rebuilding the canonical "
-            "Stage 1 bank."
+            "corpus bank."
         )
     if not indexed_product_ids.exists():
         raise SystemExit(
@@ -104,7 +104,7 @@ def _build_stage_bank(
 
     if not _stage_canonical_bank_path().exists() or not _stage_manifest_path().exists():
         raise SystemExit(
-            "ERROR: Canonical query bank build completed, but the expected Stage 1 "
+            "ERROR: Canonical query bank build completed, but the expected corpus "
             "outputs were not found."
         )
     _validate_built_ingestion_query_bank(query_bank_path=_stage_canonical_bank_path())

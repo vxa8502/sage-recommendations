@@ -92,7 +92,7 @@ def _current_gate_threshold_config() -> ThresholdConfig:
     current_config = _normalize_threshold_payload(_current_gate_config())
     if current_config is None:
         raise SystemExit(
-            "ERROR: current repo gate config is invalid and cannot support Stage 2 "
+            "ERROR: current repo gate config is invalid and cannot support "
             "decision validation. Fix `sage/services/runtime_provenance.py` or "
             "`sage/config/__init__.py` before retrying."
         )
@@ -104,7 +104,7 @@ def _current_retrieval_runtime_config() -> RetrievalConfig:
     if current_config is None:
         raise SystemExit(
             "ERROR: current repo retrieval config is invalid and cannot support "
-            "Stage 2 decision validation. Fix `sage/services/runtime_provenance.py` "
+            "config decision validation. Fix `sage/services/runtime_provenance.py` "
             "or `sage/config/__init__.py` before retrying."
         )
     return current_config
@@ -142,7 +142,7 @@ def _ensure_stage2_boundary_guardrail_passed(
         )
     except SystemExit as exc:
         raise SystemExit(
-            "ERROR: Stage 2 finalize ran the provisional boundary guardrail, but it "
+            "ERROR: Finalize ran the provisional boundary guardrail, but it "
             "did not produce a canonical passing artifact.\n"
             f"{exc}"
         ) from exc
@@ -199,7 +199,7 @@ def _query_bank_manifest_alignment_error(*, query_bank_path: Path) -> str | None
     ):
         return (
             f"{display_path(manifest_path)} is missing `query_bank_sha256`; "
-            "rebuild the canonical query bank from the current Stage 1 sources."
+            "rebuild the canonical query bank from the current corpus sources."
         )
     actual_query_bank_sha = compute_file_sha256(query_bank_path)
     if manifest_query_bank_sha != actual_query_bank_sha:
@@ -265,11 +265,11 @@ def _require_stage2_artifact_prereqs(*, query_bank_path: Path) -> None:
     if missing:
         rendered = "\n".join(f"  - {item}" for item in missing)
         raise SystemExit(
-            "ERROR: Stage 2 local artifacts are incomplete:\n"
+            "ERROR: Local experiment artifacts are incomplete:\n"
             f"{rendered}\n"
             f"Run '{cli_display_command('stage', 'data', 'status')}' or "
             f"'{cli_display_command('stage', 'data', 'all')}' first, then "
-            "retry once the canonical Stage 2 inputs are rebuilt."
+            "retry once the canonical experiment inputs are rebuilt."
         )
 
 
@@ -292,7 +292,7 @@ def _require_stage2_runtime_prereqs(*, query_bank_path: Path) -> None:
     if missing:
         rendered = "\n".join(f"  - {item}" for item in missing)
         raise SystemExit(
-            "ERROR: Stage 2 runtime prerequisites are incomplete:\n"
+            "ERROR: Experiment runtime prerequisites are incomplete:\n"
             f"{rendered}\n"
             "Refresh the cluster or rerun "
             f"'{cli_display_command('qdrant', 'stamp-anchor')}' once the live "

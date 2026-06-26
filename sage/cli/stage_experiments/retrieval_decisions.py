@@ -147,7 +147,7 @@ def _ensure_stage2_retrieval_decision_context(
         errors.append(
             f"{display_path(resolved_fit_output_path)} evaluated {rendered_fit_subsets} "
             "with a query limit; rerun retrieval fit on the full canonical fit "
-            "surface before finalizing Stage 2."
+            "surface before finalizing the config."
         )
 
     holdout_sample_limited_subsets = _holdout_sample_limited_subsets(holdout_analysis)
@@ -156,7 +156,7 @@ def _ensure_stage2_retrieval_decision_context(
             f"{display_path(resolved_holdout_output_path)} evaluated "
             f"`{DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG}` with a query limit; "
             "rerun retrieval holdout on the full promotion slice before "
-            "finalizing Stage 2."
+            "finalizing the retrieval config."
         )
 
     if (
@@ -183,7 +183,7 @@ def _ensure_stage2_retrieval_decision_context(
         decision,
         baseline=holdout_baseline_config,
         candidate=holdout_candidate_config,
-        error_label="retrieval Stage 2 decision",
+        error_label="retrieval decision",
         errors=errors,
     )
 
@@ -193,20 +193,20 @@ def _ensure_stage2_retrieval_decision_context(
     )
     if decision is not None and expected_runtime_retrieval_config is None:
         errors.append(
-            "unable to verify the chosen retrieval Stage 2 decision against the "
+            "unable to verify the chosen retrieval decision against the "
             "holdout artifact because the expected retrieval config payload is "
             "missing."
         )
     elif decision is not None and not current_config_matches_decision:
         errors.append(
-            "current repo retrieval config does not match the chosen Stage 2 "
+            "current repo retrieval config does not match the chosen "
             "retrieval decision. "
             f"Expected {expected_runtime_retrieval_config}, found {current_config}."
         )
 
     if errors:
         _raise_stage2_consistency_error(
-            title="Stage 2 retrieval decision artifacts are incomplete or inconsistent",
+            title="Retrieval decision artifacts are incomplete or inconsistent",
             errors=errors,
             next_step=(
                 "Review the retrieval fit/holdout artifacts, update "
