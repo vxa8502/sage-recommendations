@@ -15,3 +15,4 @@
 !query_bank/sources/
 !query_bank/sources/.gitkeep
 !query_bank/sources/README.md
+!query_bank/sources/*.jsonl
