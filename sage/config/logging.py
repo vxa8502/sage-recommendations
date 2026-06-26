@@ -20,7 +20,8 @@ from collections.abc import Callable
 from typing import Any
 
 # API layer registers its request-ID provider here at startup; avoids importing api from config.
-_request_id_provider: Callable[[], str] = lambda: "-"
+def _request_id_provider() -> str:
+    return "-"
 
 
 def register_request_id_provider(fn: Callable[[], str]) -> None:
