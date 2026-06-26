@@ -19,6 +19,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
+
 # API layer registers its request-ID provider here at startup; avoids importing api from config.
 def _request_id_provider() -> str:
     return "-"

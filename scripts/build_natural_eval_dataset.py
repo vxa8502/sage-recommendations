@@ -12,7 +12,9 @@ from collections import Counter
 
 from sage.config import DATA_DIR, get_logger, log_banner, log_section
 from sage.core import EvalCase
-from sage.data.query_bank.sources.esci._config import DEFAULT_RETRIEVAL_FINAL_REPORT_SUBSET_TAG
+from sage.data.query_bank.sources.esci._config import (
+    DEFAULT_RETRIEVAL_FINAL_REPORT_SUBSET_TAG,
+)
 from sage.data.query_bank import (
     QueryBankSubsetEmptyError,
     load_eval_cases_from_query_bank,

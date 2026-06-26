@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from sage.data.query_bank.sources.esci._config import DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG
+from sage.data.query_bank.sources.esci._config import (
+    DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG,
+)
 
 DEFAULT_SUBSETS = (DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG,)
 PROMOTION_HOLDOUT_SUBSETS = frozenset({DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG})

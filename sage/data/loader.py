@@ -106,8 +106,10 @@ def _build_review_quality_masks(df: pd.DataFrame) -> dict[str, pd.Series]:
     missing_text = df["text"].isna()
     normalized_text = df["text"].fillna("").astype(str).str.strip()
     empty_text = ~missing_text & normalized_text.eq("")
-    very_short = ~missing_text & ~empty_text & normalized_text.str.len().lt(
-        MIN_REVIEW_TEXT_LENGTH
+    very_short = (
+        ~missing_text
+        & ~empty_text
+        & normalized_text.str.len().lt(MIN_REVIEW_TEXT_LENGTH)
     )
     invalid_ratings = ~df["rating"].between(1, 5)
     missing_user = df["user_id"].isna()
@@ -240,10 +242,14 @@ def validate_reviews(df: pd.DataFrame) -> dict:
     issues = {
         field_name: int(mask.sum())
         for field_name, mask in masks.items()
-        if field_name != "clean_rows" and field_name != "normalized_text" and int(mask.sum()) > 0
+        if field_name != "clean_rows"
+        and field_name != "normalized_text"
+        and int(mask.sum()) > 0
     }
 
-    duplicate_texts = masks["normalized_text"][~masks["missing_text"]].duplicated().sum()
+    duplicate_texts = (
+        masks["normalized_text"][~masks["missing_text"]].duplicated().sum()
+    )
     if duplicate_texts > 0:
         issues["duplicate_texts"] = int(duplicate_texts)
 

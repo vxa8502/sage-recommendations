@@ -61,7 +61,9 @@ def test_current_explainer_identity_keeps_client_pair_together() -> None:
     }
 
 
-def test_current_explainer_identity_uses_complete_wrapper_when_client_is_partial() -> None:
+def test_current_explainer_identity_uses_complete_wrapper_when_client_is_partial() -> (
+    None
+):
     explainer = SimpleNamespace(
         provider="wrapper-provider",
         model="wrapper-model",

@@ -48,7 +48,9 @@ async def health(request: Request):
 
     # Check Qdrant
     try:
-        qdrant_ok = await asyncio.to_thread(_routes_pkg.collection_exists, app.state.qdrant)
+        qdrant_ok = await asyncio.to_thread(
+            _routes_pkg.collection_exists, app.state.qdrant
+        )
     except Exception:
         logger.exception("Health check: Qdrant unreachable")
         qdrant_ok = False
@@ -86,7 +88,9 @@ async def ready(request: Request):
 
     # Check Qdrant connectivity
     try:
-        qdrant_ok = await asyncio.to_thread(_routes_pkg.collection_exists, app.state.qdrant)
+        qdrant_ok = await asyncio.to_thread(
+            _routes_pkg.collection_exists, app.state.qdrant
+        )
         components["qdrant"] = qdrant_ok
         if not qdrant_ok:
             messages.append("Qdrant collection not found")

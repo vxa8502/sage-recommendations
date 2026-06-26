@@ -65,9 +65,7 @@ def command_stage_data_check(_args: argparse.Namespace) -> None:
         missing.append("checked-in manual boundary source")
 
     if missing:
-        raise SystemExit(
-            "ERROR: Prerequisites are incomplete: " + ", ".join(missing)
-        )
+        raise SystemExit("ERROR: Prerequisites are incomplete: " + ", ".join(missing))
 
 
 def command_stage_data_fetch_queries(args: argparse.Namespace) -> None:

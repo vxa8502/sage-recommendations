@@ -510,7 +510,6 @@ def test_build_bank_rejects_incomplete_ingestion_outputs(monkeypatch, tmp_path: 
         )
 
 
-
 def test_run_kaggle_stage_kernel_uses_metadata_not_push_flag(monkeypatch):
     workspace = Path("/tmp/sage-stage-data-workspace")
     prepare_calls: list[dict[str, object]] = []

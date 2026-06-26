@@ -59,9 +59,7 @@ def load_manual_boundary_queries(
     """Load and validate the checked-in ingestion manual boundary slice."""
     filepath = Path(path)
     if not filepath.exists():
-        raise FileNotFoundError(
-            f"Manual boundary query source not found: {filepath}"
-        )
+        raise FileNotFoundError(f"Manual boundary query source not found: {filepath}")
 
     queries: list[ManualBoundaryQuery] = []
     seen_ids: set[str] = set()
@@ -109,13 +107,10 @@ def build_manual_boundary_query_bank_rows(
 ) -> list[dict[str, Any]]:
     """Convert checked-in manual boundary queries into canonical bank rows."""
     context = "manual boundary query bank build"
-    starting_index = require_positive_int(
-        starting_index, "starting_index", context
-    )
+    starting_index = require_positive_int(starting_index, "starting_index", context)
     if not isinstance(activate, bool):
         raise ValueError(
-            f"'activate' must be a bool in {context}, "
-            f"got {type(activate).__name__}"
+            f"'activate' must be a bool in {context}, got {type(activate).__name__}"
         )
     domain = _require_collapsed_str(domain, "domain", context)
     source_name = Path(source_path).name
@@ -129,9 +124,7 @@ def build_manual_boundary_query_bank_rows(
                 "text": query.text,
                 "source_type": DEFAULT_MANUAL_BOUNDARY_SOURCE_TYPE,
                 "active": activate,
-                "source_ref": (
-                    f"{source_name}:manual_id={query.manual_id}"
-                ),
+                "source_ref": (f"{source_name}:manual_id={query.manual_id}"),
                 "domain": domain,
                 "category": None,
                 "intent": query.intent,
@@ -156,29 +149,15 @@ def summarize_manual_boundary_queries(
     queries: Sequence[ManualBoundaryQuery],
 ) -> dict[str, dict[str, int] | int]:
     """Summarize composition of the checked-in manual boundary slice."""
-    by_boundary_type = Counter(
-        query.boundary_type for query in queries
-    )
-    by_expected_behavior = Counter(
-        query.expected_behavior for query in queries
-    )
+    by_boundary_type = Counter(query.boundary_type for query in queries)
+    by_expected_behavior = Counter(query.expected_behavior for query in queries)
     by_answerability = Counter(query.answerability for query in queries)
-    by_evaluation_surface = Counter(
-        query.evaluation_surface for query in queries
-    )
-    by_challenge_family = Counter(
-        query.challenge_family for query in queries
-    )
-    by_intent = Counter(
-        query.intent for query in queries if query.intent
-    )
+    by_evaluation_surface = Counter(query.evaluation_surface for query in queries)
+    by_challenge_family = Counter(query.challenge_family for query in queries)
+    by_intent = Counter(query.intent for query in queries if query.intent)
     by_author_id = Counter(query.author_id for query in queries)
-    by_challenge_tag = Counter(
-        tag for query in queries for tag in query.challenge_tags
-    )
-    runtime_e2e_queries = [
-        query for query in queries if _is_runtime_e2e_query(query)
-    ]
+    by_challenge_tag = Counter(tag for query in queries for tag in query.challenge_tags)
+    runtime_e2e_queries = [query for query in queries if _is_runtime_e2e_query(query)]
     recency_sensitive_count = _count_recency_sensitive_queries(queries)
     runtime_e2e_recency_sensitive_count = _count_recency_sensitive_queries(
         runtime_e2e_queries
@@ -199,9 +178,7 @@ def summarize_manual_boundary_queries(
         "runtime_e2e_recency_sensitive_query_count": (
             runtime_e2e_recency_sensitive_count
         ),
-        "min_recency_sensitive_queries": (
-            MIN_RECENCY_SENSITIVE_BOUNDARY_QUERIES
-        ),
+        "min_recency_sensitive_queries": (MIN_RECENCY_SENSITIVE_BOUNDARY_QUERIES),
         "min_total_queries": MIN_MANUAL_BOUNDARY_TOTAL_QUERIES,
         "min_boundary_type_counts": dict(MIN_BOUNDARY_TYPE_COUNTS),
         "min_runtime_e2e_queries": MIN_RUNTIME_E2E_BOUNDARY_QUERIES,
@@ -212,9 +189,7 @@ def summarize_manual_boundary_queries(
             MIN_RUNTIME_E2E_BOUNDARY_TYPE_COUNTS
         ),
         "min_distinct_challenge_families": MIN_DISTINCT_CHALLENGE_FAMILIES,
-        "distinct_family_id_count": len(
-            {query.family_id for query in queries}
-        ),
+        "distinct_family_id_count": len({query.family_id for query in queries}),
     }
 
 

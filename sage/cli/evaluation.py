@@ -52,9 +52,7 @@ def _print_eval_status_surfaces(eval_status: dict[str, object]) -> None:
     print(f"  reportable_green:  {eval_status['reportable_green']}")
 
     reportable_reasons = eval_status.get("reportable_reasons") or []
-    if not eval_status.get("reportable_green") and isinstance(
-        reportable_reasons, list
-    ):
+    if not eval_status.get("reportable_green") and isinstance(reportable_reasons, list):
         for reason in reportable_reasons[:3]:
             if isinstance(reason, str) and reason:
                 print(f"  reportable_note:  {reason}")
@@ -187,16 +185,10 @@ def _run_full_eval_workflow(
         run_command(python_command("scripts/eval_gate.py"))
         print("=== CANONICAL EVALUATION COMPLETE ===")
     else:
-        print(
-            "DEV LANE: results are sampled and NOT a canonical baseline."
-        )
-        print(
-            f"  faithfulness samples: {_sample_limit_label(samples)}"
-        )
+        print("DEV LANE: results are sampled and NOT a canonical baseline.")
+        print(f"  faithfulness samples: {_sample_limit_label(samples)}")
         print(f"  RAGAS samples:        {_sample_limit_label(ragas_samples)}")
-        print(
-            "  Run 'sage eval run' for the reportable canonical evaluation."
-        )
+        print("  Run 'sage eval run' for the reportable canonical evaluation.")
         print("=== DEV LANE EVALUATION COMPLETE ===")
 
     print()
@@ -204,10 +196,7 @@ def _run_full_eval_workflow(
     print("  - eval_natural_queries_latest.json  (NDCG, Hit@K, MRR)")
     print("  - faithfulness_latest.json          (HHEM, RAGAS)")
     print("  - adjusted_faithfulness_latest.json (refusal-aware pass rate)")
-    print(
-        "  - boundary_behavior_latest.json"
-        "     (refusal/clarify guardrail benchmark)"
-    )
+    print("  - boundary_behavior_latest.json     (refusal/clarify guardrail benchmark)")
     print(
         "  - load_test_latest.json"
         "             (steady-state latency headline + drill-down)"

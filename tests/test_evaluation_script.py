@@ -145,19 +145,25 @@ def test_build_primary_evaluation_artifact_adds_metadata_breakdowns(monkeypatch)
         "recency_sensitive_query": 1,
         "negative_problem_query": 1,
     }
-    assert artifact["metric_breakdowns"]["by_curation_mode"][
-        "candidate_bootstrap"
-    ]["n_cases"] == 1
-    assert artifact["metric_breakdowns"]["by_query_slice_tag"][
-        "recency_sensitive_query"
-    ]["n_cases"] == 1
-    assert artifact["metric_breakdowns"]["by_query_slice_tag"][
-        "recency_sensitive_query"
-    ]["coverage"] == 0.4
-    assert artifact["metric_breakdowns"]["by_subset_tag"]["retrieval_eval"][
-        "n_cases"
-    ] == 2
     assert (
-        "subset_tags"
-        in artifact["breakdown_methodology"]["multi_membership_fields"]
+        artifact["metric_breakdowns"]["by_curation_mode"]["candidate_bootstrap"][
+            "n_cases"
+        ]
+        == 1
     )
+    assert (
+        artifact["metric_breakdowns"]["by_query_slice_tag"]["recency_sensitive_query"][
+            "n_cases"
+        ]
+        == 1
+    )
+    assert (
+        artifact["metric_breakdowns"]["by_query_slice_tag"]["recency_sensitive_query"][
+            "coverage"
+        ]
+        == 0.4
+    )
+    assert (
+        artifact["metric_breakdowns"]["by_subset_tag"]["retrieval_eval"]["n_cases"] == 2
+    )
+    assert "subset_tags" in artifact["breakdown_methodology"]["multi_membership_fields"]

@@ -248,12 +248,8 @@ class TestLoadEvalCases:
                         "dataset_name": "amazon_esci",
                         "source_split": "test",
                     },
-                    "selection": {
-                        "policy": "corpus_overlap_min_relevant_items_v1"
-                    },
-                    "subset_assignment": {
-                        "policy": "normalized_query_sha256_v1"
-                    },
+                    "selection": {"policy": "corpus_overlap_min_relevant_items_v1"},
+                    "subset_assignment": {"policy": "normalized_query_sha256_v1"},
                 },
             }
         ]
@@ -269,8 +265,7 @@ class TestLoadEvalCases:
             == "corpus_overlap_min_relevant_items_v1"
         )
         assert (
-            cases[0].provenance.subset_assignment_policy
-            == "normalized_query_sha256_v1"
+            cases[0].provenance.subset_assignment_policy == "normalized_query_sha256_v1"
         )
 
     def test_relevant_set_works_after_load(self, tmp_path, monkeypatch):

@@ -71,7 +71,7 @@ def test_explainer_hedges_recency_sensitive_query_with_stale_evidence():
 
 
 def test_explainer_allows_fresh_recency_sensitive_query_to_reach_llm():
-    client = _FakeLLMClient('Works well with Teams today. [review_0]')
+    client = _FakeLLMClient("Works well with Teams today. [review_0]")
     product = _make_product(
         timestamps=[
             _timestamp_ms(30),

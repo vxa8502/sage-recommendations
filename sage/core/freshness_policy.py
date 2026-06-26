@@ -160,13 +160,9 @@ def _validate_review_age_thresholds(
     very_old_review_days: int,
 ) -> None:
     if old_review_days < RECENT_REVIEW_DAYS:
-        raise ValueError(
-            f"old_review_days must be at least {RECENT_REVIEW_DAYS} days."
-        )
+        raise ValueError(f"old_review_days must be at least {RECENT_REVIEW_DAYS} days.")
     if very_old_review_days <= old_review_days:
-        raise ValueError(
-            "very_old_review_days must be greater than old_review_days."
-        )
+        raise ValueError("very_old_review_days must be greater than old_review_days.")
 
 
 def _age_range_bucket(start_day: int, end_day: int) -> str:
@@ -228,10 +224,7 @@ def _empty_evidence_guardrail_summary() -> dict[str, Any]:
         "cases_with_any_timestamp_count": 0,
         "cases_all_timestamped_evidence_old_count": 0,
         "cases_with_negative_review_evidence_count": 0,
-        **{
-            summary_key: None
-            for _, summary_key, _ in _EVIDENCE_SUMMARY_MEAN_FIELDS
-        },
+        **{summary_key: None for _, summary_key, _ in _EVIDENCE_SUMMARY_MEAN_FIELDS},
     }
 
 
@@ -350,9 +343,7 @@ def build_evidence_guardrail_report(
         "old_review_days_threshold": old_review_days,
         "very_old_review_days_threshold": very_old_review_days,
         "old_review_count": old_review_count,
-        "old_review_share": _rounded_rate(
-            old_review_count, len(age_days), empty=None
-        ),
+        "old_review_share": _rounded_rate(old_review_count, len(age_days), empty=None),
         "very_old_review_count": very_old_review_count,
         "very_old_review_share": _rounded_rate(
             very_old_review_count, len(age_days), empty=None

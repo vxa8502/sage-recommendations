@@ -311,17 +311,10 @@ def main():
             f"({summary.get('acceptable_matches', 0)}/{summary.get('total_queries', 0)})"
         )
         print(
-            "  False Accepts:  "
-            f"{summary.get('refusal_required_false_accept_count', 0)}"
+            f"  False Accepts:  {summary.get('refusal_required_false_accept_count', 0)}"
         )
-        print(
-            "  Clarify Rate:   "
-            f"{fmt(summary.get('ambiguous_clarify_rate'), 3)}"
-        )
-        print(
-            "  Boundary Safe:  "
-            f"{fmt(summary.get('boundary_safe_behavior_rate'), 3)}"
-        )
+        print(f"  Clarify Rate:   {fmt(summary.get('ambiguous_clarify_rate'), 3)}")
+        print(f"  Boundary Safe:  {fmt(summary.get('boundary_safe_behavior_rate'), 3)}")
         boundary_guardrail = boundary.get("boundary_guardrail") or {}
         boundary_guardrail_status = summary.get("boundary_guardrail_status")
         if boundary_guardrail or boundary_guardrail_status:

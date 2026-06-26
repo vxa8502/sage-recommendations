@@ -590,7 +590,8 @@ class EvalCaseProvenance:
             ),
             source_split=_clean_optional(
                 "source_split",
-                payload.get("source_split") or (upstream_source or {}).get("source_split"),
+                payload.get("source_split")
+                or (upstream_source or {}).get("source_split"),
             ),
             selection_policy=_clean_optional(
                 "selection_policy",

@@ -14,7 +14,10 @@ from sage.core.freshness_policy import (
     build_evidence_guardrail_report,
     evaluate_freshness_guardrail_case,
 )
-from sage.core.query_classification import RECENCY_SENSITIVE_QUERY, classify_query_slices
+from sage.core.query_classification import (
+    RECENCY_SENSITIVE_QUERY,
+    classify_query_slices,
+)
 from sage.utils import extract_evidence, timed_operation
 from sage.core import (
     CitationVerificationResult,
@@ -138,8 +141,7 @@ def _build_freshness_guardrail_result(
     ):
         if oldest_evidence_date == newest_evidence_date:
             recency_detail = (
-                "The freshest review evidence I found is dated "
-                f"{newest_evidence_date}."
+                f"The freshest review evidence I found is dated {newest_evidence_date}."
             )
         else:
             recency_detail = (
@@ -147,9 +149,7 @@ def _build_freshness_guardrail_result(
                 f"{oldest_evidence_date} to {newest_evidence_date}."
             )
     elif risk_level == "missing_timestamps":
-        recency_detail = (
-            "The available review evidence is missing reliable timestamps."
-        )
+        recency_detail = "The available review evidence is missing reliable timestamps."
     else:
         recency_detail = (
             "The available review evidence looks too old for a current claim."

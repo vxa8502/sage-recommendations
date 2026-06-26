@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import cast
 
-from sage.data.query_bank.sources.esci._config import DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG
+from sage.data.query_bank.sources.esci._config import (
+    DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG,
+)
 
 from .artifacts import (
     _expected_value_for_finalize_decision,

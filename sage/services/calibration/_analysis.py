@@ -194,7 +194,9 @@ def analyze_gate_thresholds(
     )
     observations_by_query = group_observations_by_query(dataset.observations)
     metrics_rows = [
-        evaluate_threshold_from_groups(dataset.queries, observations_by_query, threshold)
+        evaluate_threshold_from_groups(
+            dataset.queries, observations_by_query, threshold
+        )
         for threshold in threshold_grid
     ]
     query_success_ceiling = max(

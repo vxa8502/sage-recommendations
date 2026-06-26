@@ -118,10 +118,7 @@ def _aggregate_case_results(
     )
     if total_items > 0:
         report.coverage = catalog_coverage(
-            [
-                list(row.get("recommended_product_ids") or [])
-                for row in case_results
-            ],
+            [list(row.get("recommended_product_ids") or []) for row in case_results],
             total_items,
         )
     summary = report.to_dict()
@@ -654,13 +651,9 @@ def main():
         )
         all_results["primary_metrics"] = primary_artifact["metrics"]
         all_results["case_results"] = primary_artifact["case_results"]
-        all_results["case_metadata_summary"] = primary_artifact[
-            "case_metadata_summary"
-        ]
+        all_results["case_metadata_summary"] = primary_artifact["case_metadata_summary"]
         all_results["metric_breakdowns"] = primary_artifact["metric_breakdowns"]
-        all_results["breakdown_methodology"] = primary_artifact[
-            "breakdown_methodology"
-        ]
+        all_results["breakdown_methodology"] = primary_artifact["breakdown_methodology"]
         all_results["query_slice_methodology"] = primary_artifact[
             "query_slice_methodology"
         ]

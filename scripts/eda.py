@@ -368,7 +368,9 @@ def main():
         # skip the scan if cached stats and figures are already current.
         if _cached_stats_match(info["points_count"]):
             print("\n--- Statistics ---")
-            print(f"  Using cached EDA stats (collection unchanged at {info['points_count']:,} points)")
+            print(
+                f"  Using cached EDA stats (collection unchanged at {info['points_count']:,} points)"
+            )
             print("\n" + "=" * 60)
             print("EDA COMPLETE (cached)")
             print("=" * 60)

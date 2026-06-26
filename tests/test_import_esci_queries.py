@@ -65,8 +65,7 @@ def test_main_imports_candidates_with_single_version_filter(tmp_path: Path):
     )
 
     rows = [
-        json.loads(line)
-        for line in output.read_text(encoding="utf-8").splitlines()
+        json.loads(line) for line in output.read_text(encoding="utf-8").splitlines()
     ]
 
     assert len(rows) == 1

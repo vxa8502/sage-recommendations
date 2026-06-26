@@ -26,9 +26,7 @@ def _optional_clean_text(value: Any) -> str | None:
     return cleaned or None
 
 
-def _require_candidate_text(
-    raw: dict[str, Any], field_name: str, context: str
-) -> str:
+def _require_candidate_text(raw: dict[str, Any], field_name: str, context: str) -> str:
     """Validate required candidate text with whitespace normalization."""
     return require_nonempty_str(
         raw.get(field_name),

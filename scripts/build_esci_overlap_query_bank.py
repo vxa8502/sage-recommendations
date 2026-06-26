@@ -42,10 +42,14 @@ from sage.data.query_bank.sources.esci._config import (
     DEFAULT_TEST_RETRIEVAL_DEV_SHARE,
     DEFAULT_TEST_RETRIEVAL_FAMILY_SHARE,
 )
-from sage.data.query_bank.sources.esci._manifest import build_esci_overlap_query_bank_manifest
+from sage.data.query_bank.sources.esci._manifest import (
+    build_esci_overlap_query_bank_manifest,
+)
 from sage.data.query_bank.sources.esci._policy import TestSplitAssignmentPolicy
 from sage.data.query_bank.sources.esci._rows import build_esci_overlap_query_bank_rows
-from sage.data.query_bank.sources.esci._summary import summarize_esci_overlap_query_bank_rows
+from sage.data.query_bank.sources.esci._summary import (
+    summarize_esci_overlap_query_bank_rows,
+)
 from sage.data.query_bank.sources.boundary import (
     DEFAULT_MANUAL_BOUNDARY_QUERIES_PATH,
     build_manual_boundary_query_bank_rows,

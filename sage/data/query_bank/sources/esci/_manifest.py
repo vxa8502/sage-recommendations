@@ -25,8 +25,13 @@ from sage.data.corpus_anchor import load_corpus_anchor
 from sage.data.esci_constants import DEFAULT_ESCI_LOCALE, DEFAULT_ESCI_VERSION
 from sage.data.query_bank.sources.esci._labels import normalize_label_weights
 from sage.data.query_bank.sources.esci._policy import TestSplitAssignmentPolicy
-from sage.data.query_bank.sources.esci._summary import summarize_esci_overlap_query_bank_rows
-from sage.data.query_bank._io import QUERY_PROVENANCE_SCHEMA_VERSION, compute_file_sha256
+from sage.data.query_bank.sources.esci._summary import (
+    summarize_esci_overlap_query_bank_rows,
+)
+from sage.data.query_bank._io import (
+    QUERY_PROVENANCE_SCHEMA_VERSION,
+    compute_file_sha256,
+)
 
 
 def _display_path(path: str | Path) -> str:

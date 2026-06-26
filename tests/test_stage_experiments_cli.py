@@ -592,16 +592,18 @@ def test_stage_experiments_finalize_runs_materialize_then_boundary(monkeypatch):
     _patch_experiment_symbol(
         monkeypatch,
         "_load_json_object",
-        lambda path: {
-            "sample_limited": False,
-            "query_bank_identity": {
-                "query_bank_sha256": "bank-sha",
-            },
-        }
-        if "faithfulness_dev_seed_bundles" in str(path)
-        or "faithfulness_final_seed_bundles" in str(path)
-        or "faithfulness_cases" in str(path)
-        else None,
+        lambda path: (
+            {
+                "sample_limited": False,
+                "query_bank_identity": {
+                    "query_bank_sha256": "bank-sha",
+                },
+            }
+            if "faithfulness_dev_seed_bundles" in str(path)
+            or "faithfulness_final_seed_bundles" in str(path)
+            or "faithfulness_cases" in str(path)
+            else None
+        ),
     )
     _patch_experiment_symbol(
         monkeypatch,
@@ -2671,35 +2673,41 @@ def test_ensure_calibration_handoff_ready_rejects_sample_limited_manifest(
     _patch_experiment_symbol(
         monkeypatch,
         "_load_json_object",
-        lambda path: {
-            "query_bank_identity": {"query_bank_sha256": "bank-sha"},
-            "sample_limited": True,
-            "retrieval_config": {
-                "aggregation": "max",
-                "min_rating": None,
-                "profile": "default",
-            },
-            "stage2_handoff": {
-                "decision": "baseline-retained",
-                "retrieval_decision": "baseline-retained",
-                "expected_runtime_threshold": {
-                    "min_tokens": 20,
-                    "min_chunks": 1,
-                    "min_score": 0.7,
-                },
-                "expected_runtime_retrieval_config": {
+        lambda path: (
+            {
+                "query_bank_identity": {"query_bank_sha256": "bank-sha"},
+                "sample_limited": True,
+                "retrieval_config": {
                     "aggregation": "max",
                     "min_rating": None,
-                    "retrieval_profile": "default",
+                    "profile": "default",
                 },
-            },
-            "corpus_alignment": {"corpus_fingerprint": anchor["corpus_fingerprint"]},
-        }
-        if path == manifest_path
-        else None,
+                "stage2_handoff": {
+                    "decision": "baseline-retained",
+                    "retrieval_decision": "baseline-retained",
+                    "expected_runtime_threshold": {
+                        "min_tokens": 20,
+                        "min_chunks": 1,
+                        "min_score": 0.7,
+                    },
+                    "expected_runtime_retrieval_config": {
+                        "aggregation": "max",
+                        "min_rating": None,
+                        "retrieval_profile": "default",
+                    },
+                },
+                "corpus_alignment": {
+                    "corpus_fingerprint": anchor["corpus_fingerprint"]
+                },
+            }
+            if path == manifest_path
+            else None
+        ),
     )
 
-    with pytest.raises(SystemExit, match="query-limited calibration materialization run"):
+    with pytest.raises(
+        SystemExit, match="query-limited calibration materialization run"
+    ):
         experiment_handoff.ensure_calibration_handoff_ready()
 
 
@@ -3044,32 +3052,36 @@ def test_ensure_calibration_handoff_ready_rejects_missing_source_seed_bundle_man
     _patch_experiment_symbol(
         monkeypatch,
         "_load_json_object",
-        lambda path: {
-            "query_bank_identity": {"query_bank_sha256": "bank-sha"},
-            "sample_limited": False,
-            "retrieval_config": {
-                "aggregation": "max",
-                "min_rating": None,
-                "profile": "default",
-            },
-            "stage2_handoff": {
-                "decision": "baseline-retained",
-                "retrieval_decision": "baseline-retained",
-                "expected_runtime_threshold": {
-                    "min_tokens": 20,
-                    "min_chunks": 1,
-                    "min_score": 0.7,
-                },
-                "expected_runtime_retrieval_config": {
+        lambda path: (
+            {
+                "query_bank_identity": {"query_bank_sha256": "bank-sha"},
+                "sample_limited": False,
+                "retrieval_config": {
                     "aggregation": "max",
                     "min_rating": None,
-                    "retrieval_profile": "default",
+                    "profile": "default",
                 },
-            },
-            "corpus_alignment": {"corpus_fingerprint": anchor["corpus_fingerprint"]},
-        }
-        if path == manifest_path
-        else None,
+                "stage2_handoff": {
+                    "decision": "baseline-retained",
+                    "retrieval_decision": "baseline-retained",
+                    "expected_runtime_threshold": {
+                        "min_tokens": 20,
+                        "min_chunks": 1,
+                        "min_score": 0.7,
+                    },
+                    "expected_runtime_retrieval_config": {
+                        "aggregation": "max",
+                        "min_rating": None,
+                        "retrieval_profile": "default",
+                    },
+                },
+                "corpus_alignment": {
+                    "corpus_fingerprint": anchor["corpus_fingerprint"]
+                },
+            }
+            if path == manifest_path
+            else None
+        ),
     )
 
     with pytest.raises(SystemExit, match="source_seed_bundle_manifest_path"):

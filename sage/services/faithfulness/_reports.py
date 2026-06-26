@@ -37,7 +37,10 @@ def _build_query_slice_metrics(
     reference_timestamp_ms: int,
 ) -> dict[str, object]:
     """Compute narrow, report-only metrics for Sofia-lite query slices."""
-    from sage.services.faithfulness._metrics import compute_multi_metric_faithfulness, is_refusal
+    from sage.services.faithfulness._metrics import (
+        compute_multi_metric_faithfulness,
+        is_refusal,
+    )
 
     slice_indices = {slice_name: [] for slice_name in QUERY_SLICE_NAMES}
     for index, case in enumerate(cases):

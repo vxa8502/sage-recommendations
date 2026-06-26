@@ -119,9 +119,7 @@ def _row_matches_candidate_filters(
     require_small_version: bool,
     small_field: str | None,
 ) -> tuple[bool, str | None]:
-    row_locale = (
-        _optional_clean_text(row.get(locale_field)) if locale_field else None
-    )
+    row_locale = _optional_clean_text(row.get(locale_field)) if locale_field else None
     row_locale_lower = (row_locale or "").lower()
     if locale_filter is not None and row_locale_lower != locale_filter:
         return False, row_locale
@@ -195,8 +193,7 @@ def build_esci_query_candidates(
         max_queries = require_positive_int(max_queries, "max_queries", context)
     if require_large_version and require_small_version:
         raise ValueError(
-            "require_large_version and require_small_version are mutually "
-            "exclusive"
+            "require_large_version and require_small_version are mutually exclusive"
         )
     locale_filter = locale.lower() if locale is not None else None
     aggregated: OrderedDict[str, _CandidateBucket] = OrderedDict()
@@ -241,13 +238,9 @@ def build_esci_query_candidates(
             )
 
     filtered = [
-        bucket
-        for bucket in aggregated.values()
-        if bucket.record_count >= min_records
+        bucket for bucket in aggregated.values() if bucket.record_count >= min_records
     ]
-    filtered.sort(
-        key=lambda bucket: (-bucket.record_count, bucket.text.lower())
-    )
+    filtered.sort(key=lambda bucket: (-bucket.record_count, bucket.text.lower()))
     if max_queries is not None:
         filtered = filtered[:max_queries]
 

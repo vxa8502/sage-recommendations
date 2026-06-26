@@ -202,7 +202,9 @@ def build_product_embeddings(
 _EMBEDDINGS_BATCH_SIZE = 200
 
 
-def _scroll_collection(client, with_vectors: bool = False, batch_size: int = _EMBEDDINGS_BATCH_SIZE):
+def _scroll_collection(
+    client, with_vectors: bool = False, batch_size: int = _EMBEDDINGS_BATCH_SIZE
+):
     """Yield all points from Qdrant collection via pagination."""
     offset = None
     while True:

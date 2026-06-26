@@ -422,9 +422,11 @@ def save_results(data: dict, prefix: str, directory: Path | None = None) -> Path
     directory.mkdir(parents=True, exist_ok=True)
 
     import re as _re
+
     safe_prefix = _re.sub(r"[^a-z0-9_\-]", "_", prefix.lower())
     if safe_prefix != prefix:
         import logging as _logging
+
         _logging.getLogger(__name__).warning(
             "save_results prefix %r sanitized to %r", prefix, safe_prefix
         )

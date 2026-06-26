@@ -40,7 +40,9 @@ from sage.cli.shared import (
     DEFAULT_REQUESTS,
     remove_path,
 )
-from sage.data.query_bank.sources.esci._config import DEFAULT_RETRIEVAL_FINAL_REPORT_SUBSET_TAG
+from sage.data.query_bank.sources.esci._config import (
+    DEFAULT_RETRIEVAL_FINAL_REPORT_SUBSET_TAG,
+)
 from sage.data.query_bank import build_query_bank_identity, load_query_bank_subset
 
 
@@ -229,7 +231,7 @@ def test_eval_workflow_passes_full_scope_defaults_to_faithfulness_script(
         ragas_samples=None,
         url="https://example.com",
         requests=25,
-        enforce_gate=True,
+        enforce_gate=False,
     )
 
     assert len(recorded_steps) == 8
@@ -1011,7 +1013,8 @@ def test_reset_baseline_dry_run_is_preview_only_and_preserves_checked_in_sources
     assert "Dry run only; no files were removed." in output
     assert "Preview only; rerun without --dry-run to apply these changes." in output
     assert (
-        "Done. Local data state is back at the baseline scaffold boundary." not in output
+        "Done. Local data state is back at the baseline scaffold boundary."
+        not in output
     )
     assert "  - data/query_bank/sources/manual_boundary_queries_v2.jsonl" not in output
     assert (

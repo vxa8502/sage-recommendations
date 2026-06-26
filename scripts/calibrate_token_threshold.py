@@ -86,7 +86,9 @@ def _print_dataset_summary(summary: dict[str, object]) -> None:
     logger.info("Attempted queries:        %s", summary["attempted_query_count"])
     logger.info("Completed queries:        %s", summary["completed_query_count"])
     logger.info("Failed queries:           %s", summary["failed_query_count"])
-    logger.info("Query coverage rate:      %.1f%%", summary["query_coverage_rate"] * 100)
+    logger.info(
+        "Query coverage rate:      %.1f%%", summary["query_coverage_rate"] * 100
+    )
     logger.info("Failed query rate:        %.1f%%", summary["failed_query_rate"] * 100)
     logger.info("Observations:             %s", summary["observation_count"])
     logger.info("Candidate-hit queries:    %s", summary["candidate_hit_queries"])
@@ -273,12 +275,16 @@ def main() -> None:
     try:
         if args.analyze_only:
             if not args.output.exists():
-                raise SystemExit(f"ERROR: no calibration dataset found at {args.output}")
+                raise SystemExit(
+                    f"ERROR: no calibration dataset found at {args.output}"
+                )
             dataset = load_gate_calibration_dataset(args.output)
             logger.info("Loaded raw calibration dataset from %s", args.output)
         else:
             query_bank_path = (
-                args.query_bank_path if args.query_bank_path is not None else DATA_DIR / "query_bank" / "query_bank.jsonl"
+                args.query_bank_path
+                if args.query_bank_path is not None
+                else DATA_DIR / "query_bank" / "query_bank.jsonl"
             )
             retrieval_info = ensure_calibration_retrieval_ready()
             logger.info(

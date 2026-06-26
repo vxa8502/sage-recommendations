@@ -125,8 +125,9 @@ def test_stamp_corpus_anchor_allows_missing_chunk_count_when_forced(
     monkeypatch.setattr(
         corpus_alignment,
         "upsert_corpus_anchor",
-        lambda _client, anchor, **kwargs: captured.update({"anchor": anchor, **kwargs})
-        or {"stamped_at": STAMPED_AT},
+        lambda _client, anchor, **kwargs: (
+            captured.update({"anchor": anchor, **kwargs}) or {"stamped_at": STAMPED_AT}
+        ),
     )
 
     result = corpus_alignment.stamp_corpus_anchor(

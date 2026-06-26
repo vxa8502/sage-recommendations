@@ -7,9 +7,7 @@ from dataclasses import dataclass
 from sage.config import PROJECT_ROOT
 
 
-MANUAL_BOUNDARY_QUERY_SOURCES_DIR = (
-    PROJECT_ROOT / "data" / "query_bank" / "sources"
-)
+MANUAL_BOUNDARY_QUERY_SOURCES_DIR = PROJECT_ROOT / "data" / "query_bank" / "sources"
 DEFAULT_MANUAL_BOUNDARY_QUERIES_PATH = (
     MANUAL_BOUNDARY_QUERY_SOURCES_DIR / "manual_boundary_queries_v2.jsonl"
 )
@@ -17,9 +15,7 @@ DEFAULT_BOUNDARY_EVAL_SUBSET_TAG = "boundary_eval"
 DEFAULT_MANUAL_BOUNDARY_SOURCE_TYPE = "manual_boundary"
 DEFAULT_BOUNDARY_DOMAIN = "shopping_assistant"
 DEFAULT_MANUAL_BOUNDARY_POLICY_VERSION = "manual_boundary_queries_v2"
-DEFAULT_MANUAL_BOUNDARY_SELECTION_POLICY_VERSION = (
-    "required_boundary_slice_v2"
-)
+DEFAULT_MANUAL_BOUNDARY_SELECTION_POLICY_VERSION = "required_boundary_slice_v2"
 BOUNDARY_EVALUATION_SURFACE_TAG_PREFIX = "evaluation_surface:"
 BOUNDARY_EVALUATION_LANE_TAG_PREFIX = BOUNDARY_EVALUATION_SURFACE_TAG_PREFIX
 BOUNDARY_CHALLENGE_TAG_PREFIX = "challenge:"

@@ -137,9 +137,7 @@ def _require_evaluation_surface(raw: Mapping[str, Any], context: str) -> str:
 
     parsed = evaluation_surface or evaluation_lane
     if parsed is None:
-        raise ValueError(
-            f"'evaluation_surface' must be non-empty in {context}"
-        )
+        raise ValueError(f"'evaluation_surface' must be non-empty in {context}")
     if parsed not in MANUAL_BOUNDARY_EVALUATION_SURFACES:
         allowed = ", ".join(MANUAL_BOUNDARY_EVALUATION_SURFACES)
         raise ValueError(
@@ -181,8 +179,7 @@ def _minimum_details(
     minimums: Mapping[str, int],
 ) -> str:
     return ", ".join(
-        f"{label}={count}/{minimums[label]}"
-        for label, count in sorted(counts.items())
+        f"{label}={count}/{minimums[label]}" for label, count in sorted(counts.items())
     )
 
 
@@ -269,9 +266,7 @@ def _parse_manual_boundary_row(
 ) -> ManualBoundaryQuery:
     context = f"manual boundary line {line_no}"
 
-    manual_id = _require_identifier(
-        raw.get("manual_id"), "manual_id", context
-    )
+    manual_id = _require_identifier(raw.get("manual_id"), "manual_id", context)
     text = _require_collapsed_str(raw.get("text"), "text", context)
     boundary_type = _require_boundary_type(raw.get("boundary_type"), context)
     policy = BOUNDARY_TYPE_POLICY[boundary_type]
@@ -308,12 +303,8 @@ def _parse_manual_boundary_row(
             "challenge_tags",
             context,
         ),
-        author_id=_require_identifier(
-            raw.get("author_id"), "author_id", context
-        ),
-        family_id=_require_identifier(
-            raw.get("family_id"), "family_id", context
-        ),
+        author_id=_require_identifier(raw.get("author_id"), "author_id", context),
+        family_id=_require_identifier(raw.get("family_id"), "family_id", context),
         intent=optional_str(
             raw.get("intent"),
             "intent",
@@ -352,9 +343,7 @@ def _validate_manual_boundary_basics(
     require_nonempty: bool,
 ) -> None:
     if require_nonempty and not queries:
-        raise ValueError(
-            f"Manual boundary query source is empty: {filepath}"
-        )
+        raise ValueError(f"Manual boundary query source is empty: {filepath}")
 
     present_types = {query.boundary_type for query in queries}
     unknown_types = sorted(present_types - _REQUIRED_BOUNDARY_TYPE_SET)
@@ -406,9 +395,7 @@ def _validate_manual_boundary_benchmark_shape(
             f"breadth: {details}"
         )
 
-    runtime_e2e_queries = [
-        query for query in queries if _is_runtime_e2e_query(query)
-    ]
+    runtime_e2e_queries = [query for query in queries if _is_runtime_e2e_query(query)]
     if len(runtime_e2e_queries) < MIN_RUNTIME_E2E_BOUNDARY_QUERIES:
         raise ValueError(
             "Manual boundary query source has insufficient runtime-e2e "

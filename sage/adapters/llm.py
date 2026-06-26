@@ -351,6 +351,7 @@ class AnthropicClient(LLMClientBase):
             RuntimeError: If rate limited.
             ConnectionError: If connection fails.
         """
+
         def token_factory() -> Iterator[str]:
             with self.client.messages.stream(
                 model=self.model,
@@ -471,6 +472,7 @@ class OpenAIClient(LLMClientBase):
             RuntimeError: If rate limited.
             ConnectionError: If connection fails.
         """
+
         def token_factory() -> Iterator[str]:
             stream = self.client.chat.completions.create(
                 model=self.model,

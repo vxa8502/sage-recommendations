@@ -5,7 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from sage.core import AggregationMethod
-from sage.data.query_bank.sources.esci._config import DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG
+from sage.data.query_bank.sources.esci._config import (
+    DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG,
+)
 
 RETRIEVAL_OUTPUT_DIR = Path("data/retrieval")
 DEFAULT_FIT_OUTPUT = RETRIEVAL_OUTPUT_DIR / "retrieval_fit.analysis.json"

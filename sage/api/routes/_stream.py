@@ -76,21 +76,19 @@ async def _stream_recommendations(
         yield _sse_event("policy", json.dumps(policy_decision.to_dict()))
         yield _sse_event(
             "done",
-            json.dumps(
-                _build_policy_response(body.query, body.k, policy_decision)
-            ),
+            json.dumps(_build_policy_response(body.query, body.k, policy_decision)),
         )
         return
 
     try:
         products = await asyncio.to_thread(
-            _routes_pkg._fetch_products, body, app  # noqa: SLF001
+            _routes_pkg._fetch_products,
+            body,
+            app,  # noqa: SLF001
         )
     except Exception:
         logger.exception("Streaming: candidate generation failed")
-        yield _sse_event(
-            "error", json.dumps({"detail": "Failed to retrieve products"})
-        )
+        yield _sse_event("error", json.dumps({"detail": "Failed to retrieve products"}))
         yield _sse_event("done", json.dumps({"status": "error"}))
         return
 
@@ -112,9 +110,7 @@ async def _stream_recommendations(
     loop = asyncio.get_running_loop()
 
     for i, product in enumerate(products, 1):
-        yield _sse_event(
-            "product", json.dumps(_build_product_dict(i, product))
-        )
+        yield _sse_event("product", json.dumps(_build_product_dict(i, product)))
 
         # Feed tokens from the sync LLM iterator into an asyncio queue so
         # each token is yielded to the client as it arrives, not after the
@@ -127,43 +123,31 @@ async def _stream_recommendations(
                     body.query, prod, MAX_EVIDENCE
                 )
                 for token in stream:
-                    loop.call_soon_threadsafe(
-                        queue.put_nowait, ("token", token)
-                    )
+                    loop.call_soon_threadsafe(queue.put_nowait, ("token", token))
                 loop.call_soon_threadsafe(
                     queue.put_nowait,
                     ("result", stream.get_complete_result()),
                 )
             except Exception as exc:
-                loop.call_soon_threadsafe(
-                    queue.put_nowait, ("error", exc)
-                )
+                loop.call_soon_threadsafe(queue.put_nowait, ("error", exc))
             finally:
-                loop.call_soon_threadsafe(
-                    queue.put_nowait, ("done", None)
-                )
+                loop.call_soon_threadsafe(queue.put_nowait, ("done", None))
 
         t = threading.Thread(target=_run_stream, daemon=True)
         t.start()
         try:
             while True:
-                kind, value = await asyncio.wait_for(
-                    queue.get(), timeout=_timeout
-                )
+                kind, value = await asyncio.wait_for(queue.get(), timeout=_timeout)
                 if kind == "done":
                     break
                 elif kind == "error":
                     raise value  # type: ignore[misc]
                 elif kind == "token":
-                    yield _sse_event(
-                        "token", json.dumps({"text": value})
-                    )
+                    yield _sse_event("token", json.dumps({"text": value}))
                 elif kind == "result":
                     yield _sse_event(
                         "evidence",
-                        json.dumps(
-                            {"evidence_sources": _build_evidence_list(value)}
-                        ),
+                        json.dumps({"evidence_sources": _build_evidence_list(value)}),
                     )
         except TimeoutError:
             logger.warning(

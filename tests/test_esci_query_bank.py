@@ -18,7 +18,9 @@ from sage.data.query_bank.sources.esci._config import (
     DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG,
     DEFAULT_RETRIEVAL_FINAL_REPORT_SUBSET_TAG,
 )
-from sage.data.query_bank.sources.esci._manifest import build_esci_overlap_query_bank_manifest
+from sage.data.query_bank.sources.esci._manifest import (
+    build_esci_overlap_query_bank_manifest,
+)
 from sage.data.query_bank.sources.esci._rows import (
     build_esci_overlap_query_bank_rows,
 )

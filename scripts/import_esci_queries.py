@@ -107,10 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--version",
         choices=ESCI_VERSION_CHOICES,
         default=DEFAULT_ESCI_VERSION,
-        help=(
-            "Which ESCI version flag to require "
-            f"(default: {DEFAULT_ESCI_VERSION})"
-        ),
+        help=(f"Which ESCI version flag to require (default: {DEFAULT_ESCI_VERSION})"),
     )
     parser.add_argument(
         "--domain",

@@ -46,6 +46,7 @@ _RAGAS_API_TIMEOUT_SECONDS = 60.0
 try:
     from anthropic import APIConnectionError as _AnthropicConnectionError
     from anthropic import APITimeoutError as _AnthropicTimeoutError
+
     _ANTHROPIC_EXCEPTIONS: tuple[type[BaseException], ...] = (
         _AnthropicConnectionError,
         _AnthropicTimeoutError,
@@ -54,9 +55,7 @@ except ImportError:
     _ANTHROPIC_EXCEPTIONS = ()
 
 # Transient exceptions that should trigger retries
-TRANSIENT_EXCEPTIONS = (
-    TimeoutError, ConnectionError, OSError
-) + _ANTHROPIC_EXCEPTIONS
+TRANSIENT_EXCEPTIONS = (TimeoutError, ConnectionError, OSError) + _ANTHROPIC_EXCEPTIONS
 
 
 def _log_retry(retry_state) -> None:  # type: ignore[no-untyped-def]
@@ -175,9 +174,7 @@ def get_ragas_llm(provider: str | None = None):
         # and causes ragas.evaluate() to silently retry forever (hangs at 0%).
         # timeout overrides the default 600s read timeout — without it a
         # silent hung socket blocks the entire batch for 10 min per case.
-        anthropic_client = AsyncAnthropic(
-            timeout=_RAGAS_API_TIMEOUT_SECONDS
-        )
+        anthropic_client = AsyncAnthropic(timeout=_RAGAS_API_TIMEOUT_SECONDS)
         llm = llm_factory(
             RAGAS_MODEL,
             provider="anthropic",
@@ -302,6 +299,7 @@ class FaithfulnessEvaluator:
                 "Cannot call evaluate_batch() from async context.\n"
                 "Await evaluate_single_async() per item instead."
             )
+
         # ragas.evaluate() batch API is incompatible with ragas 0.4.x
         # collections metrics; score each sample individually via async loop.
         async def _run_all() -> list[FaithfulnessResult]:

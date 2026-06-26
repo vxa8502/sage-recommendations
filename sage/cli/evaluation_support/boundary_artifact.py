@@ -21,8 +21,7 @@ _RERUN = (
 )
 _RERUN_NO_LIMIT = "Re-run the canonical boundary benchmark without `--query-limit`."
 _RERUN_CORPUS = (
-    "Re-run the canonical boundary benchmark so the served corpus snapshot "
-    "is recorded."
+    "Re-run the canonical boundary benchmark so the served corpus snapshot is recorded."
 )
 
 
@@ -101,7 +100,9 @@ def _load_expected_boundary_slice(
             f"Query bank: {query_bank_path}\n"
             f"Subset: {subset_tag}\n{exc}"
         )
-        return BoundaryExpectedSlice(query_ids=None, count=None, query_bank_identity=None)
+        return BoundaryExpectedSlice(
+            query_ids=None, count=None, query_bank_identity=None
+        )
 
 
 def _load_boundary_payload(
@@ -149,7 +150,9 @@ def _extract_boundary_guardrail(
     if isinstance(raw_status, str) and raw_status.strip():
         return guardrail, raw_status.strip()
 
-    errors.append("Evaluation boundary artifact is missing `boundary_guardrail.status`.")
+    errors.append(
+        "Evaluation boundary artifact is missing `boundary_guardrail.status`."
+    )
     return guardrail, None
 
 
@@ -162,12 +165,14 @@ def _validate_boundary_query_bank_identity(
     errors: list[str],
 ) -> None:
     if not isinstance(artifact_identity, dict):
-        errors.append(_err(
-            "Evaluation boundary artifact is missing `query_bank_identity`.",
-            results_path,
-            "Re-run the canonical boundary benchmark so the artifact can be "
-            "validated against the current query bank.",
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact is missing `query_bank_identity`.",
+                results_path,
+                "Re-run the canonical boundary benchmark so the artifact can be "
+                "validated against the current query bank.",
+            )
+        )
         return
 
     expected_identity = expected.query_bank_identity
@@ -190,11 +195,13 @@ def _validate_methodology(
 ) -> object:
     """Validate the methodology payload section; returns artifact_scope or None."""
     if not isinstance(methodology, dict):
-        errors.append(_err(
-            "Evaluation boundary artifact is missing `methodology`.",
-            results_path,
-            "Re-run the canonical boundary benchmark so the evaluated subset is explicit.",
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact is missing `methodology`.",
+                results_path,
+                "Re-run the canonical boundary benchmark so the evaluated subset is explicit.",
+            )
+        )
         return None
 
     artifact_scope = methodology.get("artifact_scope")
@@ -206,11 +213,13 @@ def _validate_methodology(
             f"Observed subset: {methodology.get('subset_tag')!r}"
         )
     if artifact_scope != "canonical":
-        errors.append(_err(
-            "Evaluation boundary artifact is not a canonical full-scope run.",
-            results_path,
-            _RERUN_NO_LIMIT,
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact is not a canonical full-scope run.",
+                results_path,
+                _RERUN_NO_LIMIT,
+            )
+        )
     return artifact_scope
 
 
@@ -222,25 +231,31 @@ def _validate_dataset_summary(
 ) -> None:
     """Validate that dataset_summary records a canonical, non-sample-limited run."""
     if not isinstance(dataset_summary, dict):
-        errors.append(_err(
-            "Evaluation boundary artifact is missing `dataset_summary`.",
-            results_path,
-            "Re-run the canonical boundary benchmark so artifact scope is explicit.",
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact is missing `dataset_summary`.",
+                results_path,
+                "Re-run the canonical boundary benchmark so artifact scope is explicit.",
+            )
+        )
         return
 
     if dataset_summary.get("sample_limited") is not False:
-        errors.append(_err(
-            "Evaluation boundary artifact came from a query-limited dry run.",
-            results_path,
-            _RERUN_NO_LIMIT,
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact came from a query-limited dry run.",
+                results_path,
+                _RERUN_NO_LIMIT,
+            )
+        )
     if dataset_summary.get("requested_query_limit") is not None:
-        errors.append(_err(
-            "Evaluation boundary artifact records a non-canonical query limit.",
-            results_path,
-            _RERUN_NO_LIMIT,
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact records a non-canonical query limit.",
+                results_path,
+                _RERUN_NO_LIMIT,
+            )
+        )
 
 
 def _validate_boundary_query_ids(
@@ -270,11 +285,13 @@ def _validate_boundary_query_ids(
     for key, label, remedy in fields:
         ids = normalize_query_ids(dataset_summary.get(key))
         if ids is None:
-            errors.append(_err(
-                f"Evaluation boundary artifact is missing `dataset_summary.{key}`.",
-                results_path,
-                remedy,
-            ))
+            errors.append(
+                _err(
+                    f"Evaluation boundary artifact is missing `dataset_summary.{key}`.",
+                    results_path,
+                    remedy,
+                )
+            )
         elif ids != expected_query_ids:
             diff_lines.extend(
                 _query_id_diff_lines(
@@ -333,21 +350,25 @@ def _validate_boundary_corpus_alignment(
 ) -> None:
     artifact_corpus_alignment = payload.get("corpus_alignment")
     if not isinstance(artifact_corpus_alignment, dict):
-        errors.append(_err(
-            "Evaluation boundary artifact is missing `corpus_alignment`.",
-            results_path,
-            _RERUN_CORPUS,
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact is missing `corpus_alignment`.",
+                results_path,
+                _RERUN_CORPUS,
+            )
+        )
         return
 
     artifact_fingerprint = artifact_corpus_alignment.get("corpus_fingerprint")
     if not isinstance(artifact_fingerprint, str) or not artifact_fingerprint:
-        errors.append(_err(
-            "Evaluation boundary artifact is missing "
-            "`corpus_alignment.corpus_fingerprint`.",
-            results_path,
-            _RERUN_CORPUS,
-        ))
+        errors.append(
+            _err(
+                "Evaluation boundary artifact is missing "
+                "`corpus_alignment.corpus_fingerprint`.",
+                results_path,
+                _RERUN_CORPUS,
+            )
+        )
         return
 
     if corpus_alignment_error is not None:

@@ -308,8 +308,7 @@ def _materialize_and_verify_finalize_cases(
         manifest_path=paths.case_paths["manifest_path"],
         label="the frozen manifest",
         identity_error_title=(
-            "ERROR: Finalize materialized cases against the wrong "
-            "canonical query bank:"
+            "ERROR: Finalize materialized cases against the wrong canonical query bank:"
         ),
         sample_limited_error=(
             "ERROR: Finalize cannot freeze canonical faithfulness artifacts "

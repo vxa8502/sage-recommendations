@@ -102,9 +102,7 @@ def evaluate_ranking(
     k: int = 10,
 ) -> EvalResult:
     """Evaluate a single recommendation list against ground truth."""
-    relevances = [
-        eval_case.relevant_items.get(pid, 0.0) for pid in recommended[:k]
-    ]
+    relevances = [eval_case.relevant_items.get(pid, 0.0) for pid in recommended[:k]]
     all_relevant = list(eval_case.relevant_items.values())
     relevant_set = eval_case.relevant_set
 

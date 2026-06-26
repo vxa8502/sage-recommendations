@@ -422,7 +422,9 @@ def test_run_evaluation_uses_frozen_manifest_reference(monkeypatch, tmp_path):
         saved_payloads[prefix] = payload
         return tmp_path / f"{prefix}.json"
 
-    monkeypatch.setattr("sage.services.faithfulness._runner.save_results", _save_results)
+    monkeypatch.setattr(
+        "sage.services.faithfulness._runner.save_results", _save_results
+    )
 
     results = run_evaluation(
         n_samples=None,

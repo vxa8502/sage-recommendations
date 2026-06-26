@@ -103,10 +103,7 @@ def _open_parquet_rows(path: Path) -> Iterator[_SourceRows]:
 
     def _iter_rows() -> Iterator[dict[str, Any]]:
         for values in df.itertuples(index=False, name=None):
-            yield {
-                fieldname: value
-                for fieldname, value in zip(fieldnames, values)
-            }
+            yield {fieldname: value for fieldname, value in zip(fieldnames, values)}
 
     yield _SourceRows(fieldnames=fieldnames, rows=_iter_rows())
 
@@ -121,9 +118,8 @@ def _open_source_rows(
         # tests can monkeypatch candidates._open_parquet_rows and have the
         # patch take effect here.
         import sys
-        _candidates = sys.modules.get(
-            "sage.data.query_bank.sources.candidates"
-        )
+
+        _candidates = sys.modules.get("sage.data.query_bank.sources.candidates")
         _impl = (
             getattr(_candidates, "_open_parquet_rows", None)
             if _candidates is not None

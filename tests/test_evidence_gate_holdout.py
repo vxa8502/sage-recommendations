@@ -7,7 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sage.data.query_bank.sources.esci._config import DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG
+from sage.data.query_bank.sources.esci._config import (
+    DEFAULT_RETRIEVAL_DEV_HOLDOUT_SUBSET_TAG,
+)
 from sage.core.query_classification import RECENCY_SENSITIVE_QUERY
 from sage.services.calibration import _holdout as holdout_service
 from sage.services.calibration._types import (

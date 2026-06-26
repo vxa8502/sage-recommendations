@@ -362,8 +362,7 @@ def upsert_corpus_anchor(
         "record_schema_version": "remote_corpus_anchor_v1",
         "collection_name": collection_name,
         "collection_points_count": collection_points_count,
-        "stamped_at": stamped_at
-        or datetime.now(UTC).isoformat(timespec="seconds"),
+        "stamped_at": stamped_at or datetime.now(UTC).isoformat(timespec="seconds"),
         "anchor": dict(anchor),
         "corpus_fingerprint": anchor.get("corpus_fingerprint"),
         "dataset_category": anchor.get("dataset_category"),

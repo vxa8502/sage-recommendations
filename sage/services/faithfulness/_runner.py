@@ -152,10 +152,9 @@ def run_evaluation(
 
     log_section(logger, "2. HHEM HALLUCINATION DETECTION")
 
-    hhem_results = detector.check_batch([
-        (expl.evidence_texts, expl.explanation)
-        for expl in all_explanations
-    ])
+    hhem_results = detector.check_batch(
+        [(expl.evidence_texts, expl.explanation) for expl in all_explanations]
+    )
 
     for expl, result in zip(all_explanations, hhem_results, strict=True):
         status = "GROUNDED" if not result.is_hallucinated else "HALLUCINATED"
@@ -466,9 +465,7 @@ def _save_ragas_checkpoint(
                 "explanation": expl.explanation,
                 "evidence_texts": expl.evidence_texts,
             }
-            for case, expl in zip(
-                evaluated_cases, all_explanations, strict=True
-            )
+            for case, expl in zip(evaluated_cases, all_explanations, strict=True)
         ]
     }
     with open(_RAGAS_CHECKPOINT_PATH, "w", encoding="utf-8") as f:
@@ -491,8 +488,11 @@ def run_ragas_from_checkpoint(
     """
     from sage.services.faithfulness._evaluator import FaithfulnessEvaluator
 
-    path = Path(checkpoint_path).resolve() if checkpoint_path else _RAGAS_CHECKPOINT_PATH
+    path = (
+        Path(checkpoint_path).resolve() if checkpoint_path else _RAGAS_CHECKPOINT_PATH
+    )
     from sage.config import DATA_DIR
+
     if not str(path).startswith(str(DATA_DIR)):
         raise ValueError(
             f"Checkpoint path {path} is outside DATA_DIR ({DATA_DIR}). "
@@ -515,9 +515,7 @@ def run_ragas_from_checkpoint(
     logger.info("Loaded %d cases from %s", len(cases_data), path)
     logger.info("Target: %.2f", FAITHFULNESS_TARGET)
     if completed:
-        logger.info(
-            "Resuming: %d/%d already scored", len(completed), len(cases_data)
-        )
+        logger.info("Resuming: %d/%d already scored", len(completed), len(cases_data))
 
     # Single event loop for all cases — one AsyncAnthropic client, one
     # connection pool, one TLS handshake reused across all 120 API calls.
@@ -533,9 +531,7 @@ def run_ragas_from_checkpoint(
                 cached = completed[case_id]
                 score = cached["score"]
                 meets = cached["meets_target"]
-                logger.info(
-                    "[%d/%d] %.3f (cached) — %s", i, n, score, c["query"]
-                )
+                logger.info("[%d/%d] %.3f (cached) — %s", i, n, score, c["query"])
             else:
                 result = await evaluator.evaluate_single_async(
                     c["query"], c["explanation"], c["evidence_texts"]
@@ -552,13 +548,15 @@ def run_ragas_from_checkpoint(
                     json.dump(completed, f, indent=2)
                 logger.info("[%d/%d] %.3f — %s", i, n, score, c["query"])
 
-            per_case_inner.append({
-                "case_id": case_id,
-                "query": c["query"],
-                "product_id": c["product_id"],
-                "score": score,
-                "meets_target": meets,
-            })
+            per_case_inner.append(
+                {
+                    "case_id": case_id,
+                    "query": c["query"],
+                    "product_id": c["product_id"],
+                    "score": score,
+                    "meets_target": meets,
+                }
+            )
             scores_inner.append(score)
 
         return per_case_inner, scores_inner
@@ -570,9 +568,7 @@ def run_ragas_from_checkpoint(
     std = float(np.std(scores_arr, ddof=1)) if len(scores_arr) > 1 else 0.0
     n_passing = sum(1 for s in scores if s >= FAITHFULNESS_TARGET)
 
-    logger.info(
-        "Faithfulness: %.3f +/- %.3f (n=%d)", mean, std, len(scores)
-    )
+    logger.info("Faithfulness: %.3f +/- %.3f (n=%d)", mean, std, len(scores))
     logger.info("Passing: %d/%d", n_passing, len(scores))
 
     results = {
