@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 from collections.abc import AsyncIterator
 
 import sage.api.routes as _routes_pkg
@@ -107,48 +108,64 @@ async def _stream_recommendations(
         yield _sse_event("done", json.dumps({"status": "error"}))
         return
 
+    _timeout = _routes_pkg.STREAM_PRODUCT_TIMEOUT
+    loop = asyncio.get_running_loop()
+
     for i, product in enumerate(products, 1):
         yield _sse_event(
             "product", json.dumps(_build_product_dict(i, product))
         )
 
-        try:
-            # Helper to generate explanation with timeout protection
-            async def _generate_with_timeout(prod):
-                # Get the stream object in a thread (it sets up the connection)
-                stream = await asyncio.to_thread(
-                    explainer.generate_explanation_stream,
-                    body.query,
-                    prod,
-                    MAX_EVIDENCE,
+        # Feed tokens from the sync LLM iterator into an asyncio queue so
+        # each token is yielded to the client as it arrives, not after the
+        # full response is buffered.
+        queue: asyncio.Queue[tuple[str, object]] = asyncio.Queue()
+
+        def _run_stream(prod=product) -> None:
+            try:
+                stream = explainer.generate_explanation_stream(
+                    body.query, prod, MAX_EVIDENCE
+                )
+                for token in stream:
+                    loop.call_soon_threadsafe(
+                        queue.put_nowait, ("token", token)
+                    )
+                loop.call_soon_threadsafe(
+                    queue.put_nowait,
+                    ("result", stream.get_complete_result()),
+                )
+            except Exception as exc:
+                loop.call_soon_threadsafe(
+                    queue.put_nowait, ("error", exc)
+                )
+            finally:
+                loop.call_soon_threadsafe(
+                    queue.put_nowait, ("done", None)
                 )
 
-                # Iterate over tokens - each token retrieval is blocking
-                def _get_tokens():
-                    tokens = list(stream)
-                    return tokens, stream.get_complete_result()
-
-                return await asyncio.to_thread(_get_tokens)
-
-            # Wrap in timeout to prevent hanging streams
-            _timeout = _routes_pkg.STREAM_PRODUCT_TIMEOUT
-            tokens, result = await asyncio.wait_for(
-                _generate_with_timeout(product),
-                timeout=_timeout,
-            )
-
-            for token in tokens:
-                yield _sse_event("token", json.dumps({"text": token}))
-
-            yield _sse_event(
-                "evidence",
-                json.dumps(
-                    {"evidence_sources": _build_evidence_list(result)}
-                ),
-            )
-
+        t = threading.Thread(target=_run_stream, daemon=True)
+        t.start()
+        try:
+            while True:
+                kind, value = await asyncio.wait_for(
+                    queue.get(), timeout=_timeout
+                )
+                if kind == "done":
+                    break
+                elif kind == "error":
+                    raise value  # type: ignore[misc]
+                elif kind == "token":
+                    yield _sse_event(
+                        "token", json.dumps({"text": value})
+                    )
+                elif kind == "result":
+                    yield _sse_event(
+                        "evidence",
+                        json.dumps(
+                            {"evidence_sources": _build_evidence_list(value)}
+                        ),
+                    )
         except TimeoutError:
-            _timeout = _routes_pkg.STREAM_PRODUCT_TIMEOUT
             logger.warning(
                 "Streaming timeout for product %s after %.1fs",
                 product.product_id,
@@ -158,16 +175,12 @@ async def _stream_recommendations(
                 "error",
                 json.dumps(
                     {
-                        "detail": (
-                            f"Explanation timed out ({_timeout}s)"
-                        ),
+                        "detail": f"Explanation timed out ({_timeout}s)",
                         "product_id": product.product_id,
                     }
                 ),
             )
         except ValueError as exc:
-            # Quality gate refusal — evidence insufficient for this product.
-            # Surface the reason so clients can display it meaningfully.
             logger.info(
                 "Quality gate refusal for %s: %s",
                 product.product_id,
@@ -185,6 +198,8 @@ async def _stream_recommendations(
                 "error",
                 json.dumps({"detail": "Failed to generate explanation"}),
             )
+        finally:
+            t.join(timeout=2.0)
 
     yield _sse_event("done", json.dumps({"status": "complete"}))
 
