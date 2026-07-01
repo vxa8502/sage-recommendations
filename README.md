@@ -79,7 +79,7 @@ User Query: "wireless earbuds for running"
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Stack:** E5-small-v2 embeddings · Qdrant Cloud (HNSW, int8 quantization) · Claude Sonnet (`claude-sonnet-4-6`) · Redis L1 exact + L2 semantic cache · FastAPI · Prometheus metrics
+**Stack:** E5-small-v2 embeddings · Qdrant Cloud (HNSW, int8 quantization) · Claude Sonnet (`claude-sonnet-4-6`) · in-memory two-layer cache (L1 exact-match, L2 semantic similarity) · FastAPI · Prometheus metrics
 
 **Data flow:** Amazon Electronics reviews → filtering and chunking → embeddings in Qdrant → evidence-grounded explanations.
 
