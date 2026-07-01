@@ -15,7 +15,7 @@ Requires:
 Outputs:
     data/eda_stats_latest.json - Machine-readable stats (regenerated)
     assets/*.png - Distribution visualizations (regenerated)
-    reports/DATA_CARD.md - Human-curated narrative (manually edited)
+    DATA_CARD.md - Human-curated narrative (manually edited)
 """
 
 from __future__ import annotations
@@ -396,7 +396,7 @@ def main():
         print("=" * 60)
         print(f"Stats:     {DATA_DIR / 'eda_stats_latest.json'}")
         print(f"Figures:   {FIGURES_DIR}/")
-        print("Data Card: reports/DATA_CARD.md (human-edited)")
+        print("Data Card: DATA_CARD.md (human-edited)")
     finally:
         client.close()
 
